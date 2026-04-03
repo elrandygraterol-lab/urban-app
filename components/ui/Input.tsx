@@ -75,7 +75,9 @@ export const Input: React.FC<InputProps> = ({
   return (
     <View style={[containerStyle, style]}>
       {label && (
-        <Text style={[Typography.bodySmall, { marginBottom: Spacing.sm, color: Colors.textPrimary }]}>
+        <Text
+          style={[Typography.bodySmall, { marginBottom: Spacing.sm, color: Colors.textPrimary }]}
+        >
           {label}
         </Text>
       )}
@@ -111,11 +113,7 @@ export const Input: React.FC<InputProps> = ({
             onPress={() => setShowPassword(!showPassword)}
             style={{ padding: Spacing.sm }}
           >
-            <Ionicons
-              name={showPassword ? 'eye-off' : 'eye'}
-              size={20}
-              color={Colors.lightGray}
-            />
+            <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={Colors.lightGray} />
           </TouchableOpacity>
         )}
 

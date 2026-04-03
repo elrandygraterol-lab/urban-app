@@ -1,6 +1,6 @@
 /**
  * Offline Map Service Tests
- * 
+ *
  * Tests for offline map downloading, caching, and offline mode detection
  */
 
@@ -244,12 +244,7 @@ describe('Offline Map Service', () => {
         [-73.9855, 40.758],
       ];
 
-      const result = await offlineMapService.cacheRoute(
-        'route-123',
-        coordinates,
-        5.2,
-        12
-      );
+      const result = await offlineMapService.cacheRoute('route-123', coordinates, 5.2, 12);
 
       expect(result).toBe(true);
       expect(mockedAsyncStorage.setItem).toHaveBeenCalled();
@@ -263,12 +258,7 @@ describe('Offline Map Service', () => {
         [-73.9855, 40.758],
       ];
 
-      const result = await offlineMapService.cacheRoute(
-        'route-123',
-        coordinates,
-        5.2,
-        12
-      );
+      const result = await offlineMapService.cacheRoute('route-123', coordinates, 5.2, 12);
 
       expect(result).toBe(false);
     });

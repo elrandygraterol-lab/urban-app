@@ -1,7 +1,7 @@
 /**
  * Maps Service (Mobile App)
  * Cliente para consumir los endpoints de mapas del backend
- * 
+ *
  * Usa Google Maps SDK + OSRM Autohospedado
  * - Visualización: Google Maps SDK (GRATIS, ilimitado)
  * - Rutas: OSRM Autohospedado ($5-20/mes)
@@ -9,6 +9,8 @@
 
 import axios from 'axios';
 import config from '../src/config/api';
+
+console.log('[MAPS SERVICE] Initializing with baseURL:', config.apiUrl);
 
 const api = axios.create({
   baseURL: config.apiUrl,
@@ -79,10 +81,7 @@ export async function geocodeAddress(address: string): Promise<Location> {
 /**
  * Reverse geocodificar (coordenadas -> dirección)
  */
-export async function reverseGeocode(
-  latitude: number,
-  longitude: number
-): Promise<Location> {
+export async function reverseGeocode(latitude: number, longitude: number): Promise<Location> {
   try {
     const response = await api.post('/maps/reverse-geocode', {
       latitude,
@@ -99,10 +98,7 @@ export async function reverseGeocode(
 /**
  * Validar una ubicación
  */
-export async function validateLocation(
-  latitude: number,
-  longitude: number
-): Promise<boolean> {
+export async function validateLocation(latitude: number, longitude: number): Promise<boolean> {
   try {
     const response = await api.post('/maps/validate-location', {
       latitude,
@@ -165,23 +161,37 @@ export async function findNearbyDrivers(
 /**
  * Obtener ruta con instrucciones
  */
-export async function getRoute(
-  pickupLocation: Location,
-  dropoffLocation: Location
-): Promise<any> {
+export async function getRoute(pickupLocation: Location, dropoffLocation: Location): Promise<any> {
   try {
-    const response = await api.get('/maps/route', {
-      params: {
-        pickupLat: pickupLocation.latitude,
-        pickupLng: pickupLocation.longitude,
-        dropoffLat: dropoffLocation.latitude,
-        dropoffLng: dropoffLocation.longitude,
-      },
-    });
+    const url = '/maps/route';
+    const params = {
+      pickupLat: pickupLocation.latitude,
+      pickupLng: pickupLocation.longitude,
+      dropoffLat: dropoffLocation.latitude,
+      dropoffLng: dropoffLocation.longitude,
+    };
 
+    console.log('[MAPS SERVICE] getRoute - Full URL:', `${api.defaults.baseURL}${url}`);
+    console.log('[MAPS SERVICE] getRoute - Params:', params);
+
+    const response = await api.get(url, { params });
+
+    console.log('[MAPS SERVICE] getRoute - Success:', response.data);
     return response.data.data;
   } catch (error) {
-    console.error('Error obteniendo ruta:', error);
+    console.error('[MAPS SERVICE] Error obteniendo ruta:', error);
+    if (axios.isAxiosError(error)) {
+      console.error('[MAPS SERVICE] Error details:', {
+        message: error.message,
+        code: error.code,
+        config: {
+          baseURL: error.config?.baseURL,
+          url: error.config?.url,
+          method: error.config?.method,
+        },
+        response: error.response?.data,
+      });
+    }
     throw error;
   }
 }

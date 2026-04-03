@@ -17,6 +17,7 @@ La plataforma de taxis y moto-taxis es un sistema distribuido que conecta pasaje
 ### Alcance
 
 El diseño cubre:
+
 - Arquitectura de microservicios con backend Express
 - Aplicaciones móviles con Expo + React Native
 - Dashboard web administrativo
@@ -67,6 +68,7 @@ El sistema sigue una arquitectura cliente-servidor con los siguientes componente
 ### Technology Stack
 
 #### Frontend (Mobile & Web)
+
 - **Framework**: Expo SDK 50+ con React Native
 - **Navegación**: React Navigation 6.x
 - **Estado Global**: Zustand o Redux Toolkit
@@ -80,6 +82,7 @@ El sistema sigue una arquitectura cliente-servidor con los siguientes componente
 - **Branding**: UrbanTaxi color palette (green and orange theme)
 
 #### Backend
+
 - **Runtime**: Node.js 18+ LTS
 - **Framework**: Express.js 4.x
 - **Base de Datos**: PostgreSQL 15+ con PostGIS para datos geoespaciales
@@ -93,13 +96,14 @@ El sistema sigue una arquitectura cliente-servidor con los siguientes componente
 - **File Storage**: AWS S3 o Cloudinary para documentos
 
 #### Infrastructure & DevOps
+
 - **Containerización**: Docker + Docker Compose
 - **Orquestación**: Kubernetes (opcional para producción)
 - **CI/CD**: GitHub Actions o GitLab CI
 - **Monitoreo**: Sentry para errores, Prometheus + Grafana para métricas
 - **Hosting Backend**: AWS EC2/ECS, DigitalOcean, o Railway
-- **Hosting Web**:  Netlify
-- **CDN**: CloudFlare para assets estáticos 
+- **Hosting Web**: Netlify
+- **CDN**: CloudFlare para assets estáticos
 - Build con EAS Build (Expo Application Services)
 - Distribución vía Google Play Store
 - Configuración de Google Maps API Key
@@ -107,6 +111,7 @@ El sistema sigue una arquitectura cliente-servidor con los siguientes componente
 - Firma de APK/AAB con keystore seguro
 
 #### iOS
+
 - Build con EAS Build
 - Distribución vía Apple App Store
 - Configuración de Apple Maps
@@ -114,6 +119,7 @@ El sistema sigue una arquitectura cliente-servidor con los siguientes componente
 - Certificados y provisioning profiles gestionados por EAS
 
 #### Web
+
 - Build con `expo export:web` o `npx expo export --platform web`
 - Despliegue en Netlify con configuración SPA
 - PWA capabilities para instalación en escritorio
@@ -136,6 +142,7 @@ El sistema sigue una arquitectura cliente-servidor con los siguientes componente
 #### Design System & Branding
 
 **Color Palette (UrbanTaxi)**:
+
 - Primary Green: #00B300 (main actions, primary buttons)
 - Secondary Green: #32CD32 (hover states, secondary elements)
 - Light Green: #90EE90 (backgrounds, subtle highlights)
@@ -146,12 +153,14 @@ El sistema sigue una arquitectura cliente-servidor con los siguientes componente
 - White: #FFFFFF (backgrounds, cards)
 
 **Typography**:
+
 - H1: Bold, Dark Gray (#505050)
 - H2: Semi-bold, Dark Gray (#505050)
 - Body: Regular, Dark Gray (#505050)
 - Input Placeholder: Light Gray (#A9A9A9)
 
 **Component Styles**:
+
 - Input Fields: White background, green border (#00B300), rounded corners (24px)
 - Primary Buttons: Green background (#00B300), white text, rounded (24px), hover: #32CD32
 - Cancel Buttons: Orange background (#FF9500), white text, rounded (24px), hover: #E6C896
@@ -159,6 +168,7 @@ El sistema sigue una arquitectura cliente-servidor con los siguientes componente
 - Icons: Green (#00B300) for primary actions, Orange (#FF9500) for warnings
 
 **Login/Register Screen Design**:
+
 - Top section: UrbanTaxi logo with green and orange branding
 - Tagline: "¿Listo para tu siguiente destino?"
 - Welcome message: "Bienvenido de vuelta"
@@ -300,6 +310,7 @@ El sistema sigue una arquitectura cliente-servidor con los siguientes componente
 #### 1. Auth Service
 
 **Responsibilities:**
+
 - Registro y autenticación de usuarios
 - Generación y validación de JWT tokens
 - Gestión de sesiones
@@ -307,6 +318,7 @@ El sistema sigue una arquitectura cliente-servidor con los siguientes componente
 - Refresh token rotation
 
 **Endpoints:**
+
 ```
 POST   /api/auth/register/passenger
 POST   /api/auth/register/driver
@@ -321,6 +333,7 @@ GET    /api/auth/me
 #### 2. User Service
 
 **Responsibilities:**
+
 - Gestión de perfiles de pasajeros
 - Gestión de perfiles de conductores
 - Actualización de información personal
@@ -328,6 +341,7 @@ GET    /api/auth/me
 - Suspensión y reactivación de cuentas
 
 **Endpoints:**
+
 ```
 GET    /api/users/passengers
 GET    /api/users/passengers/:id
@@ -345,6 +359,7 @@ PUT    /api/users/drivers/:id/suspend
 #### 3. Ride Service
 
 **Responsibilities:**
+
 - Creación de solicitudes de viaje
 - Matching de conductores cercanos
 - Gestión de estados de viaje
@@ -353,6 +368,7 @@ PUT    /api/users/drivers/:id/suspend
 - Cancelación de viajes
 
 **Endpoints:**
+
 ```
 POST   /api/rides/request
 POST   /api/rides/:id/accept
@@ -369,6 +385,7 @@ GET    /api/rides/nearby-drivers
 ```
 
 **WebSocket Events:**
+
 ```
 // Emitted by server
 ride:request_created
@@ -385,6 +402,7 @@ driver:availability_changed
 #### 4. Payment Service
 
 **Responsibilities:**
+
 - Gestión de métodos de pago
 - Procesamiento de pagos
 - Cálculo de comisiones
@@ -392,6 +410,7 @@ driver:availability_changed
 - Gestión de reembolsos
 
 **Endpoints:**
+
 ```
 GET    /api/payments/methods
 POST   /api/payments/methods
@@ -404,12 +423,14 @@ POST   /api/payments/refund
 #### 5. Rating Service
 
 **Responsibilities:**
+
 - Gestión de valoraciones de conductores
 - Gestión de valoraciones de pasajeros
 - Cálculo de promedios de rating
 - Almacenamiento de comentarios
 
 **Endpoints:**
+
 ```
 POST   /api/ratings/driver
 POST   /api/ratings/passenger
@@ -420,12 +441,14 @@ GET    /api/ratings/passenger/:id
 #### 6. Notification Service
 
 **Responsibilities:**
+
 - Envío de notificaciones push
 - Gestión de tokens de dispositivos
 - Plantillas de notificaciones
 - Preferencias de notificaciones
 
 **Endpoints:**
+
 ```
 POST   /api/notifications/register-device
 POST   /api/notifications/send
@@ -435,6 +458,7 @@ PUT    /api/notifications/preferences
 #### 7. Admin Service
 
 **Responsibilities:**
+
 - Estadísticas y reportes
 - Configuración de tarifas
 - Monitoreo de viajes activos
@@ -442,6 +466,7 @@ PUT    /api/notifications/preferences
 - Exportación de datos
 
 **Endpoints:**
+
 ```
 GET    /api/admin/statistics
 GET    /api/admin/rides/active
@@ -480,6 +505,7 @@ GET    /api/admin/drivers/pending-verification
 ### Database Schema (PostgreSQL)
 
 #### Users Table
+
 ```sql
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -501,6 +527,7 @@ CREATE INDEX idx_users_role ON users(role);
 ```
 
 #### Driver Profiles Table
+
 ```sql
 CREATE TABLE driver_profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -533,6 +560,7 @@ CREATE INDEX idx_driver_profiles_location ON driver_profiles USING GIST(location
 ```
 
 #### Verification Documents Table
+
 ```sql
 CREATE TABLE verification_documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -549,6 +577,7 @@ CREATE INDEX idx_verification_documents_driver_id ON verification_documents(driv
 ```
 
 #### Passenger Profiles Table
+
 ```sql
 CREATE TABLE passenger_profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -564,6 +593,7 @@ CREATE INDEX idx_passenger_profiles_user_id ON passenger_profiles(user_id);
 ```
 
 #### Rides Table
+
 ```sql
 CREATE TABLE rides (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -571,27 +601,27 @@ CREATE TABLE rides (
   driver_id UUID REFERENCES driver_profiles(id),
   status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'arrived', 'in_progress', 'completed', 'cancelled')),
   vehicle_type VARCHAR(20) NOT NULL CHECK (vehicle_type IN ('taxi', 'moto-taxi')),
-  
+
   pickup_latitude DECIMAL(10, 8) NOT NULL,
   pickup_longitude DECIMAL(11, 8) NOT NULL,
   pickup_address TEXT NOT NULL,
-  
+
   destination_latitude DECIMAL(10, 8) NOT NULL,
   destination_longitude DECIMAL(11, 8) NOT NULL,
   destination_address TEXT NOT NULL,
-  
+
   estimated_distance_km DECIMAL(10, 2),
   estimated_duration_minutes INTEGER,
   estimated_fare DECIMAL(10, 2),
-  
+
   actual_distance_km DECIMAL(10, 2),
   actual_duration_minutes INTEGER,
   final_fare DECIMAL(10, 2),
-  
+
   cancellation_reason TEXT,
   cancelled_by VARCHAR(20) CHECK (cancelled_by IN ('passenger', 'driver', 'system')),
   cancellation_fee DECIMAL(10, 2) DEFAULT 0.00,
-  
+
   scheduled_pickup_time TIMESTAMP,
   requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   accepted_at TIMESTAMP,
@@ -599,7 +629,7 @@ CREATE TABLE rides (
   started_at TIMESTAMP,
   completed_at TIMESTAMP,
   cancelled_at TIMESTAMP,
-  
+
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -611,22 +641,23 @@ CREATE INDEX idx_rides_created_at ON rides(created_at);
 ```
 
 #### Payment Methods Table
+
 ```sql
 CREATE TABLE payment_methods (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   method_type VARCHAR(20) NOT NULL CHECK (method_type IN ('cash', 'card', 'digital_wallet')),
   is_default BOOLEAN DEFAULT false,
-  
+
   -- For card payments
   card_last_four VARCHAR(4),
   card_brand VARCHAR(20),
   card_token TEXT, -- Stripe token or similar
-  
+
   -- For digital wallets
   wallet_provider VARCHAR(50),
   wallet_identifier TEXT,
-  
+
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -635,6 +666,7 @@ CREATE INDEX idx_payment_methods_user_id ON payment_methods(user_id);
 ```
 
 #### Payments Table
+
 ```sql
 CREATE TABLE payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -655,6 +687,7 @@ CREATE INDEX idx_payments_status ON payments(status);
 ```
 
 #### Ratings Table
+
 ```sql
 CREATE TABLE ratings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -671,6 +704,7 @@ CREATE INDEX idx_ratings_rated_id ON ratings(rated_id);
 ```
 
 #### Fare Configuration Table
+
 ```sql
 CREATE TABLE fare_config (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -691,6 +725,7 @@ CREATE INDEX idx_fare_config_is_active ON fare_config(is_active);
 ```
 
 #### Notification Tokens Table
+
 ```sql
 CREATE TABLE notification_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -709,6 +744,7 @@ CREATE INDEX idx_notification_tokens_token ON notification_tokens(token);
 ### Data Transfer Objects (DTOs)
 
 #### Ride Request DTO
+
 ```typescript
 interface RideRequestDTO {
   passengerId: string;
@@ -729,6 +765,7 @@ interface RideRequestDTO {
 ```
 
 #### Ride Response DTO
+
 ```typescript
 interface RideResponseDTO {
   id: string;
@@ -800,12 +837,12 @@ async function findNearbyDrivers(
     ORDER BY distance_km ASC
     LIMIT 20
   `;
-  
+
   return await db.query(query, [
     pickupLocation.longitude,
     pickupLocation.latitude,
     vehicleType,
-    radiusKm
+    radiusKm,
   ]);
 }
 ```
@@ -821,17 +858,17 @@ async function calculateFare(
 ): Promise<number> {
   // Get active fare configuration
   const fareConfig = await getFareConfig(vehicleType);
-  
+
   // Base calculation
   let fare = fareConfig.baseFare;
   fare += distanceKm * fareConfig.perKmRate;
   fare += durationMinutes * fareConfig.perMinuteRate;
-  
+
   // Apply surge pricing if applicable
   if (await isSurgePricingActive()) {
     fare *= fareConfig.surgeMultiplier;
   }
-  
+
   // Round to 2 decimals
   return Math.round(fare * 100) / 100;
 }
@@ -840,9 +877,9 @@ async function isSurgePricingActive(): Promise<boolean> {
   // Check if demand is high
   const activeRides = await getActiveRidesCount();
   const availableDrivers = await getAvailableDriversCount();
-  
+
   const demandRatio = activeRides / Math.max(availableDrivers, 1);
-  
+
   // Activate surge if demand ratio > 2
   return demandRatio > 2;
 }
@@ -852,41 +889,36 @@ async function isSurgePricingActive(): Promise<boolean> {
 
 ```typescript
 // Socket.io event handler
-io.on('connection', (socket) => {
-  socket.on('driver:location_update', async (data: {
-    driverId: string;
-    latitude: number;
-    longitude: number;
-  }) => {
-    // Update driver location in database
-    await updateDriverLocation(
-      data.driverId,
-      data.latitude,
-      data.longitude
-    );
-    
-    // Get driver's active ride
-    const activeRide = await getDriverActiveRide(data.driverId);
-    
-    if (activeRide) {
-      // Broadcast location to passenger
-      io.to(`ride:${activeRide.id}`).emit('driver:location_update', {
-        latitude: data.latitude,
-        longitude: data.longitude,
-        timestamp: new Date()
-      });
-      
-      // Calculate ETA
-      const eta = await calculateETA(
-        { latitude: data.latitude, longitude: data.longitude },
-        activeRide.status === 'accepted' 
-          ? activeRide.pickupLocation 
-          : activeRide.destinationLocation
-      );
-      
-      io.to(`ride:${activeRide.id}`).emit('ride:eta_update', { eta });
+io.on('connection', socket => {
+  socket.on(
+    'driver:location_update',
+    async (data: { driverId: string; latitude: number; longitude: number }) => {
+      // Update driver location in database
+      await updateDriverLocation(data.driverId, data.latitude, data.longitude);
+
+      // Get driver's active ride
+      const activeRide = await getDriverActiveRide(data.driverId);
+
+      if (activeRide) {
+        // Broadcast location to passenger
+        io.to(`ride:${activeRide.id}`).emit('driver:location_update', {
+          latitude: data.latitude,
+          longitude: data.longitude,
+          timestamp: new Date(),
+        });
+
+        // Calculate ETA
+        const eta = await calculateETA(
+          { latitude: data.latitude, longitude: data.longitude },
+          activeRide.status === 'accepted'
+            ? activeRide.pickupLocation
+            : activeRide.destinationLocation
+        );
+
+        io.to(`ride:${activeRide.id}`).emit('ride:eta_update', { eta });
+      }
     }
-  });
+  );
 });
 ```
 
@@ -900,14 +932,14 @@ async function notifyNearbyDrivers(ride: Ride): Promise<void> {
     ride.vehicleType,
     5 // 5km radius
   );
-  
+
   // Sort by rating and distance
   const sortedDrivers = drivers.sort((a, b) => {
     const scoreA = a.averageRating * 0.7 + (1 / a.distanceKm) * 0.3;
     const scoreB = b.averageRating * 0.7 + (1 / b.distanceKm) * 0.3;
     return scoreB - scoreA;
   });
-  
+
   // Send push notifications to top 10 drivers
   const notificationPromises = sortedDrivers.slice(0, 10).map(driver =>
     sendPushNotification(driver.userId, {
@@ -916,13 +948,13 @@ async function notifyNearbyDrivers(ride: Ride): Promise<void> {
       data: {
         rideId: ride.id,
         estimatedFare: ride.estimatedFare,
-        distance: driver.distanceKm
-      }
+        distance: driver.distanceKm,
+      },
     })
   );
-  
+
   await Promise.all(notificationPromises);
-  
+
   // Set timeout to cancel if no acceptance
   setTimeout(async () => {
     const updatedRide = await getRide(ride.id);
@@ -936,360 +968,359 @@ async function notifyNearbyDrivers(ride: Ride): Promise<void> {
 
 ## Correctness Properties
 
-
-*A property is a characteristic or behavior that should hold true across all valid executions of a system—essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
+_A property is a characteristic or behavior that should hold true across all valid executions of a system—essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees._
 
 ### Property 1: Valid Registration Creates Account
 
-*For any* valid passenger registration data (valid email format, valid phone format, password ≥8 characters, unique email and phone), submitting the registration should create a new passenger account in the system.
+_For any_ valid passenger registration data (valid email format, valid phone format, password ≥8 characters, unique email and phone), submitting the registration should create a new passenger account in the system.
 
 **Validates: Requirements 1.2, 1.4, 1.5, 1.6**
 
 ### Property 2: Duplicate Credentials Rejected
 
-*For any* registration attempt using an email or phone number that already exists in the system, the registration should be rejected with an appropriate error message.
+_For any_ registration attempt using an email or phone number that already exists in the system, the registration should be rejected with an appropriate error message.
 
 **Validates: Requirements 1.3**
 
 ### Property 3: Authentication Token Generation
 
-*For any* valid user credentials (existing email and correct password), authentication should return a valid access token that can be used for subsequent requests.
+_For any_ valid user credentials (existing email and correct password), authentication should return a valid access token that can be used for subsequent requests.
 
 **Validates: Requirements 2.3**
 
 ### Property 4: Invalid Credentials Rejected
 
-*For any* invalid credentials (non-existent email or incorrect password), authentication should return an error and not generate a token.
+_For any_ invalid credentials (non-existent email or incorrect password), authentication should return an error and not generate a token.
 
 **Validates: Requirements 2.4**
 
 ### Property 5: Password Recovery Token Generation
 
-*For any* registered user email, requesting password recovery should generate a valid recovery token that can be used to reset the password.
+_For any_ registered user email, requesting password recovery should generate a valid recovery token that can be used to reset the password.
 
 **Validates: Requirements 2.6**
 
 ### Property 6: Driver Registration Creates Pending Account
 
-*For any* valid driver registration data (including vehicle information), submitting the registration should create a driver account with status "pending" verification.
+_For any_ valid driver registration data (including vehicle information), submitting the registration should create a driver account with status "pending" verification.
 
 **Validates: Requirements 3.2**
 
 ### Property 7: Document Completeness Validation
 
-*For any* driver profile, the profile should be marked as incomplete if any of the required documents (driver's license, vehicle registration, insurance certificate, vehicle photos) are missing.
+_For any_ driver profile, the profile should be marked as incomplete if any of the required documents (driver's license, vehicle registration, insurance certificate, vehicle photos) are missing.
 
 **Validates: Requirements 3.4**
 
 ### Property 8: Document Upload Triggers Verification Status
 
-*For any* driver profile, when all required documents are uploaded, the profile status should automatically change to "pending verification".
+_For any_ driver profile, when all required documents are uploaded, the profile status should automatically change to "pending verification".
 
 **Validates: Requirements 3.5**
 
 ### Property 9: Unverified Drivers Cannot Accept Rides
 
-*For any* driver with verification status other than "verified", attempting to accept a ride request should be rejected by the system.
+_For any_ driver with verification status other than "verified", attempting to accept a ride request should be rejected by the system.
 
 **Validates: Requirements 3.6, 4.5**
 
 ### Property 10: Admin Approval Changes Driver Status
 
-*For any* driver profile in "pending" status, when an administrator approves it, the status should change to "verified" and the driver should be able to receive ride requests.
+_For any_ driver profile in "pending" status, when an administrator approves it, the status should change to "verified" and the driver should be able to receive ride requests.
 
 **Validates: Requirements 4.3**
 
 ### Property 11: Admin Rejection Stores Reason
 
-*For any* driver profile in "pending" status, when an administrator rejects it with a reason, the status should change to "rejected" and the rejection reason should be stored.
+_For any_ driver profile in "pending" status, when an administrator rejects it with a reason, the status should change to "rejected" and the rejection reason should be stored.
 
 **Validates: Requirements 4.4**
 
 ### Property 12: Fare Calculation Includes All Components
 
-*For any* ride request with distance, duration, and vehicle type, the estimated fare should equal: base_fare + (distance × per_km_rate) + (duration × per_minute_rate), optionally multiplied by surge_multiplier if surge pricing is active.
+_For any_ ride request with distance, duration, and vehicle type, the estimated fare should equal: base_fare + (distance × per_km_rate) + (duration × per_minute_rate), optionally multiplied by surge_multiplier if surge pricing is active.
 
 **Validates: Requirements 5.4, 9.1, 9.2, 9.3, 9.4, 9.5, 9.7**
 
 ### Property 13: Ride Request Creates Ride and Notifies Drivers
 
-*For any* valid ride request, the system should create a ride record with status "pending" and send notifications to available drivers within the specified radius.
+_For any_ valid ride request, the system should create a ride record with status "pending" and send notifications to available drivers within the specified radius.
 
 **Validates: Requirements 5.5, 8.1**
 
 ### Property 14: Geospatial Filtering of Drivers
 
-*For any* ride request with pickup location, only drivers within 5 kilometers of the pickup location should receive ride request notifications.
+_For any_ ride request with pickup location, only drivers within 5 kilometers of the pickup location should receive ride request notifications.
 
 **Validates: Requirements 5.6**
 
 ### Property 15: Driver Acceptance Assigns Ride
 
-*For any* pending ride request, when a driver accepts it, the ride should be assigned to that driver, the status should change to "accepted", and the passenger should be notified.
+_For any_ pending ride request, when a driver accepts it, the ride should be assigned to that driver, the status should change to "accepted", and the passenger should be notified.
 
 **Validates: Requirements 6.3, 6.4, 8.2**
 
 ### Property 16: Assignment Cancels Other Notifications
 
-*For any* ride request, when it is assigned to a driver, all pending notifications to other drivers should be cancelled or marked as expired.
+_For any_ ride request, when it is assigned to a driver, all pending notifications to other drivers should be cancelled or marked as expired.
 
 **Validates: Requirements 6.5**
 
 ### Property 17: Ride State Machine Transitions
 
-*For any* ride, state transitions should follow the valid sequence: pending → accepted → arrived → in_progress → completed, or any state before in_progress → cancelled. Invalid transitions should be rejected.
+_For any_ ride, state transitions should follow the valid sequence: pending → accepted → arrived → in_progress → completed, or any state before in_progress → cancelled. Invalid transitions should be rejected.
 
 **Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7**
 
 ### Property 18: ETA Calculation for Active Rides
 
-*For any* active ride (status: accepted, arrived, or in_progress), the system should calculate and provide an estimated time of arrival based on current location and destination.
+_For any_ active ride (status: accepted, arrived, or in_progress), the system should calculate and provide an estimated time of arrival based on current location and destination.
 
 **Validates: Requirements 7.5**
 
 ### Property 19: Payment Method Support
 
-*For any* payment method registration, the system should accept and store cash, credit/debit card, and digital wallet payment methods.
+_For any_ payment method registration, the system should accept and store cash, credit/debit card, and digital wallet payment methods.
 
 **Validates: Requirements 10.2**
 
 ### Property 20: Automatic Payment Processing
 
-*For any* completed ride with a non-cash payment method, the system should automatically process the payment without manual intervention.
+_For any_ completed ride with a non-cash payment method, the system should automatically process the payment without manual intervention.
 
 **Validates: Requirements 10.5**
 
 ### Property 21: Failed Payment Notification
 
-*For any* payment attempt that fails, the system should notify the passenger and allow retry of the payment.
+_For any_ payment attempt that fails, the system should notify the passenger and allow retry of the payment.
 
 **Validates: Requirements 10.6**
 
 ### Property 22: Payment Receipt Generation
 
-*For any* successfully processed payment, the system should generate and send a receipt to the passenger via email.
+_For any_ successfully processed payment, the system should generate and send a receipt to the passenger via email.
 
 **Validates: Requirements 10.7**
 
 ### Property 23: Rating Value Validation
 
-*For any* rating submission (driver or passenger), the system should only accept integer values between 1 and 5 inclusive.
+_For any_ rating submission (driver or passenger), the system should only accept integer values between 1 and 5 inclusive.
 
 **Validates: Requirements 11.2, 11.5**
 
 ### Property 24: Average Rating Calculation
 
-*For any* user (driver or passenger) with multiple ratings, the average rating should equal the sum of all ratings divided by the number of ratings, rounded to two decimal places.
+_For any_ user (driver or passenger) with multiple ratings, the average rating should equal the sum of all ratings divided by the number of ratings, rounded to two decimal places.
 
 **Validates: Requirements 11.6**
 
 ### Property 25: Driver Earnings Calculation
 
-*For any* completed ride, the driver's earnings should equal the final fare minus the platform commission (fare × commission_percentage).
+_For any_ completed ride, the driver's earnings should equal the final fare minus the platform commission (fare × commission_percentage).
 
 **Validates: Requirements 12.6**
 
 ### Property 26: User Search Functionality
 
-*For any* search query (name, email, or phone), the system should return all users whose name, email, or phone number contains the search term (case-insensitive).
+_For any_ search query (name, email, or phone), the system should return all users whose name, email, or phone number contains the search term (case-insensitive).
 
 **Validates: Requirements 13.3**
 
 ### Property 27: Account Suspension Blocks Access
 
-*For any* user account with status "suspended", all authentication attempts and service access should be denied.
+_For any_ user account with status "suspended", all authentication attempts and service access should be denied.
 
 **Validates: Requirements 13.5, 13.7**
 
 ### Property 28: Account Reactivation Restores Access
 
-*For any* suspended user account, when an administrator reactivates it, the status should change to "active" and the user should be able to access services again.
+_For any_ suspended user account, when an administrator reactivates it, the status should change to "active" and the user should be able to access services again.
 
 **Validates: Requirements 13.6**
 
 ### Property 29: Fare Configuration Persistence
 
-*For any* fare configuration update (base fare, per-km rate, per-minute rate, commission percentage, surge multiplier), the new values should be stored and applied to all subsequent ride requests.
+_For any_ fare configuration update (base fare, per-km rate, per-minute rate, commission percentage, surge multiplier), the new values should be stored and applied to all subsequent ride requests.
 
 **Validates: Requirements 15.1, 15.2, 15.3, 15.4, 15.5, 15.6**
 
 ### Property 30: CSV Export Generation
 
-*For any* report data, the system should be able to generate a valid CSV file containing all the report data with proper headers and formatting.
+_For any_ report data, the system should be able to generate a valid CSV file containing all the report data with proper headers and formatting.
 
 **Validates: Requirements 16.6**
 
 ### Property 31: Ride Completion Rate Calculation
 
-*For any* set of rides in a time period, the completion rate should equal (number of completed rides / total number of rides) × 100.
+_For any_ set of rides in a time period, the completion rate should equal (number of completed rides / total number of rides) × 100.
 
 **Validates: Requirements 16.7**
 
 ### Property 32: Critical Events Trigger Notifications
 
-*For any* critical ride event (driver acceptance, driver arrival, ride completion, payment processing, driver verification), the system should send a push notification to the relevant user(s).
+_For any_ critical ride event (driver acceptance, driver arrival, ride completion, payment processing, driver verification), the system should send a push notification to the relevant user(s).
 
 **Validates: Requirements 17.1, 17.2, 17.3, 17.4, 17.5, 17.6**
 
 ### Property 33: Notification Preferences Respected
 
-*For any* user who has disabled push notifications in settings, the system should not send push notifications to that user's devices.
+_For any_ user who has disabled push notifications in settings, the system should not send push notifications to that user's devices.
 
 **Validates: Requirements 17.7**
 
 ### Property 34: Ride History Filtering
 
-*For any* date range filter applied to ride history, the system should return only rides where the ride date falls within the specified start and end dates (inclusive).
+_For any_ date range filter applied to ride history, the system should return only rides where the ride date falls within the specified start and end dates (inclusive).
 
 **Validates: Requirements 18.3**
 
 ### Property 35: Driver Availability Controls Matching
 
-*For any* driver, the driver should receive ride request notifications if and only if their status is "available" and they have no active ride.
+_For any_ driver, the driver should receive ride request notifications if and only if their status is "available" and they have no active ride.
 
 **Validates: Requirements 19.2, 19.3, 19.5**
 
 ### Property 36: Cancellation Allowed by State
 
-*For any* ride, passengers should be able to cancel if status is "pending" or "accepted", and drivers should be able to cancel if status is "accepted". Cancellation should not be allowed once status is "in_progress".
+_For any_ ride, passengers should be able to cancel if status is "pending" or "accepted", and drivers should be able to cancel if status is "accepted". Cancellation should not be allowed once status is "in_progress".
 
 **Validates: Requirements 21.1, 21.2, 8.6**
 
 ### Property 37: Late Cancellation Fee Applied
 
-*For any* ride cancelled by a passenger after driver acceptance and more than 2 minutes after request creation, a cancellation fee should be applied.
+_For any_ ride cancelled by a passenger after driver acceptance and more than 2 minutes after request creation, a cancellation fee should be applied.
 
 **Validates: Requirements 21.3, 21.5**
 
 ### Property 38: Driver Cancellation Triggers Re-request
 
-*For any* ride cancelled by a driver, the system should notify the passenger and create a new ride request with the same pickup and destination.
+_For any_ ride cancelled by a driver, the system should notify the passenger and create a new ride request with the same pickup and destination.
 
 **Validates: Requirements 21.4**
 
 ### Property 39: Cancellation Fee Configuration
 
-*For any* cancellation fee amount configured by administrators, the new fee amount should be stored and applied to subsequent cancellations.
+_For any_ cancellation fee amount configured by administrators, the new fee amount should be stored and applied to subsequent cancellations.
 
 **Validates: Requirements 21.6**
 
 ### Property 40: Device Language Detection
 
-*For any* new user on first app launch, the system should detect the device's language setting and set it as the default app language if supported.
+_For any_ new user on first app launch, the system should detect the device's language setting and set it as the default app language if supported.
 
 **Validates: Requirements 22.5**
 
 ### Property 58: Brand Color Consistency
 
-*For any* UI component in the Passenger_App, Driver_App, or Admin_Dashboard, the component should use colors from the UrbanTaxi brand palette (greens: #00B300, #32CD32, #90EE90; oranges: #FF9500, #E6C896; grays: #505050, #A9A9A9).
+_For any_ UI component in the Passenger_App, Driver_App, or Admin_Dashboard, the component should use colors from the UrbanTaxi brand palette (greens: #00B300, #32CD32, #90EE90; oranges: #FF9500, #E6C896; grays: #505050, #A9A9A9).
 
 **Validates: Requirements 29.1, 29.2, 29.3**
 
 ### Property 59: Login Screen Design Compliance
 
-*For any* login screen (Passenger_App or Driver_App), the screen should include all required elements: logo, tagline, welcome message, email/phone input with green border, password input with eye icon, "Recuérdame" checkbox, "¿Olvidaste tu Contraseña?" link, primary button "Empezar a viajar", registration link, and Google/Apple sign-in buttons.
+_For any_ login screen (Passenger_App or Driver_App), the screen should include all required elements: logo, tagline, welcome message, email/phone input with green border, password input with eye icon, "Recuérdame" checkbox, "¿Olvidaste tu Contraseña?" link, primary button "Empezar a viajar", registration link, and Google/Apple sign-in buttons.
 
 **Validates: Requirements 29.6, 29.7, 29.8, 29.9, 29.11, 29.12**
 
 ### Property 41: Document Update Triggers Re-verification
 
-*For any* verified driver who uploads updated verification documents, the driver's verification status should change to "pending re-verification" while still allowing the driver to accept rides.
+_For any_ verified driver who uploads updated verification documents, the driver's verification status should change to "pending re-verification" while still allowing the driver to accept rides.
 
 **Validates: Requirements 23.2, 23.3, 23.5**
 
 ### Property 42: Document Update Notifies Admins
 
-*For any* driver document update, the system should send a notification to administrators indicating that new documents require review.
+_For any_ driver document update, the system should send a notification to administrators indicating that new documents require review.
 
 **Validates: Requirements 23.4**
 
 ### Property 43: Password Hashing
 
-*For any* user password stored in the database, the password should be hashed using bcrypt or similar algorithm, never stored in plain text.
+_For any_ user password stored in the database, the password should be hashed using bcrypt or similar algorithm, never stored in plain text.
 
 **Validates: Requirements 24.1**
 
 ### Property 44: Card Number Masking
 
-*For any* payment card number displayed in any application interface, only the last 4 digits should be visible, with the rest masked.
+_For any_ payment card number displayed in any application interface, only the last 4 digits should be visible, with the rest masked.
 
 **Validates: Requirements 24.4**
 
 ### Property 45: Account Deletion Removes Data
 
-*For any* user account deletion request, the system should remove or anonymize all associated personal data from the database.
+_For any_ user account deletion request, the system should remove or anonymize all associated personal data from the database.
 
 **Validates: Requirements 24.5**
 
 ### Property 46: Rate Limiting Protection
 
-*For any* authentication endpoint, the system should block requests from an IP address or user after a configured number of failed attempts within a time window.
+_For any_ authentication endpoint, the system should block requests from an IP address or user after a configured number of failed attempts within a time window.
 
 **Validates: Requirements 24.6**
 
 ### Property 47: Scheduled Ride Creation (Optional)
 
-*For any* scheduled ride request with a future pickup time, the system should create a ride with status "scheduled" and trigger driver notifications 15 minutes before the scheduled time.
+_For any_ scheduled ride request with a future pickup time, the system should create a ride with status "scheduled" and trigger driver notifications 15 minutes before the scheduled time.
 
 **Validates: Requirements 25.2, 25.3**
 
 ### Property 48: Scheduled Ride Cancellation Window (Optional)
 
-*For any* scheduled ride, passengers should be able to cancel without penalty if cancellation occurs more than 1 hour before the scheduled pickup time.
+_For any_ scheduled ride, passengers should be able to cancel without penalty if cancellation occurs more than 1 hour before the scheduled pickup time.
 
 **Validates: Requirements 25.4**
 
 ### Property 49: Loyalty Points Award (Optional)
 
-*For any* completed ride when loyalty program is enabled, the system should award points to the passenger based on the fare amount using the configured conversion rate.
+_For any_ completed ride when loyalty program is enabled, the system should award points to the passenger based on the fare amount using the configured conversion rate.
 
 **Validates: Requirements 26.1, 26.2**
 
 ### Property 50: Points Redemption (Optional)
 
-*For any* points redemption request when loyalty program is enabled, the system should deduct the points from the passenger's balance and apply the corresponding discount to the ride fare.
+_For any_ points redemption request when loyalty program is enabled, the system should deduct the points from the passenger's balance and apply the corresponding discount to the ride fare.
 
 **Validates: Requirements 26.4**
 
 ### Property 51: Loyalty Points Configuration (Optional)
 
-*For any* loyalty points conversion rate configured by administrators, the new rate should be stored and applied to subsequent point calculations.
+_For any_ loyalty points conversion rate configured by administrators, the new rate should be stored and applied to subsequent point calculations.
 
 **Validates: Requirements 26.5**
 
 ### Property 52: Shared Ride Matching (Optional)
 
-*For any* two ride requests with shared ride enabled, if the pickup and destination locations are within a configured distance threshold and timing is compatible, the system should match them as a shared ride.
+_For any_ two ride requests with shared ride enabled, if the pickup and destination locations are within a configured distance threshold and timing is compatible, the system should match them as a shared ride.
 
 **Validates: Requirements 27.2**
 
 ### Property 53: Shared Ride Discount (Optional)
 
-*For any* shared ride, each passenger's fare should be discounted by a configured percentage compared to a non-shared ride with the same route.
+_For any_ shared ride, each passenger's fare should be discounted by a configured percentage compared to a non-shared ride with the same route.
 
 **Validates: Requirements 27.3**
 
 ### Property 54: Shared Ride Passenger Limit (Optional)
 
-*For any* shared ride, the system should not allow more than 3 passengers to be matched together.
+_For any_ shared ride, the system should not allow more than 3 passengers to be matched together.
 
 **Validates: Requirements 27.5**
 
 ### Property 55: Gamification Badge Awards (Optional)
 
-*For any* driver milestone achievement (e.g., 100 rides, 500 rides, 5-star average), the system should award the corresponding badge to the driver's profile.
+_For any_ driver milestone achievement (e.g., 100 rides, 500 rides, 5-star average), the system should award the corresponding badge to the driver's profile.
 
 **Validates: Requirements 28.1**
 
 ### Property 56: Gamification Goal Tracking (Optional)
 
-*For any* driver with gamification enabled, the system should track progress toward daily and weekly ride goals and update the progress in real-time.
+_For any_ driver with gamification enabled, the system should track progress toward daily and weekly ride goals and update the progress in real-time.
 
 **Validates: Requirements 28.3**
 
 ### Property 57: Gamification Bonus Awards (Optional)
 
-*For any* driver who achieves a daily or weekly goal, the system should award bonus points according to the configured bonus structure.
+_For any_ driver who achieves a daily or weekly goal, the system should award bonus points according to the configured bonus structure.
 
 **Validates: Requirements 28.5**
 
@@ -1350,12 +1381,12 @@ All API errors should follow a consistent JSON structure:
 ```typescript
 interface ErrorResponse {
   error: {
-    code: string;           // Machine-readable error code
-    message: string;        // Human-readable error message
-    details?: any;          // Additional error context
-    field?: string;         // Field name for validation errors
-    timestamp: string;      // ISO 8601 timestamp
-    requestId: string;      // Unique request identifier for tracking
+    code: string; // Machine-readable error code
+    message: string; // Human-readable error message
+    details?: any; // Additional error context
+    field?: string; // Field name for validation errors
+    timestamp: string; // ISO 8601 timestamp
+    requestId: string; // Unique request identifier for tracking
   };
 }
 ```
@@ -1403,6 +1434,7 @@ Both approaches are complementary and necessary. Unit tests catch concrete bugs 
 **Framework**: Jest for backend (Node.js/Express), Jest + React Native Testing Library for mobile apps
 
 **Focus Areas**:
+
 - Specific examples demonstrating correct behavior
 - Edge cases (empty inputs, boundary values, null/undefined)
 - Error conditions and exception handling
@@ -1412,11 +1444,13 @@ Both approaches are complementary and necessary. Unit tests catch concrete bugs 
 - Authentication and authorization flows
 
 **Coverage Goals**:
+
 - Minimum 80% code coverage
 - 100% coverage for critical paths (authentication, payments, ride matching)
 - All error handlers must have tests
 
 **Example Unit Tests**:
+
 ```typescript
 describe('Fare Calculation', () => {
   it('should calculate fare for a 10km, 20min taxi ride', () => {
@@ -1440,6 +1474,7 @@ describe('Fare Calculation', () => {
 **Framework**: fast-check for JavaScript/TypeScript
 
 **Configuration**:
+
 - Minimum 100 iterations per property test (due to randomization)
 - Seed-based reproducibility for failed tests
 - Shrinking enabled to find minimal failing cases
@@ -1454,15 +1489,14 @@ Each property test must include a comment tag referencing the design document pr
 test('fare calculation includes all components', () => {
   fc.assert(
     fc.property(
-      fc.float({ min: 0, max: 100 }),  // distance
+      fc.float({ min: 0, max: 100 }), // distance
       fc.integer({ min: 0, max: 120 }), // duration
       fc.constantFrom('taxi', 'moto-taxi'),
       (distance, duration, vehicleType) => {
         const fare = calculateFare(distance, duration, vehicleType);
         const config = getFareConfig(vehicleType);
-        const expected = config.baseFare + 
-                        (distance * config.perKmRate) + 
-                        (duration * config.perMinuteRate);
+        const expected =
+          config.baseFare + distance * config.perKmRate + duration * config.perMinuteRate;
         expect(fare).toBeCloseTo(expected, 2);
       }
     ),
@@ -1506,6 +1540,7 @@ test('fare calculation includes all components', () => {
 **Tools**: Supertest for API testing, Testcontainers for database
 
 **Test Scenarios**:
+
 - Complete ride lifecycle (request → accept → complete → payment)
 - User registration and verification flow
 - Real-time location updates via WebSocket
@@ -1517,6 +1552,7 @@ test('fare calculation includes all components', () => {
 **Framework**: Detox for React Native apps, Playwright for web dashboard
 
 **Critical User Journeys**:
+
 1. Passenger requests ride → Driver accepts → Ride completes → Payment processed
 2. Driver registers → Uploads documents → Admin verifies → Driver goes online
 3. Admin configures fares → New fares applied to subsequent rides
@@ -1527,6 +1563,7 @@ test('fare calculation includes all components', () => {
 **Tools**: Artillery or k6 for load testing
 
 **Scenarios**:
+
 - 1000 concurrent ride requests
 - 10,000 location updates per second
 - Database query performance under load
@@ -1535,6 +1572,7 @@ test('fare calculation includes all components', () => {
 ### Security Testing
 
 **Focus Areas**:
+
 - SQL injection prevention
 - XSS prevention in user inputs
 - JWT token validation
@@ -1552,6 +1590,7 @@ test('fare calculation includes all components', () => {
 ### Continuous Integration
 
 **Pipeline**:
+
 1. Lint and format check
 2. Unit tests (parallel execution)
 3. Property tests (parallel execution)
@@ -1561,6 +1600,7 @@ test('fare calculation includes all components', () => {
 7. Deploy to production (manual approval)
 
 **Quality Gates**:
+
 - All tests must pass
 - Code coverage ≥ 80%
 - No critical security vulnerabilities
@@ -1689,6 +1729,7 @@ test('fare calculation includes all components', () => {
 ### Mobile App Deployment
 
 **Android**:
+
 1. Build with EAS Build: `eas build --platform android --profile production`
 2. Generate signed AAB (Android App Bundle)
 3. Upload to Google Play Console
@@ -1696,6 +1737,7 @@ test('fare calculation includes all components', () => {
 5. Monitor crash reports and ratings
 
 **iOS**:
+
 1. Build with EAS Build: `eas build --platform ios --profile production`
 2. Generate signed IPA with App Store provisioning
 3. Upload to App Store Connect via EAS Submit
@@ -1704,6 +1746,7 @@ test('fare calculation includes all components', () => {
 6. Phased release
 
 **Web**:
+
 1. Build: `npx expo export --platform web`
 2. Deploy to Vercel/Netlify
 3. Configure custom domain
@@ -1713,18 +1756,21 @@ test('fare calculation includes all components', () => {
 ### Environment Configuration
 
 **Development**:
+
 - Local database and Redis
 - Mock payment gateway
 - Development API keys
 - Hot reload enabled
 
 **Staging**:
+
 - Cloud-hosted database (smaller instance)
 - Test payment gateway credentials
 - Staging API keys
 - Production-like configuration
 
 **Production**:
+
 - High-availability database with replicas
 - Production payment gateway
 - Production API keys
@@ -1734,6 +1780,7 @@ test('fare calculation includes all components', () => {
 ### CI/CD Pipeline
 
 **GitHub Actions Workflow**:
+
 ```yaml
 1. Code push to main branch
 2. Run linters and formatters
@@ -1761,6 +1808,7 @@ test('fare calculation includes all components', () => {
 ### Monitoring & Alerting
 
 **Metrics to Monitor**:
+
 - API response times (p50, p95, p99)
 - Error rates by endpoint
 - Active rides count
@@ -1770,6 +1818,7 @@ test('fare calculation includes all components', () => {
 - App crash rate
 
 **Alerts**:
+
 - Error rate > 5%
 - API latency > 2 seconds
 - Database CPU > 80%
@@ -1783,6 +1832,7 @@ This design document provides a comprehensive technical blueprint for the taxi a
 The system is designed with correctness at its core, with 57 formally specified properties that will be validated through property-based testing. Combined with comprehensive unit and integration tests, this approach ensures high reliability and correctness.
 
 Key architectural decisions include:
+
 - Expo for cross-platform mobile development with native capabilities
 - Express backend for flexibility and ecosystem maturity
 - PostgreSQL with PostGIS for robust geospatial queries

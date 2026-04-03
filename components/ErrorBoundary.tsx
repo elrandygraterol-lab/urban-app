@@ -62,7 +62,7 @@ export class ErrorBoundary extends Component<Props, State> {
         <View style={styles.container}>
           <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
             <Text style={styles.title}>🔴 Application Error</Text>
-            
+
             <Text style={styles.subtitle}>Something went wrong</Text>
 
             {this.state.error && (
@@ -88,7 +88,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
             <View style={styles.infoBox}>
               <Text style={styles.infoText}>
-                ℹ️  This error has been logged to the console.{'\n'}
+                ℹ️ This error has been logged to the console.{'\n'}
                 Check Metro Bundler terminal for full details.
               </Text>
             </View>

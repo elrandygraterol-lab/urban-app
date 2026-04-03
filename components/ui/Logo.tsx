@@ -8,11 +8,7 @@ interface LogoProps {
   showTagline?: boolean;
 }
 
-export const Logo: React.FC<LogoProps> = ({
-  size = 'medium',
-  style,
-  showTagline = false,
-}) => {
+export const Logo: React.FC<LogoProps> = ({ size = 'medium', style, showTagline = false }) => {
   const sizeMap = {
     small: { fontSize: 24, iconSize: 20 },
     medium: { fontSize: 32, iconSize: 28 },

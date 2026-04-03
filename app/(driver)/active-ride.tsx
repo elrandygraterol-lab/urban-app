@@ -1,18 +1,36 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  Platform,
+  Linking,
+  Alert,
+  Modal,
+  TextInput,
+  Image,
+} from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { useRoute } from '@react-navigation/native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import Constants from 'expo-constants';
-import { api } from '@/services/api';
-import { socket } from '@/services/socket';
+import api from '@/services/api';
+import mapsService from '@/services/mapsService';
+import { getSocket, onPaymentConfirmed } from '@/services/socket';
+import { useSound } from '@/hooks/useSound';
 import { Colors as colors } from '@/constants/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { formatCurrency, Currency } from '@/utils/currency';
+import { formatAddressForCard } from '@/utils/addressFormatter';
 
 interface Ride {
   id: string;
   status: 'accepted' | 'arrived' | 'in_progress' | 'completed';
   passengerName: string;
   passengerPhone: string;
+  passengerProfilePicture?: string;
   pickupAddress: string;
   destinationAddress: string;
   pickupLocation: { latitude: number; longitude: number };
@@ -20,29 +38,101 @@ interface Ride {
   estimatedFare: number;
   actualDistance?: number;
   actualDuration?: number;
+  currency?: Currency;
+}
+
+interface RouteCoordinate {
+  latitude: number;
+  longitude: number;
 }
 
 export default function ActiveRideScreen() {
-  const route = useRoute();
-  const rideId = (route.params as any)?.rideId;
+  const params = useLocalSearchParams();
+  const router = useRouter();
+  const rideId = params.rideId as string;
+  const { playNotificationSound } = useSound();
   const mapRef = useRef<MapView>(null);
+  const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
+  
   const [ride, setRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(true);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [route_coords, setRouteCoords] = useState<any[]>([]);
+  const [routeCoordinates, setRouteCoordinates] = useState<RouteCoordinate[]>([]);
+  const [loadingRoute, setLoadingRoute] = useState(false);
+  const [routeDistance, setRouteDistance] = useState<number | null>(null);
+  const [routeDuration, setRouteDuration] = useState<number | null>(null);
+  const [heading, setHeading] = useState<number>(0); // Driver's heading/direction
+  const lastRouteUpdateRef = useRef<number>(0); // Timestamp of last route update
+  const ROUTE_UPDATE_INTERVAL = 30000; // Update route every 30 seconds (30000ms)
+
+  // Payment state
+  const [isPaymentConfirmed, setIsPaymentConfirmed] = useState(false);
+
+  // Rating modal states
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [passengerRating, setPassengerRating] = useState(0);
+  const [passengerComment, setPassengerComment] = useState('');
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+  const [finalFare, setFinalFare] = useState<number | null>(null);
+
+  // Panel collapse state
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
 
   useEffect(() => {
     fetchRide();
     initializeLocation();
-    setupSocketListeners();
+    const cleanup = setupSocketListeners();
+
+    // Cleanup on unmount
+    return () => {
+      if (cleanup) cleanup();
+      if (locationSubscriptionRef.current) {
+        locationSubscriptionRef.current.remove();
+      }
+    };
   }, [rideId]);
+
+  // Fetch and draw route when ride or location changes
+  useEffect(() => {
+    if (ride && location) {
+      // Reset map interaction state when ride status changes
+      setUserInteractedWithMap(false);
+      setIsInitialMapSetup(true);
+      fetchAndDrawRoute();
+    }
+  }, [ride?.status, location]);
+
+  // State to track if user has manually interacted with map
+  const [userInteractedWithMap, setUserInteractedWithMap] = useState(false);
+  const [isInitialMapSetup, setIsInitialMapSetup] = useState(true);
+
+  // Auto-center map on driver location during navigation (only if user hasn't interacted)
+  useEffect(() => {
+    if (location && mapRef.current && ride && !userInteractedWithMap) {
+      // Only auto-center when actively navigating (accepted or in_progress)
+      if (ride.status === 'accepted' || ride.status === 'in_progress') {
+        mapRef.current.animateCamera(
+          {
+            center: location,
+            zoom: 17, // Close zoom for navigation
+            heading: heading, // Rotate map based on driver's direction
+            pitch: 50, // 3D perspective
+          },
+          { duration: 500 }
+        );
+      }
+    }
+  }, [location, ride?.status, heading, userInteractedWithMap]);
 
   const fetchRide = async () => {
     try {
       const response = await api.get(`/api/rides/${rideId}`);
-      setRide(response.data);
+      // Backend returns { success: true, data: {...} }
+      const rideData = response.data.data || response.data;
+      setRide(rideData);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load ride details');
+      console.error('Failed to load ride details:', error);
+      // Don't show technical error to user, just log it
     } finally {
       setLoading(false);
     }
@@ -50,22 +140,339 @@ export default function ActiveRideScreen() {
 
   const initializeLocation = async () => {
     try {
-      const currentLocation = await Location.getCurrentPositionAsync({});
-      setLocation({
+      // Get initial location
+      const currentLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      const coords = {
         latitude: currentLocation.coords.latitude,
         longitude: currentLocation.coords.longitude,
-      });
+      };
+      setLocation(coords);
+      
+      // Set initial heading if available
+      if (currentLocation.coords.heading !== null && currentLocation.coords.heading !== undefined) {
+        setHeading(currentLocation.coords.heading);
+      }
+
+      // Start watching location for real-time updates
+      const subscription = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          timeInterval: 3000, // Update every 3 seconds for smoother tracking
+          distanceInterval: 5, // Or every 5 meters
+        },
+        newLocation => {
+          const newCoords = {
+            latitude: newLocation.coords.latitude,
+            longitude: newLocation.coords.longitude,
+          };
+          
+          console.log('[ACTIVE_RIDE] 📍 Location updated:', newCoords);
+          
+          setLocation(newCoords);
+          
+          // Update heading if available
+          if (newLocation.coords.heading !== null && newLocation.coords.heading !== undefined) {
+            setHeading(newLocation.coords.heading);
+          }
+
+          // Only send location updates if ride is still active (not completed)
+          // This prevents "Ride ID does not match active ride" errors after completion
+          if (ride && ride.status !== 'completed') {
+            // Send location update to server via socket
+            const socket = getSocket();
+            if (socket && socket.connected) {
+              socket.emit('driver:location_update', {
+                rideId: rideId,
+                latitude: newCoords.latitude,
+                longitude: newCoords.longitude,
+                heading: newLocation.coords.heading,
+              });
+            }
+          }
+          
+          // Check if we should update the route (every 30 seconds)
+          const now = Date.now();
+          if (now - lastRouteUpdateRef.current > ROUTE_UPDATE_INTERVAL) {
+            console.log('[ACTIVE_RIDE] 🔄 Updating route from new location');
+            lastRouteUpdateRef.current = now;
+            // Trigger route recalculation
+            if (ride && ride.status !== 'completed') {
+              fetchAndDrawRoute();
+            }
+          }
+        }
+      );
+
+      locationSubscriptionRef.current = subscription;
     } catch (error) {
       console.error('Failed to get location:', error);
     }
   };
 
-  const setupSocketListeners = () => {
-    socket.on('ride:status_changed', (data) => {
-      if (data.rideId === rideId) {
-        setRide((prev) => prev ? { ...prev, status: data.status } : null);
+  const fetchAndDrawRoute = async () => {
+    if (!ride || !location) return;
+
+    setLoadingRoute(true);
+
+    try {
+      // Determine origin and destination based on ride status
+      let origin, destination;
+
+      if (ride.status === 'accepted' || ride.status === 'arrived') {
+        // Route from driver's current location to pickup
+        origin = location;
+        destination = ride.pickupLocation;
+      } else if (ride.status === 'in_progress') {
+        // Route from driver's current location to destination (navigation mode)
+        origin = location;
+        destination = ride.destinationLocation;
+      } else {
+        // No route needed for completed rides
+        setLoadingRoute(false);
+        return;
       }
-    });
+
+      console.log('[ACTIVE_RIDE] Fetching route:', {
+        status: ride.status,
+        origin,
+        destination,
+      });
+
+      // Fetch route from backend
+      const routeData = await mapsService.getRoute(origin, destination);
+
+      if (routeData.coordinates && routeData.coordinates.length > 0) {
+        setRouteCoordinates(routeData.coordinates);
+        setRouteDistance(routeData.distance);
+        setRouteDuration(routeData.duration);
+
+        console.log('[ACTIVE_RIDE] Route loaded:', {
+          points: routeData.coordinates.length,
+          distance: routeData.distance,
+          duration: routeData.duration,
+        });
+
+        // Only fit map to route on initial setup, not on updates
+        if (isInitialMapSetup && mapRef.current && routeData.coordinates.length > 0) {
+          mapRef.current.fitToCoordinates(routeData.coordinates, {
+            edgePadding: { top: 100, right: 50, bottom: 300, left: 50 },
+            animated: true,
+          });
+          setIsInitialMapSetup(false);
+        }
+      }
+    } catch (error) {
+      console.error('[ACTIVE_RIDE] Failed to fetch route:', error);
+      // Don't show error to user, route is optional
+    } finally {
+      setLoadingRoute(false);
+    }
+  };
+
+  const setupSocketListeners = () => {
+    const socket = getSocket();
+    if (!socket) {
+      console.warn('[ACTIVE_RIDE] ⚠️ Socket not available');
+      return;
+    }
+
+    if (!socket.connected) {
+      console.warn('[ACTIVE_RIDE] ⚠️ Socket not connected');
+      console.warn('[ACTIVE_RIDE] Socket ID:', socket.id);
+      console.warn('[ACTIVE_RIDE] Attempting to reconnect...');
+    }
+
+    console.log('[ACTIVE_RIDE] ========================================');
+    console.log('[ACTIVE_RIDE] Setting up socket listeners');
+    console.log('[ACTIVE_RIDE]    Ride ID:', rideId);
+    console.log('[ACTIVE_RIDE]    Socket ID:', socket.id);
+    console.log('[ACTIVE_RIDE]    Socket Connected:', socket.connected);
+    console.log('[ACTIVE_RIDE]    Transport:', socket.io?.engine?.transport?.name);
+    console.log('[ACTIVE_RIDE] ========================================');
+
+    // Join the ride room to receive ride-specific events
+    console.log('[ACTIVE_RIDE] 🔌 Joining ride room:', `ride:${rideId}`);
+    socket.emit('join_ride', { rideId });
+
+    // Listen for ride status changes (only for this screen)
+    const handleStatusChanged = (data: any) => {
+      console.log('[ACTIVE_RIDE] 📍 Status changed:', data);
+      if (data.rideId === rideId) {
+        setRide(prev => (prev ? { ...prev, status: data.status } : null));
+        // Route will be updated by useEffect when status changes
+      }
+    };
+
+    // Listen for ride completion
+    const handleRideCompleted = (data: {
+      rideId: string;
+      status: 'completed';
+      completedAt: string;
+      actualDistanceKm: number;
+      actualDurationMinutes: number;
+      finalFare: number;
+      timestamp: string;
+    }) => {
+      console.log('[ACTIVE_RIDE] ========================================');
+      console.log('[ACTIVE_RIDE] ✅ RIDE COMPLETED EVENT RECEIVED');
+      console.log('[ACTIVE_RIDE]    Ride ID:', data.rideId);
+      console.log('[ACTIVE_RIDE]    Current Ride ID:', rideId);
+      console.log('[ACTIVE_RIDE]    Final Fare:', data.finalFare);
+      console.log('[ACTIVE_RIDE] ========================================');
+
+      // Only handle if this is the current ride
+      if (data.rideId !== rideId) {
+        console.log('[ACTIVE_RIDE] ⚠️ Completed ride does not match current ride, ignoring');
+        return;
+      }
+
+      // Play notification sound
+      playNotificationSound();
+
+      // Store final fare and show rating modal
+      setFinalFare(data.finalFare);
+      setShowRatingModal(true);
+
+      // Update ride state to reflect completion
+      setRide(prev => (prev ? { ...prev, status: 'completed' } : null));
+    };
+
+    // Listen for ride cancellation
+    const handleRideCancelled = (data: {
+      rideId: string;
+      status: 'cancelled';
+      cancelledBy: 'passenger' | 'driver' | 'system';
+      cancellationReason: string;
+      cancellationFee: number;
+      cancelledAt: string;
+      timestamp: string;
+    }) => {
+      console.log('[ACTIVE_RIDE] ========================================');
+      console.log('[ACTIVE_RIDE] 🚫 RIDE CANCELLED EVENT RECEIVED');
+      console.log('[ACTIVE_RIDE]    Ride ID:', data.rideId);
+      console.log('[ACTIVE_RIDE]    Current Ride ID:', rideId);
+      console.log('[ACTIVE_RIDE]    Cancelled By:', data.cancelledBy);
+      console.log('[ACTIVE_RIDE]    Cancellation Fee:', data.cancellationFee);
+      console.log('[ACTIVE_RIDE]    Reason:', data.cancellationReason);
+      console.log('[ACTIVE_RIDE] ========================================');
+
+      // Only handle if this is the current ride
+      if (data.rideId !== rideId) {
+        console.log('[ACTIVE_RIDE] ⚠️ Cancelled ride does not match current ride, ignoring');
+        return;
+      }
+
+      // Play notification sound
+      playNotificationSound();
+
+      // Build cancellation message
+      let message = `El pasajero ha cancelado el viaje`;
+      
+      if (data.cancellationReason) {
+        message += `\n\nMotivo: ${data.cancellationReason}`;
+      }
+
+      // Add compensation information if applicable
+      if (data.cancellationFee > 0) {
+        message += `\n\nCompensación recibida: Bs. ${data.cancellationFee.toFixed(2)}`;
+      }
+
+      // Show alert and navigate back to home screen
+      Alert.alert(
+        'Viaje Cancelado',
+        message,
+        [
+          {
+            text: 'Entendido',
+            onPress: () => {
+              console.log('[ACTIVE_RIDE] Navigating back to home screen');
+              router.replace('/(driver)');
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+
+      // Update ride state to reflect cancellation
+      setRide(prev => (prev ? { ...prev, status: 'cancelled' } : null));
+    };
+
+    // Listen for payment confirmation
+    const handlePaymentConfirmed = (data: any) => {
+      console.log('[ACTIVE_RIDE] ========================================');
+      console.log('[ACTIVE_RIDE] 💳 PAYMENT CONFIRMED EVENT RECEIVED');
+      console.log('[ACTIVE_RIDE]    Ride ID:', data.rideId);
+      console.log('[ACTIVE_RIDE]    Payment ID:', data.paymentId);
+      console.log('[ACTIVE_RIDE]    Amount:', data.amount);
+      console.log('[ACTIVE_RIDE] ========================================');
+
+      // Enable the "Start Ride" button
+      setIsPaymentConfirmed(true);
+
+      // Play notification sound
+      playNotificationSound();
+
+      // Show alert to driver
+      Alert.alert(
+        'Pago Confirmado',
+        'El pasajero ha confirmado el pago. Ahora puedes iniciar el viaje.',
+        [{ text: 'Entendido' }]
+      );
+    };
+
+    // Listen for connection events
+    const handleConnect = () => {
+      console.log('[ACTIVE_RIDE] ========================================');
+      console.log('[ACTIVE_RIDE] ✅ SOCKET RECONNECTED');
+      console.log('[ACTIVE_RIDE]    Socket ID:', socket.id);
+      console.log('[ACTIVE_RIDE] ========================================');
+    };
+
+    const handleDisconnect = (reason: string) => {
+      console.log('[ACTIVE_RIDE] ========================================');
+      console.log('[ACTIVE_RIDE] ❌ SOCKET DISCONNECTED');
+      console.log('[ACTIVE_RIDE]    Reason:', reason);
+      console.log('[ACTIVE_RIDE] ========================================');
+    };
+
+    // Register listeners
+    socket.on('ride:status_changed', handleStatusChanged);
+    socket.on('ride:completed', handleRideCompleted);
+    socket.on('ride:cancelled', handleRideCancelled);
+    onPaymentConfirmed(handlePaymentConfirmed);
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+
+    console.log('[ACTIVE_RIDE] ========================================');
+    console.log('[ACTIVE_RIDE] ✅ Socket listeners registered');
+    console.log('[ACTIVE_RIDE]    - ride:status_changed');
+    console.log('[ACTIVE_RIDE]    - ride:completed');
+    console.log('[ACTIVE_RIDE]    - ride:cancelled');
+    console.log('[ACTIVE_RIDE]    - ride:payment_confirmed');
+    console.log('[ACTIVE_RIDE]    - connect');
+    console.log('[ACTIVE_RIDE]    - disconnect');
+    console.log('[ACTIVE_RIDE] ========================================');
+    console.log('[ACTIVE_RIDE] ℹ️ NOTE: Payment notifications handled by useGlobalSocketListeners');
+    console.log('[ACTIVE_RIDE] ℹ️ GlobalNotificationModal will show notification on ANY screen');
+    console.log('[ACTIVE_RIDE] ========================================');
+
+    // Cleanup function
+    return () => {
+      console.log('[ACTIVE_RIDE] Cleaning up socket listeners');
+      
+      // Leave the ride room
+      console.log('[ACTIVE_RIDE] 🔌 Leaving ride room:', `ride:${rideId}`);
+      socket.emit('leave_ride', { rideId });
+      
+      socket.off('ride:status_changed', handleStatusChanged);
+      socket.off('ride:completed', handleRideCompleted);
+      socket.off('ride:cancelled', handleRideCancelled);
+      socket.off('ride:payment_confirmed', handlePaymentConfirmed);
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+    };
   };
 
   const updateRideStatus = async (newStatus: string) => {
@@ -74,19 +481,129 @@ export default function ActiveRideScreen() {
         newStatus === 'arrived'
           ? `/api/rides/${rideId}/arrive`
           : newStatus === 'in_progress'
-          ? `/api/rides/${rideId}/start`
-          : `/api/rides/${rideId}/complete`;
+            ? `/api/rides/${rideId}/start`
+            : `/api/rides/${rideId}/complete`;
 
-      await api.post(endpoint);
-      fetchRide();
+      const response = await api.post(endpoint);
+      
+      // If completing the ride, show rating modal immediately
+      if (newStatus === 'completed') {
+        const rideData = response.data.data || response.data;
+        
+        // Store final fare from response
+        if (rideData.finalFare) {
+          setFinalFare(rideData.finalFare);
+        }
+        
+        // Update ride state
+        setRide(prev => (prev ? { ...prev, status: 'completed' } : null));
+        
+        // Show rating modal
+        setShowRatingModal(true);
+        
+        // Play notification sound
+        playNotificationSound();
+      } else {
+        // For other status changes, just fetch the updated ride
+        fetchRide();
+      }
+      
+      // Route will be updated automatically by useEffect when status changes
     } catch (error) {
-      Alert.alert('Error', `Failed to update ride status to ${newStatus}`);
+      console.error(`Failed to update ride status to ${newStatus}:`, error);
+      // Don't show technical error to user, just log it
     }
+  };
+
+  const handleCallPassenger = () => {
+    if (!ride) return;
+
+    const phoneUrl = `tel:${ride.passengerPhone}`;
+    Linking.canOpenURL(phoneUrl)
+      .then(supported => {
+        if (supported) {
+          return Linking.openURL(phoneUrl);
+        } else {
+          console.warn('Cannot make calls on this device');
+          // Don't show error, device doesn't support calls
+        }
+      })
+      .catch(err => {
+        console.error('Error making call:', err);
+        // Don't show technical error to user
+      });
+  };
+
+  const handleSubmitRating = async () => {
+    if (!ride || passengerRating === 0) return;
+
+    setIsSubmittingRating(true);
+
+    try {
+      await api.post('/api/ratings/passenger', {
+        rideId: ride.id,
+        rating: passengerRating,
+        comment: passengerComment.trim() || undefined,
+      });
+
+      console.log('✅ Rating submitted successfully');
+
+      // Close rating modal
+      setShowRatingModal(false);
+      setIsSubmittingRating(false);
+
+      // Show success message and navigate home
+      Alert.alert(
+        '¡Gracias!',
+        'Tu valoración ha sido enviada exitosamente.',
+        [
+          {
+            text: 'Aceptar',
+            onPress: () => {
+              console.log('[ACTIVE_RIDE] Navigating back to home screen');
+              router.replace('/(driver)');
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+    } catch (error) {
+      console.error('Failed to submit rating:', error);
+      setIsSubmittingRating(false);
+
+      Alert.alert(
+        'Error',
+        'No se pudo enviar la valoración. Por favor, intenta de nuevo.',
+        [{ text: 'Aceptar' }]
+      );
+    }
+  };
+
+  const handleSkipRating = () => {
+    setShowRatingModal(false);
+    
+    // Navigate home after skipping
+    Alert.alert(
+      '🎉 Viaje Completado',
+      `El viaje ha sido completado exitosamente.\n\nTarifa Final: Bs. ${finalFare?.toFixed(2) || '0.00'}`,
+      [
+        {
+          text: 'Aceptar',
+          onPress: () => {
+            console.log('[ACTIVE_RIDE] Navigating back to home screen');
+            router.replace('/(driver)');
+          },
+        },
+      ],
+      { cancelable: false }
+    );
   };
 
   if (loading || !ride) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+      <View
+        style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}
+      >
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -103,11 +620,29 @@ export default function ActiveRideScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
       {isExpoGo ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5', padding: 20 }}>
-          <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.darkGray, marginBottom: 12, textAlign: 'center' }}>
+        <View
+          style={{
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: '#f5f5f5',
+            padding: 20,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 18,
+              fontWeight: 'bold',
+              color: colors.darkGray,
+              marginBottom: 12,
+              textAlign: 'center',
+            }}
+          >
             🗺️ Mapa no disponible en Expo Go
           </Text>
-          <Text style={{ fontSize: 14, color: colors.lightGray, textAlign: 'center', marginBottom: 8 }}>
+          <Text
+            style={{ fontSize: 14, color: colors.lightGray, textAlign: 'center', marginBottom: 8 }}
+          >
             react-native-maps requiere un Development Build
           </Text>
           <Text style={{ fontSize: 12, color: colors.lightGray, textAlign: 'center' }}>
@@ -124,35 +659,213 @@ export default function ActiveRideScreen() {
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           }}
+          rotateEnabled={true}
+          pitchEnabled={true}
+          showsBuildings={true}
+          showsUserLocation={false}
+          showsMyLocationButton={false}
+          onPanDrag={() => setUserInteractedWithMap(true)}
+          onRegionChangeComplete={() => {
+            // User manually changed region
+            setUserInteractedWithMap(true);
+          }}
         >
+          {/* Driver's current location with rotation based on heading */}
+          {/* Color changes: Green when going to pickup, Orange when transporting passenger */}
           {location && (
             <Marker
               coordinate={location}
-              title="Your Location"
-              pinColor={colors.primary}
-            />
+              title="Tu Ubicación"
+              description="Conductor"
+              anchor={{ x: 0.5, y: 0.5 }}
+              flat={true}
+              rotation={heading}
+            >
+              <View
+                style={{
+                  backgroundColor: ride.status === 'in_progress' ? '#FF8C00' : colors.primary,
+                  padding: 10,
+                  borderRadius: 25,
+                  borderWidth: 4,
+                  borderColor: '#fff',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 4,
+                  elevation: 5,
+                }}
+              >
+                <Ionicons name="navigate" size={24} color="#fff" />
+              </View>
+            </Marker>
           )}
-          <Marker
-            coordinate={ride.pickupLocation}
-            title="Pickup"
-            pinColor="green"
-          />
+
+          {/* Pickup location marker - Orange with person icon */}
+          {/* Only show if ride is not in progress (passenger not picked up yet) */}
+          {(ride.status === 'accepted' || ride.status === 'arrived') && (
+            <Marker
+              coordinate={ride.pickupLocation}
+              title="Punto de Recogida"
+              description={ride.pickupAddress}
+              anchor={{ x: 0.5, y: 1 }}
+            >
+              <View style={{ alignItems: 'center' }}>
+                <View
+                  style={{
+                    backgroundColor: '#FF8C00',
+                    padding: 12,
+                    borderRadius: 25,
+                    borderWidth: 3,
+                    borderColor: '#fff',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 4,
+                    elevation: 5,
+                  }}
+                >
+                  <Ionicons name="person" size={24} color="#fff" />
+                </View>
+                <View
+                  style={{
+                    width: 0,
+                    height: 0,
+                    backgroundColor: 'transparent',
+                    borderStyle: 'solid',
+                    borderLeftWidth: 8,
+                    borderRightWidth: 8,
+                    borderTopWidth: 12,
+                    borderLeftColor: 'transparent',
+                    borderRightColor: 'transparent',
+                    borderTopColor: '#fff',
+                    marginTop: -3,
+                  }}
+                />
+              </View>
+            </Marker>
+          )}
+
+          {/* Destination location marker - Green with flag icon */}
           <Marker
             coordinate={ride.destinationLocation}
-            title="Destination"
-            pinColor="red"
-          />
-          {route_coords.length > 0 && (
+            title="Destino"
+            description={ride.destinationAddress}
+            anchor={{ x: 0.5, y: 1 }}
+          >
+            <View style={{ alignItems: 'center' }}>
+              <View
+                style={{
+                  backgroundColor: '#22c55e',
+                  padding: 12,
+                  borderRadius: 25,
+                  borderWidth: 3,
+                  borderColor: '#fff',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 4,
+                  elevation: 5,
+                }}
+              >
+                <Ionicons name="flag" size={24} color="#fff" />
+              </View>
+              <View
+                style={{
+                  width: 0,
+                  height: 0,
+                  backgroundColor: 'transparent',
+                  borderStyle: 'solid',
+                  borderLeftWidth: 8,
+                  borderRightWidth: 8,
+                  borderTopWidth: 12,
+                  borderLeftColor: 'transparent',
+                  borderRightColor: 'transparent',
+                  borderTopColor: '#fff',
+                  marginTop: -3,
+                }}
+              />
+            </View>
+          </Marker>
+
+          {/* Route polyline - Different colors based on ride status */}
+          {routeCoordinates.length > 0 && (
             <Polyline
-              coordinates={route_coords}
-              strokeColor={colors.primary}
-              strokeWidth={3}
+              coordinates={routeCoordinates}
+              strokeColor={
+                ride.status === 'accepted' || ride.status === 'arrived'
+                  ? '#FF8C00' // Orange for going to pickup
+                  : '#22c55e' // Green for going to destination
+              }
+              strokeWidth={5}
+              lineCap="round"
+              lineJoin="round"
             />
           )}
         </MapView>
       )}
 
-      {/* Ride Info Card */}
+      {/* Loading route indicator */}
+      {loadingRoute && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 60,
+            alignSelf: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            borderRadius: 20,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <ActivityIndicator size="small" color="#fff" />
+          <Text style={{ color: '#fff', fontSize: 14 }}>Cargando ruta...</Text>
+        </View>
+      )}
+
+      {/* Route info badge with status indicator */}
+      {routeDistance != null && routeDuration != null && !loadingRoute && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 60,
+            alignSelf: 'center',
+            backgroundColor: 
+              ride.status === 'accepted' || ride.status === 'arrived'
+                ? '#FF8C00' // Orange for going to pickup
+                : '#22c55e', // Green for going to destination
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            borderRadius: 25,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.3,
+            shadowRadius: 4,
+            elevation: 5,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Ionicons name="navigate" size={18} color="#fff" />
+            <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>
+              {routeDistance.toFixed(1)} km
+            </Text>
+          </View>
+          <View style={{ width: 1, height: 20, backgroundColor: 'rgba(255,255,255,0.3)' }} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Ionicons name="time" size={18} color="#fff" />
+            <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>
+              {Math.round(routeDuration)} min
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Ride Info Card - Collapsible */}
       <View
         style={{
           position: 'absolute',
@@ -160,118 +873,673 @@ export default function ActiveRideScreen() {
           left: 0,
           right: 0,
           backgroundColor: '#fff',
-          borderTopLeftRadius: 16,
-          borderTopRightRadius: 16,
-          padding: 16,
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -2 },
           shadowOpacity: 0.1,
-          shadowRadius: 4,
-          elevation: 3,
+          shadowRadius: 8,
+          elevation: 5,
+          maxHeight: isPanelCollapsed ? 50 : '65%',
         }}
       >
-        <ScrollView showsVerticalScrollIndicator={false}>
-          <Text style={{ fontSize: 16, fontWeight: 'bold', color: colors.darkGray, marginBottom: 12 }}>
-            {ride.status === 'accepted' || ride.status === 'arrived'
-              ? 'Going to Pickup'
-              : 'En Route to Destination'}
-          </Text>
+        {/* Collapsible Handle - Always visible */}
+        <TouchableOpacity
+          style={{
+            alignItems: 'center',
+            paddingVertical: 12,
+            backgroundColor: '#fff',
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+          }}
+          onPress={() => setIsPanelCollapsed(!isPanelCollapsed)}
+          activeOpacity={0.7}
+        >
+          <View
+            style={{
+              width: 40,
+              height: 4,
+              backgroundColor: '#D1D5DB',
+              borderRadius: 2,
+            }}
+          />
+        </TouchableOpacity>
 
-          {/* Passenger Info */}
-          <View style={{ marginBottom: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0' }}>
-            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.darkGray, marginBottom: 4 }}>
-              Passenger: {ride.passengerName}
-            </Text>
-            <Text style={{ fontSize: 14, color: colors.lightGray }}>
-              Phone: {ride.passengerPhone}
-            </Text>
-          </View>
+        {/* Panel Content - Hidden when collapsed */}
+        {!isPanelCollapsed && (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={{ maxHeight: '100%' }}
+            contentContainerStyle={{ padding: 20, paddingBottom: 32 }}
+          >
+            {/* Status Badge */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor:
+                  ride.status === 'accepted' || ride.status === 'arrived'
+                    ? '#FFF4E6'
+                    : '#E8F5E9',
+                padding: 14,
+                borderRadius: 16,
+                marginBottom: 20,
+                gap: 12,
+              }}
+            >
+              <View
+                style={{
+                  backgroundColor:
+                    ride.status === 'accepted' || ride.status === 'arrived'
+                      ? '#FF8C00'
+                      : '#22c55e',
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Ionicons
+                  name={
+                    ride.status === 'accepted' || ride.status === 'arrived'
+                      ? 'navigate-circle'
+                      : 'checkmark-circle'
+                  }
+                  size={28}
+                  color="#fff"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: 17,
+                    fontWeight: 'bold',
+                    color: colors.darkGray,
+                    marginBottom: 4,
+                  }}
+                >
+                  {ride.status === 'accepted' || ride.status === 'arrived'
+                    ? 'Navegando al Punto de Recogida'
+                    : 'Navegando al Destino'}
+                </Text>
+                {routeDistance != null && routeDuration != null && (
+                  <Text style={{ fontSize: 14, color: colors.lightGray }}>
+                    {routeDistance.toFixed(1)} km • {Math.round(routeDuration)} min restantes
+                  </Text>
+                )}
+              </View>
+            </View>
 
-          {/* Location Info */}
-          <View style={{ marginBottom: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0' }}>
-            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.lightGray, marginBottom: 4 }}>
-              PICKUP
-            </Text>
-            <Text style={{ fontSize: 14, color: colors.darkGray, marginBottom: 12 }}>
-              {ride.pickupAddress}
-            </Text>
+            {/* Passenger Info Card */}
+            <View
+              style={{
+                backgroundColor: '#F9FAFB',
+                borderRadius: 16,
+                padding: 16,
+                marginBottom: 20,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  marginBottom: 16,
+                }}
+              >
+                <View
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 28,
+                    backgroundColor: colors.primary,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 14,
+                    overflow: 'hidden',
+                  }}
+                >
+                  {ride.passengerProfilePicture ? (
+                    <Image
+                      source={{ uri: ride.passengerProfilePicture }}
+                      style={{ width: 56, height: 56 }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#fff' }}>
+                      {ride.passengerName.charAt(0).toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 'bold',
+                      color: colors.darkGray,
+                      marginBottom: 4,
+                    }}
+                  >
+                    {ride.passengerName}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="call-outline" size={16} color={colors.lightGray} />
+                    <Text style={{ fontSize: 14, color: colors.lightGray }}>
+                      {ride.passengerPhone}
+                    </Text>
+                  </View>
+                </View>
+              </View>
 
-            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.lightGray, marginBottom: 4 }}>
-              DESTINATION
-            </Text>
-            <Text style={{ fontSize: 14, color: colors.darkGray }}>
-              {ride.destinationAddress}
-            </Text>
-          </View>
+              {/* Call Button - Disabled when ride is in progress */}
+              <TouchableOpacity
+                onPress={handleCallPassenger}
+                disabled={ride.status === 'in_progress'}
+                style={{
+                  backgroundColor: ride.status === 'in_progress' ? '#D1D5DB' : colors.primary,
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: 8,
+                  opacity: ride.status === 'in_progress' ? 0.5 : 1,
+                }}
+              >
+                <Ionicons name="call" size={20} color="#fff" />
+                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
+                  {ride.status === 'in_progress' ? 'Pasajero en el Vehículo' : 'Llamar al Pasajero'}
+                </Text>
+              </TouchableOpacity>
+            </View>
 
-          {/* Fare Info */}
-          <View style={{ marginBottom: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0' }}>
-            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.primary }}>
-              Estimated Fare: ${ride.estimatedFare.toFixed(2)}
-            </Text>
-          </View>
+            {/* Trip Details */}
+            <View
+              style={{
+                backgroundColor: '#fff',
+                borderWidth: 1,
+                borderColor: '#E5E7EB',
+                borderRadius: 16,
+                padding: 16,
+                marginBottom: 20,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: 'bold',
+                  color: colors.darkGray,
+                  marginBottom: 16,
+                }}
+              >
+                Detalles del Viaje
+              </Text>
 
-          {/* Action Buttons */}
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+              {/* Pickup Location */}
+              <View style={{ marginBottom: 16 }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                    marginBottom: 6,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: '#FFF4E6',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Ionicons name="person" size={18} color="#FF8C00" />
+                  </View>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: '600',
+                      color: colors.lightGray,
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    Punto de Recogida
+                  </Text>
+                </View>
+                <Text
+                  style={{
+                    fontSize: 15,
+                    color: colors.darkGray,
+                    marginLeft: 42,
+                    lineHeight: 20,
+                  }}
+                >
+                  {formatAddressForCard(ride.pickupAddress)}
+                </Text>
+              </View>
+
+              {/* Destination Location */}
+              <View style={{ marginBottom: 16 }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                    marginBottom: 6,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: '#E8F5E9',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Ionicons name="flag" size={18} color="#22c55e" />
+                  </View>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: '600',
+                      color: colors.lightGray,
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    Destino
+                  </Text>
+                </View>
+                <Text
+                  style={{
+                    fontSize: 15,
+                    color: colors.darkGray,
+                    marginLeft: 42,
+                    lineHeight: 20,
+                  }}
+                >
+                  {formatAddressForCard(ride.destinationAddress)}
+                </Text>
+              </View>
+
+              {/* Fare */}
+              <View
+                style={{
+                  backgroundColor: '#F0FDF4',
+                  padding: 12,
+                  borderRadius: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Text style={{ fontSize: 14, color: colors.lightGray, fontWeight: '500' }}>
+                  Tarifa Estimada
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 20,
+                    fontWeight: 'bold',
+                    color: colors.primary,
+                  }}
+                >
+                  {formatCurrency(ride.estimatedFare, ride.currency || 'VES')}
+                </Text>
+              </View>
+            </View>
+
+            {/* Action Button */}
             {ride.status === 'accepted' && (
               <TouchableOpacity
                 onPress={() => updateRideStatus('arrived')}
                 style={{
-                  flex: 1,
-                  paddingVertical: 12,
-                  borderRadius: 8,
                   backgroundColor: colors.primary,
+                  paddingVertical: 16,
+                  borderRadius: 12,
                   alignItems: 'center',
+                  shadowColor: colors.primary,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 4,
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 8,
                 }}
               >
-                <Text style={{ color: '#fff', fontWeight: '600' }}>I've Arrived</Text>
+                <Ionicons name="location" size={20} color="#fff" />
+                <Text style={{ color: '#fff', fontSize: 17, fontWeight: 'bold' }}>
+                  He Llegado al Punto de Recogida
+                </Text>
               </TouchableOpacity>
             )}
 
             {ride.status === 'arrived' && (
-              <TouchableOpacity
-                onPress={() => updateRideStatus('in_progress')}
-                style={{
-                  flex: 1,
-                  paddingVertical: 12,
-                  borderRadius: 8,
-                  backgroundColor: colors.primary,
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ color: '#fff', fontWeight: '600' }}>Start Trip</Text>
-              </TouchableOpacity>
+              <>
+                {/* Payment waiting message */}
+                {!isPaymentConfirmed && (
+                  <View
+                    style={{
+                      backgroundColor: '#FFF4E6',
+                      padding: 16,
+                      borderRadius: 12,
+                      marginBottom: 16,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 12,
+                    }}
+                  >
+                    <ActivityIndicator size="small" color="#FF8C00" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF8C00', marginBottom: 4 }}>
+                        Esperando confirmación de pago
+                      </Text>
+                      <Text style={{ fontSize: 13, color: '#666' }}>
+                        El pasajero debe confirmar el pago antes de iniciar el viaje
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Start Ride button */}
+                <TouchableOpacity
+                  onPress={() => updateRideStatus('in_progress')}
+                  disabled={!isPaymentConfirmed}
+                  style={{
+                    backgroundColor: isPaymentConfirmed ? colors.primary : '#D1D5DB',
+                    paddingVertical: 16,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                    shadowColor: isPaymentConfirmed ? colors.primary : '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: isPaymentConfirmed ? 0.3 : 0.1,
+                    shadowRadius: 8,
+                    elevation: 4,
+                    opacity: isPaymentConfirmed ? 1 : 0.6,
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <Ionicons 
+                    name={isPaymentConfirmed ? "play-circle" : "time-outline"} 
+                    size={20} 
+                    color="#fff" 
+                  />
+                  <Text style={{ color: '#fff', fontSize: 17, fontWeight: 'bold' }}>
+                    {isPaymentConfirmed ? 'Iniciar Viaje' : 'Esperando Pago'}
+                  </Text>
+                </TouchableOpacity>
+              </>
             )}
 
             {ride.status === 'in_progress' && (
               <TouchableOpacity
                 onPress={() => updateRideStatus('completed')}
                 style={{
-                  flex: 1,
-                  paddingVertical: 12,
-                  borderRadius: 8,
                   backgroundColor: colors.primary,
+                  paddingVertical: 16,
+                  borderRadius: 12,
                   alignItems: 'center',
+                  shadowColor: colors.primary,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 4,
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 8,
                 }}
               >
-                <Text style={{ color: '#fff', fontWeight: '600' }}>Complete Trip</Text>
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                <Text style={{ color: '#fff', fontSize: 17, fontWeight: 'bold' }}>
+                  He Llegado al Destino
+                </Text>
               </TouchableOpacity>
             )}
-
-            <TouchableOpacity
-              style={{
-                flex: 1,
-                paddingVertical: 12,
-                borderRadius: 8,
-                backgroundColor: colors.orange,
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{ color: '#fff', fontWeight: '600' }}>Call</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+          </ScrollView>
+        )}
       </View>
+
+      {/* Rating Modal */}
+      <Modal
+        visible={showRatingModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={handleSkipRating}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: '#fff',
+              borderRadius: 20,
+              padding: 24,
+              width: '100%',
+              maxWidth: 400,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 8,
+              elevation: 5,
+            }}
+          >
+            {/* Rating Header */}
+            <View style={{ marginBottom: 20 }}>
+              <Text
+                style={{
+                  fontSize: 24,
+                  fontWeight: 'bold',
+                  color: colors.darkGray,
+                  textAlign: 'center',
+                  marginBottom: 8,
+                }}
+              >
+                ¿Cómo fue el viaje?
+              </Text>
+              <Text
+                style={{
+                  fontSize: 14,
+                  color: colors.lightGray,
+                  textAlign: 'center',
+                }}
+              >
+                Valora tu experiencia con {ride?.passengerName || 'el pasajero'}
+              </Text>
+            </View>
+
+            {/* Passenger Info */}
+            {ride && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#F9FAFB',
+                  padding: 16,
+                  borderRadius: 12,
+                  marginBottom: 20,
+                }}
+              >
+                <View
+                  style={{
+                    width: 50,
+                    height: 50,
+                    borderRadius: 25,
+                    backgroundColor: colors.primary,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 12,
+                  }}
+                >
+                  <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#fff' }}>
+                    {ride.passengerName.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: colors.darkGray }}>
+                    {ride.passengerName}
+                  </Text>
+                  {finalFare && (
+                    <Text style={{ fontSize: 14, color: colors.lightGray, marginTop: 2 }}>
+                      Tarifa: {formatCurrency(finalFare, ride.currency || 'VES')}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* Star Rating Component */}
+            <View style={{ marginBottom: 20 }}>
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: '600',
+                  color: colors.darkGray,
+                  marginBottom: 12,
+                  textAlign: 'center',
+                }}
+              >
+                Tu valoración
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 8,
+                  marginBottom: 8,
+                }}
+              >
+                {[1, 2, 3, 4, 5].map(star => (
+                  <TouchableOpacity
+                    key={star}
+                    onPress={() => setPassengerRating(star)}
+                    style={{
+                      padding: 4,
+                    }}
+                  >
+                    <Ionicons 
+                      name={star <= passengerRating ? "star" : "star-outline"} 
+                      size={40} 
+                      color={star <= passengerRating ? "#FFD700" : "#D1D5DB"} 
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {passengerRating > 0 && (
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: colors.primary,
+                    textAlign: 'center',
+                    fontWeight: '600',
+                  }}
+                >
+                  {passengerRating === 1 && 'Muy malo'}
+                  {passengerRating === 2 && 'Malo'}
+                  {passengerRating === 3 && 'Regular'}
+                  {passengerRating === 4 && 'Bueno'}
+                  {passengerRating === 5 && 'Excelente'}
+                </Text>
+              )}
+            </View>
+
+            {/* Comment Input */}
+            <View style={{ marginBottom: 20 }}>
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: '600',
+                  color: colors.darkGray,
+                  marginBottom: 8,
+                }}
+              >
+                Comentario (opcional)
+              </Text>
+              <TextInput
+                style={{
+                  backgroundColor: '#F9FAFB',
+                  borderWidth: 1,
+                  borderColor: '#E5E7EB',
+                  borderRadius: 12,
+                  padding: 12,
+                  fontSize: 14,
+                  color: colors.darkGray,
+                  minHeight: 100,
+                  textAlignVertical: 'top',
+                }}
+                placeholder="Cuéntanos más sobre tu experiencia..."
+                placeholderTextColor="#A9A9A9"
+                value={passengerComment}
+                onChangeText={setPassengerComment}
+                multiline
+                numberOfLines={4}
+                maxLength={500}
+              />
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: colors.lightGray,
+                  textAlign: 'right',
+                  marginTop: 4,
+                }}
+              >
+                {passengerComment.length}/500
+              </Text>
+            </View>
+
+            {/* Rating Modal Buttons */}
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  backgroundColor: '#F3F4F6',
+                  alignItems: 'center',
+                }}
+                onPress={handleSkipRating}
+                disabled={isSubmittingRating}
+              >
+                <Text style={{ fontSize: 16, fontWeight: '600', color: colors.lightGray }}>
+                  Omitir
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  backgroundColor: passengerRating === 0 || isSubmittingRating ? '#D1D5DB' : colors.primary,
+                  alignItems: 'center',
+                }}
+                onPress={handleSubmitRating}
+                disabled={passengerRating === 0 || isSubmittingRating}
+              >
+                {isSubmittingRating ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: '#fff' }}>
+                    Enviar Valoración
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

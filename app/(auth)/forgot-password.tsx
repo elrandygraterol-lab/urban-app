@@ -41,15 +41,18 @@ export default function ForgotPasswordScreen() {
       Alert.alert(
         'Éxito',
         'Se ha enviado un enlace de recuperación a tu email. Por favor revisa tu bandeja de entrada.',
-        [{ 
-          text: 'OK', 
-          onPress: () => router.push('/(auth)/login' as any) 
-        }]
+        [
+          {
+            text: 'OK',
+            onPress: () => router.push('/(auth)/login' as any),
+          },
+        ]
       );
     } catch (error: any) {
-      const errorMessage = error?.response?.data?.error?.message || 
-                          error?.message || 
-                          'No se pudo enviar el email de recuperación. Por favor intenta de nuevo.';
+      const errorMessage =
+        error?.response?.data?.error?.message ||
+        error?.message ||
+        'No se pudo enviar el email de recuperación. Por favor intenta de nuevo.';
       Alert.alert('Error', errorMessage);
     } finally {
       setIsLoading(false);
@@ -57,14 +60,11 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
+    <KeyboardAvoidingView
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text style={styles.logo}>UrbanTaxi</Text>
           <Text style={styles.tagline}>¿Listo para tu siguiente destino?</Text>

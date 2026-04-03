@@ -4,12 +4,13 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { InteractionManager } from 'react-native';
 import 'react-native-reanimated';
-
+//React Native Best Practices expo-dev-client
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuthStore } from '@/store/authStore';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useGlobalSocketListeners } from '@/hooks/useGlobalSocketListeners';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { logInfo, logError, logWarning } from '@/utils/errorLogger';
+import { logInfo, logError } from '@/utils/errorLogger';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -17,23 +18,38 @@ export default function RootLayout() {
   const segments = useSegments();
   const router = useRouter();
   const [isNavigationReady, setIsNavigationReady] = useState(false);
-  
+
   // Initialize notifications
   const { expoPushToken, error: notificationError } = useNotifications();
+
+  // Initialize global socket listeners for payment and cancellation events
+  useGlobalSocketListeners({ user, isAuthenticated });
 
   // Load stored authentication on app start
   useEffect(() => {
     logInfo('App Initialization', 'Loading stored authentication...');
     loadStoredAuth();
   }, []);
-  
+
   // Log notification setup status
   useEffect(() => {
     if (expoPushToken) {
-      logInfo('Notifications', 'Push notifications initialized successfully', { token: expoPushToken });
+      logInfo('Notifications', 'Push notifications initialized successfully', {
+        token: expoPushToken,
+      });
     }
+    // Silenciar errores comunes de desarrollo
     if (notificationError) {
-      logError('Notifications', notificationError);
+      const errorMsg = String(notificationError);
+      const isFirebaseError = errorMsg.includes('FirebaseApp');
+      const isNetworkError = errorMsg.includes('Network request failed');
+      const isTokenError = errorMsg.includes('device token') || errorMsg.includes('push token');
+
+      // Solo loguear errores críticos, no errores esperados en desarrollo
+      if (!isFirebaseError && !isNetworkError && !isTokenError) {
+        logError('Notifications', notificationError);
+      }
+      // En desarrollo, estos errores son esperados y no críticos
     }
   }, [expoPushToken, notificationError]);
 
@@ -51,7 +67,7 @@ export default function RootLayout() {
   // Handle navigation based on authentication and role
   useEffect(() => {
     // Wait for navigation to be ready and segments to be available
-    if (!isNavigationReady || !segments || segments.length === 0) {
+    if (!isNavigationReady || !segments || !segments[0]) {
       return;
     }
 
@@ -79,7 +95,11 @@ export default function RootLayout() {
         // Redirect to appropriate home based on role
         if (user?.role === 'driver') {
           // Check if driver needs to complete registration
-          if (segments[1] === 'register' || segments[1] === 'documents-upload' || segments[1] === 'verification-status') {
+          if (
+            segments[1] === 'register' ||
+            segments[1] === 'documents-upload' ||
+            segments[1] === 'verification-status'
+          ) {
             // Allow driver registration flow
             logInfo('Navigation', 'Allowing driver registration flow');
             return;

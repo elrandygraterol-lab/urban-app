@@ -14,18 +14,16 @@ const resources = {
 };
 
 // Initialize i18next
-i18n
-  .use(initReactI18next)
-  .init({
-    resources,
-    lng: deviceLanguage === 'es' ? 'es' : 'en',
-    fallbackLng: 'en',
-    interpolation: {
-      escapeValue: false, // React already escapes values
-    },
-    react: {
-      useSuspense: false, // Disable suspense for better compatibility
-    },
-  });
+i18n.use(initReactI18next).init({
+  resources,
+  lng: deviceLanguage === 'es' ? 'es' : 'en',
+  fallbackLng: 'en',
+  interpolation: {
+    escapeValue: false, // React already escapes values
+  },
+  react: {
+    useSuspense: false, // Disable suspense for better compatibility
+  },
+});
 
 export default i18n;

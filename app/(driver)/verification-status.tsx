@@ -31,21 +31,24 @@ export default function VerificationStatusScreen() {
         return {
           icon: '⏳',
           title: 'Verificación Pendiente',
-          description: 'Tu solicitud ha sido recibida. Nuestro equipo revisará tus documentos en las próximas 24-48 horas.',
+          description:
+            'Tu solicitud ha sido recibida. Nuestro equipo revisará tus documentos en las próximas 24-48 horas.',
           color: COLORS.orange,
         };
       case 'verified':
         return {
           icon: '✓',
           title: 'Cuenta Verificada',
-          description: '¡Felicidades! Tu cuenta ha sido verificada. Ahora puedes comenzar a aceptar viajes.',
+          description:
+            '¡Felicidades! Tu cuenta ha sido verificada. Ahora puedes comenzar a aceptar viajes.',
           color: COLORS.primary,
         };
       case 'rejected':
         return {
           icon: '✕',
           title: 'Verificación Rechazada',
-          description: 'Lamentablemente, tu solicitud fue rechazada. Por favor, revisa tus documentos e intenta nuevamente.',
+          description:
+            'Lamentablemente, tu solicitud fue rechazada. Por favor, revisa tus documentos e intenta nuevamente.',
           color: '#FF6B6B',
         };
     }
@@ -95,7 +98,8 @@ export default function VerificationStatusScreen() {
           <View style={styles.infoBox}>
             <Text style={styles.infoTitle}>Próximos Pasos</Text>
             <Text style={styles.infoText}>
-              Completa tu perfil y configura tu disponibilidad para comenzar a recibir solicitudes de viaje.
+              Completa tu perfil y configura tu disponibilidad para comenzar a recibir solicitudes
+              de viaje.
             </Text>
           </View>
         )}
@@ -104,7 +108,8 @@ export default function VerificationStatusScreen() {
           <View style={styles.infoBox}>
             <Text style={styles.infoTitle}>Razón del Rechazo</Text>
             <Text style={styles.infoText}>
-              Algunos de tus documentos no cumplen con los requisitos. Por favor, sube nuevas versiones.
+              Algunos de tus documentos no cumplen con los requisitos. Por favor, sube nuevas
+              versiones.
             </Text>
           </View>
         )}
@@ -112,19 +117,13 @@ export default function VerificationStatusScreen() {
 
       <View style={styles.buttonContainer}>
         {status === 'pending' && (
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => router.push('/(driver)/')}
-          >
+          <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/(driver)/')}>
             <Text style={styles.primaryButtonText}>Volver al Inicio</Text>
           </TouchableOpacity>
         )}
 
         {status === 'verified' && (
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => router.push('/(driver)/')}
-          >
+          <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/(driver)/')}>
             <Text style={styles.primaryButtonText}>Ir al Dashboard</Text>
           </TouchableOpacity>
         )}

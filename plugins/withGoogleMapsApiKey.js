@@ -1,14 +1,14 @@
 const { withAndroidManifest } = require('@expo/config-plugins');
 
-const withGoogleMapsApiKey = (config) => {
-  return withAndroidManifest(config, async (config) => {
+const withGoogleMapsApiKey = config => {
+  return withAndroidManifest(config, async config => {
     const androidManifest = config.modResults;
     const application = androidManifest.manifest.application[0];
 
     // Check if API key already exists
     const existingMetaData = application['meta-data'] || [];
     const hasApiKey = existingMetaData.some(
-      (item) => item.$['android:name'] === 'com.google.android.geo.API_KEY'
+      item => item.$['android:name'] === 'com.google.android.geo.API_KEY'
     );
 
     if (!hasApiKey) {

@@ -9,7 +9,9 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/theme';
@@ -19,9 +21,9 @@ import { translations } from '../../i18n/translations';
 import { userAPI, notificationAPI } from '../../services/api';
 
 interface NotificationPreferences {
-  rideRequests?: boolean;
+  driverArrival?: boolean;
   rideUpdates?: boolean;
-  payments?: boolean;
+  tripReminders?: boolean;
   promotions?: boolean;
 }
 
@@ -42,9 +44,9 @@ export default function PassengerProfileScreen() {
 
   // Notification preferences
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>({
-    rideRequests: true,
+    driverArrival: true,
     rideUpdates: true,
-    payments: true,
+    tripReminders: true,
     promotions: false,
   });
 
@@ -55,19 +57,20 @@ export default function PassengerProfileScreen() {
   const loadUserData = async () => {
     try {
       setIsLoading(true);
-      
+
       // Load user info
       const userResponse = await userAPI.getMe();
-      
+
       // Defensive programming: validate response structure
-      if (!userResponse || !userResponse.data || !userResponse.data.user) {
+      // API returns: {success: true, data: {user data}}
+      if (!userResponse || !userResponse.data || !userResponse.data.data) {
         console.warn('User API returned invalid response:', userResponse);
         Alert.alert('Error', t.loadError);
         return;
       }
-      
-      const userData = userResponse.data.user;
-      
+
+      const userData = userResponse.data.data;
+
       // Validate user data has required fields
       if (!userData.name || !userData.phone || !userData.email) {
         console.warn('User data is incomplete:', userData);
@@ -111,11 +114,14 @@ export default function PassengerProfileScreen() {
       setIsSaving(false);
     }
   };
-  
-  const handleUpdateNotificationPref = async (key: keyof NotificationPreferences, value: boolean) => {
+
+  const handleUpdateNotificationPref = async (
+    key: keyof NotificationPreferences,
+    value: boolean
+  ) => {
     const newPrefs = { ...notificationPrefs, [key]: value };
     setNotificationPrefs(newPrefs);
-    
+
     try {
       await notificationAPI.updatePreferences(newPrefs);
     } catch (error) {
@@ -181,14 +187,19 @@ export default function PassengerProfileScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <StatusBar barStyle="dark-content" backgroundColor="#f0f9ff" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <StatusBar barStyle="dark-content" backgroundColor="#f0f9ff" />
+      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Personal Information Section */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
@@ -269,7 +280,7 @@ export default function PassengerProfileScreen() {
       {/* Settings Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t.settings}</Text>
-        
+
         <View style={styles.card}>
           <View style={styles.settingItem}>
             <View style={styles.settingLeft}>
@@ -280,10 +291,7 @@ export default function PassengerProfileScreen() {
             </View>
             <View style={styles.languageButtons}>
               <TouchableOpacity
-                style={[
-                  styles.languageButton,
-                  language === 'es' && styles.languageButtonActive,
-                ]}
+                style={[styles.languageButton, language === 'es' && styles.languageButtonActive]}
                 onPress={() => handleLanguageChange('es')}
               >
                 <Text
@@ -296,10 +304,7 @@ export default function PassengerProfileScreen() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[
-                  styles.languageButton,
-                  language === 'en' && styles.languageButtonActive,
-                ]}
+                style={[styles.languageButton, language === 'en' && styles.languageButtonActive]}
                 onPress={() => handleLanguageChange('en')}
               >
                 <Text
@@ -319,20 +324,20 @@ export default function PassengerProfileScreen() {
       {/* Notifications Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t.notifications}</Text>
-        
+
         <View style={styles.card}>
           <View style={styles.settingItem}>
             <View style={styles.settingLeft}>
               <View style={styles.iconContainer}>
-                <Ionicons name="notifications" size={22} color={Colors.primary} />
+                <Ionicons name="car-sport" size={22} color={Colors.primary} />
               </View>
-              <Text style={styles.settingLabel}>Solicitudes de viaje</Text>
+              <Text style={styles.settingLabel}>Llegada del conductor</Text>
             </View>
             <Switch
-              value={notificationPrefs.rideRequests}
-              onValueChange={(value) => handleUpdateNotificationPref('rideRequests', value)}
+              value={notificationPrefs.driverArrival}
+              onValueChange={value => handleUpdateNotificationPref('driverArrival', value)}
               trackColor={{ false: Colors.lightGray, true: Colors.light }}
-              thumbColor={notificationPrefs.rideRequests ? Colors.primary : Colors.white}
+              thumbColor={notificationPrefs.driverArrival ? Colors.primary : Colors.white}
             />
           </View>
 
@@ -341,13 +346,13 @@ export default function PassengerProfileScreen() {
           <View style={styles.settingItem}>
             <View style={styles.settingLeft}>
               <View style={styles.iconContainer}>
-                <Ionicons name="car" size={22} color={Colors.primary} />
+                <Ionicons name="notifications" size={22} color={Colors.primary} />
               </View>
               <Text style={styles.settingLabel}>Actualizaciones de viaje</Text>
             </View>
             <Switch
               value={notificationPrefs.rideUpdates}
-              onValueChange={(value) => handleUpdateNotificationPref('rideUpdates', value)}
+              onValueChange={value => handleUpdateNotificationPref('rideUpdates', value)}
               trackColor={{ false: Colors.lightGray, true: Colors.light }}
               thumbColor={notificationPrefs.rideUpdates ? Colors.primary : Colors.white}
             />
@@ -358,15 +363,15 @@ export default function PassengerProfileScreen() {
           <View style={styles.settingItem}>
             <View style={styles.settingLeft}>
               <View style={styles.iconContainer}>
-                <Ionicons name="card" size={22} color={Colors.primary} />
+                <Ionicons name="time" size={22} color={Colors.primary} />
               </View>
-              <Text style={styles.settingLabel}>Pagos</Text>
+              <Text style={styles.settingLabel}>Recordatorios de viaje</Text>
             </View>
             <Switch
-              value={notificationPrefs.payments}
-              onValueChange={(value) => handleUpdateNotificationPref('payments', value)}
+              value={notificationPrefs.tripReminders}
+              onValueChange={value => handleUpdateNotificationPref('tripReminders', value)}
               trackColor={{ false: Colors.lightGray, true: Colors.light }}
-              thumbColor={notificationPrefs.payments ? Colors.primary : Colors.white}
+              thumbColor={notificationPrefs.tripReminders ? Colors.primary : Colors.white}
             />
           </View>
 
@@ -381,7 +386,7 @@ export default function PassengerProfileScreen() {
             </View>
             <Switch
               value={notificationPrefs.promotions}
-              onValueChange={(value) => handleUpdateNotificationPref('promotions', value)}
+              onValueChange={value => handleUpdateNotificationPref('promotions', value)}
               trackColor={{ false: Colors.lightGray, true: Colors.light }}
               thumbColor={notificationPrefs.promotions ? Colors.primary : Colors.white}
             />
@@ -392,7 +397,7 @@ export default function PassengerProfileScreen() {
       {/* Account Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t.account}</Text>
-        
+
         <View style={styles.card}>
           <TouchableOpacity style={styles.actionItem} onPress={handleLogout}>
             <View style={styles.settingLeft}>
@@ -420,10 +425,15 @@ export default function PassengerProfileScreen() {
 
       <View style={styles.bottomSpacer} />
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f0f9ff',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f0f9ff',

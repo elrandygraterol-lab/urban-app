@@ -1,6 +1,6 @@
 /**
  * Offline Map Service
- * 
+ *
  * Servicio para gestionar caché de mapas offline
  * Incluye:
  * - Descarga de tiles offline
@@ -204,7 +204,7 @@ class OfflineMapService {
       // Limpiar AsyncStorage
       const keys = await AsyncStorage.getAllKeys();
       const cacheKeys = keys.filter(
-        (key) =>
+        key =>
           key.startsWith(CACHE_KEY_PREFIX) ||
           key.startsWith(ROUTE_CACHE_KEY_PREFIX) ||
           key === CACHE_METADATA_KEY

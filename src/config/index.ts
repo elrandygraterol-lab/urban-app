@@ -41,23 +41,23 @@ export const COLORS = {
   LIGHT_GREEN: '#86efac',
   PRIMARY_ORANGE: '#FF9500',
   LIGHT_ORANGE: '#E6C896',
-  
+
   // Neutral Colors
   DARK_GRAY: '#505050',
   LIGHT_GRAY: '#A9A9A9',
   WHITE: '#FFFFFF',
   BLACK: '#000000',
-  
+
   // Status Colors
   SUCCESS: '#22c55e',
   ERROR: '#FF3B30',
   WARNING: '#FF9500',
   INFO: '#007AFF',
-  
+
   // Background Colors
   BACKGROUND: '#FFFFFF',
   BACKGROUND_SECONDARY: '#F5F5F5',
-  
+
   // Border Colors
   BORDER: '#22c55e',
   BORDER_LIGHT: '#86efac',

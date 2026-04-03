@@ -10,6 +10,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
@@ -17,7 +18,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 
 type UserRole = 'passenger' | 'driver';
-type VehicleType = 'taxi' | 'moto-taxi';
+type VehicleType = 'taxi' | 'moto_taxi';
 
 interface DocumentFile {
   uri: string;
@@ -29,7 +30,7 @@ interface DocumentFile {
 export default function RegisterScreen() {
   const router = useRouter();
   const { register, isLoading } = useAuthStore();
-  
+
   // Common fields
   const [role, setRole] = useState<UserRole>('passenger');
   const [name, setName] = useState('');
@@ -39,12 +40,24 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
+
+  // Validation errors
+  const [nameError, setNameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [licensePlateError, setLicensePlateError] = useState('');
+  const [vehicleModelError, setVehicleModelError] = useState('');
+
   // Driver-specific fields
   const [vehicleType, setVehicleType] = useState<VehicleType>('taxi');
   const [licensePlate, setLicensePlate] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
-  
+
+  // Profile photo (optional for both roles)
+  const [profilePhoto, setProfilePhoto] = useState<DocumentFile | null>(null);
+
   // Driver documents (required for drivers)
   const [driverLicense, setDriverLicense] = useState<DocumentFile | null>(null);
   const [medicalCertificate, setMedicalCertificate] = useState<DocumentFile | null>(null);
@@ -59,6 +72,165 @@ export default function RegisterScreen() {
     return phoneRegex.test(phone);
   };
 
+  // Real-time validation functions
+  const validateNameField = (value: string) => {
+    setName(value);
+    if (value.trim().length === 0) {
+      setNameError('El nombre es requerido');
+    } else if (value.trim().length < 3) {
+      setNameError('El nombre debe tener al menos 3 caracteres');
+    } else {
+      setNameError('');
+    }
+  };
+
+  const validateEmailField = (value: string) => {
+    setEmail(value);
+    if (value.trim().length === 0) {
+      setEmailError('El email es requerido');
+    } else if (!validateEmail(value.trim())) {
+      setEmailError('Ingresa un email válido (ejemplo@correo.com)');
+    } else {
+      setEmailError('');
+    }
+  };
+
+  const validatePhoneField = (value: string) => {
+    setPhone(value);
+    if (value.trim().length === 0) {
+      setPhoneError('El teléfono es requerido');
+    } else if (!validatePhone(value.trim())) {
+      setPhoneError('Ingresa un teléfono válido (mínimo 10 dígitos)');
+    } else {
+      setPhoneError('');
+    }
+  };
+
+  const validatePasswordField = (value: string) => {
+    setPassword(value);
+    if (value.length === 0) {
+      setPasswordError('La contraseña es requerida');
+    } else if (value.length < 8) {
+      setPasswordError('La contraseña debe tener al menos 8 caracteres');
+    } else if (!/[A-Z]/.test(value)) {
+      setPasswordError('Debe contener al menos una mayúscula');
+    } else if (!/[a-z]/.test(value)) {
+      setPasswordError('Debe contener al menos una minúscula');
+    } else if (!/[0-9]/.test(value)) {
+      setPasswordError('Debe contener al menos un número');
+    } else {
+      setPasswordError('');
+    }
+
+    // Re-validate confirm password if it has a value
+    if (confirmPassword) {
+      validateConfirmPasswordField(confirmPassword, value);
+    }
+  };
+
+  const validateConfirmPasswordField = (value: string, currentPassword?: string) => {
+    setConfirmPassword(value);
+    const passwordToCompare = currentPassword !== undefined ? currentPassword : password;
+
+    if (value.length === 0) {
+      setConfirmPasswordError('Confirma tu contraseña');
+    } else if (value !== passwordToCompare) {
+      setConfirmPasswordError('Las contraseñas no coinciden');
+    } else {
+      setConfirmPasswordError('');
+    }
+  };
+
+  const validateLicensePlateField = (value: string) => {
+    setLicensePlate(value);
+    if (role === 'driver') {
+      if (value.trim().length === 0) {
+        setLicensePlateError('La placa es requerida');
+      } else if (value.trim().length < 6) {
+        setLicensePlateError('Ingresa una placa válida');
+      } else {
+        setLicensePlateError('');
+      }
+    }
+  };
+
+  const validateVehicleModelField = (value: string) => {
+    setVehicleModel(value);
+    if (role === 'driver') {
+      if (value.trim().length === 0) {
+        setVehicleModelError('El modelo del vehículo es requerido');
+      } else if (value.trim().length < 3) {
+        setVehicleModelError('Ingresa un modelo válido');
+      } else {
+        setVehicleModelError('');
+      }
+    }
+  };
+
+  const pickProfilePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permiso requerido', 'Necesitamos permiso para acceder a tus fotos');
+        return;
+      }
+
+      Alert.alert('Foto de perfil', 'Elige una opción', [
+        {
+          text: 'Tomar foto',
+          onPress: async () => {
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+              const asset = result.assets[0];
+              const file: DocumentFile = {
+                uri: asset.uri,
+                name: `profile_${Date.now()}.jpg`,
+                type: 'image/jpeg',
+                size: asset.fileSize || 0,
+              };
+              setProfilePhoto(file);
+            }
+          },
+        },
+        {
+          text: 'Elegir de galería',
+          onPress: async () => {
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+              const asset = result.assets[0];
+              const file: DocumentFile = {
+                uri: asset.uri,
+                name: `profile_${Date.now()}.jpg`,
+                type: 'image/jpeg',
+                size: asset.fileSize || 0,
+              };
+              setProfilePhoto(file);
+            }
+          },
+        },
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+      ]);
+    } catch (error) {
+      console.error('Error picking profile photo:', error);
+      Alert.alert('Error', 'No se pudo seleccionar la foto');
+    }
+  };
+
   const pickDocument = async (type: 'license' | 'medical') => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -67,68 +239,64 @@ export default function RegisterScreen() {
         return;
       }
 
-      Alert.alert(
-        'Seleccionar documento',
-        'Elige una opción',
-        [
-          {
-            text: 'Tomar foto',
-            onPress: async () => {
-              const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                quality: 0.8,
-              });
+      Alert.alert('Seleccionar documento', 'Elige una opción', [
+        {
+          text: 'Tomar foto',
+          onPress: async () => {
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              quality: 0.8,
+            });
 
-              if (!result.canceled && result.assets[0]) {
-                const asset = result.assets[0];
-                const file: DocumentFile = {
-                  uri: asset.uri,
-                  name: `${type}_${Date.now()}.jpg`,
-                  type: 'image/jpeg',
-                  size: asset.fileSize || 0,
-                };
-                
-                if (type === 'license') {
-                  setDriverLicense(file);
-                } else {
-                  setMedicalCertificate(file);
-                }
-              }
-            },
-          },
-          {
-            text: 'Elegir de galería',
-            onPress: async () => {
-              const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                quality: 0.8,
-              });
+            if (!result.canceled && result.assets[0]) {
+              const asset = result.assets[0];
+              const file: DocumentFile = {
+                uri: asset.uri,
+                name: `${type}_${Date.now()}.jpg`,
+                type: 'image/jpeg',
+                size: asset.fileSize || 0,
+              };
 
-              if (!result.canceled && result.assets[0]) {
-                const asset = result.assets[0];
-                const file: DocumentFile = {
-                  uri: asset.uri,
-                  name: `${type}_${Date.now()}.jpg`,
-                  type: 'image/jpeg',
-                  size: asset.fileSize || 0,
-                };
-                
-                if (type === 'license') {
-                  setDriverLicense(file);
-                } else {
-                  setMedicalCertificate(file);
-                }
+              if (type === 'license') {
+                setDriverLicense(file);
+              } else {
+                setMedicalCertificate(file);
               }
-            },
+            }
           },
-          {
-            text: 'Cancelar',
-            style: 'cancel',
+        },
+        {
+          text: 'Elegir de galería',
+          onPress: async () => {
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+              const asset = result.assets[0];
+              const file: DocumentFile = {
+                uri: asset.uri,
+                name: `${type}_${Date.now()}.jpg`,
+                type: 'image/jpeg',
+                size: asset.fileSize || 0,
+              };
+
+              if (type === 'license') {
+                setDriverLicense(file);
+              } else {
+                setMedicalCertificate(file);
+              }
+            }
           },
-        ]
-      );
+        },
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+      ]);
     } catch (error) {
       console.error('Error picking document:', error);
       Alert.alert('Error', 'No se pudo seleccionar el documento');
@@ -144,6 +312,12 @@ export default function RegisterScreen() {
   };
 
   const handleRegister = async () => {
+    // Check if there are any validation errors
+    if (nameError || emailError || phoneError || passwordError || confirmPasswordError) {
+      Alert.alert('Errores en el formulario', 'Por favor corrige los errores antes de continuar');
+      return;
+    }
+
     // Validation
     if (!name.trim()) {
       Alert.alert('Error', 'Por favor ingresa tu nombre completo');
@@ -206,6 +380,7 @@ export default function RegisterScreen() {
         phone: formattedPhone,
         password,
         role,
+        profilePhoto,
         ...(role === 'driver' && {
           vehicleType,
           licensePlate: licensePlate.trim().toUpperCase(),
@@ -214,33 +389,49 @@ export default function RegisterScreen() {
           medicalCertificate,
         }),
       });
-      
+
       Alert.alert(
         '✅ Registro exitoso',
         'Tu cuenta ha sido creada correctamente. Ahora puedes iniciar sesión.',
         [
           {
             text: 'Ir a Login',
-            onPress: () => router.replace('/(auth)/login' as any)
-          }
+            onPress: () => router.replace('/(auth)/login' as any),
+          },
         ],
         { cancelable: false }
       );
     } catch (error: any) {
-      const errorMessage = error?.response?.data?.error?.message || 
-                          error?.message || 
-                          'No se pudo completar el registro. Por favor intenta de nuevo.';
-      Alert.alert('Error de registro', errorMessage);
+      console.error('[REGISTER_SCREEN] Registration error:', error);
+
+      // Parse error message
+      let errorMessage =
+        error?.message || 'No se pudo completar el registro. Por favor intenta de nuevo.';
+
+      // Make the error more user-friendly
+      if (
+        errorMessage.includes('Validation failed') &&
+        !errorMessage.includes('Errores de validación:')
+      ) {
+        errorMessage = 'Error de validación:\n\n';
+        errorMessage += '• Verifica que todos los campos estén completos\n';
+        errorMessage += '• El email debe ser válido y único\n';
+        errorMessage += '• El teléfono debe ser válido\n';
+        errorMessage += '• La contraseña debe tener al menos 8 caracteres';
+      }
+
+      // Show user-friendly error
+      Alert.alert('Error de Registro', errorMessage);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
+    <KeyboardAvoidingView
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView 
-        style={styles.scrollView} 
+      <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -253,19 +444,17 @@ export default function RegisterScreen() {
             <View style={styles.cloud1} />
             <View style={styles.cloud2} />
           </View>
-          
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
+
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
 
           <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>
-              <Text style={styles.logoUrban}>Urban</Text>
-              <Text style={styles.logoTaxi}>Taxi</Text>
-            </Text>
+            <Image
+              source={require('@/assets/images/logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
             <Text style={styles.tagline}>Únete a nuestra comunidad</Text>
           </View>
         </View>
@@ -289,12 +478,10 @@ export default function RegisterScreen() {
               onPress={() => setRole('passenger')}
               disabled={isLoading}
             >
-              <Ionicons 
-                name="person" 
-                size={20} 
-                color={role === 'passenger' ? '#fff' : '#22c55e'} 
-              />
-              <Text style={[styles.roleButtonText, role === 'passenger' && styles.roleButtonTextActive]}>
+              <Ionicons name="person" size={20} color={role === 'passenger' ? '#fff' : '#22c55e'} />
+              <Text
+                style={[styles.roleButtonText, role === 'passenger' && styles.roleButtonTextActive]}
+              >
                 Pasajero
               </Text>
             </TouchableOpacity>
@@ -304,12 +491,10 @@ export default function RegisterScreen() {
               onPress={() => setRole('driver')}
               disabled={isLoading}
             >
-              <Ionicons 
-                name="car" 
-                size={20} 
-                color={role === 'driver' ? '#fff' : '#22c55e'} 
-              />
-              <Text style={[styles.roleButtonText, role === 'driver' && styles.roleButtonTextActive]}>
+              <Ionicons name="car" size={20} color={role === 'driver' ? '#fff' : '#22c55e'} />
+              <Text
+                style={[styles.roleButtonText, role === 'driver' && styles.roleButtonTextActive]}
+              >
                 Conductor
               </Text>
             </TouchableOpacity>
@@ -318,52 +503,55 @@ export default function RegisterScreen() {
           {/* Name Input */}
           <View style={styles.inputWrapper}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, nameError ? styles.inputError : null]}
               placeholder="Nombre completo"
               placeholderTextColor="#9ca3af"
               value={name}
-              onChangeText={setName}
+              onChangeText={validateNameField}
               autoCapitalize="words"
               editable={!isLoading}
             />
+            {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
           </View>
 
           {/* Email Input */}
           <View style={styles.inputWrapper}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, emailError ? styles.inputError : null]}
               placeholder="Email"
               placeholderTextColor="#9ca3af"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={validateEmailField}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
               editable={!isLoading}
             />
           </View>
+          {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
 
           {/* Phone Input */}
           <View style={styles.inputWrapper}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, phoneError ? styles.inputError : null]}
               placeholder="Teléfono (ej: 4121234567)"
               placeholderTextColor="#9ca3af"
               value={phone}
-              onChangeText={setPhone}
+              onChangeText={validatePhoneField}
               keyboardType="phone-pad"
               editable={!isLoading}
             />
+            {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
           </View>
 
           {/* Password Input */}
           <View style={styles.inputWrapper}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, passwordError ? styles.inputError : null]}
               placeholder="Contraseña (mínimo 8 caracteres)"
               placeholderTextColor="#9ca3af"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={validatePasswordField}
               secureTextEntry={!showPassword}
               autoCapitalize="none"
               autoCorrect={false}
@@ -374,22 +562,23 @@ export default function RegisterScreen() {
               onPress={() => setShowPassword(!showPassword)}
               disabled={isLoading}
             >
-              <Ionicons 
-                name={showPassword ? 'eye-outline' : 'eye-off-outline'} 
-                size={20} 
-                color="#9ca3af" 
+              <Ionicons
+                name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+                size={20}
+                color="#9ca3af"
               />
             </TouchableOpacity>
           </View>
+          {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
 
           {/* Confirm Password Input */}
           <View style={styles.inputWrapper}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, confirmPasswordError ? styles.inputError : null]}
               placeholder="Confirmar contraseña"
               placeholderTextColor="#9ca3af"
               value={confirmPassword}
-              onChangeText={setConfirmPassword}
+              onChangeText={value => validateConfirmPasswordField(value)}
               secureTextEntry={!showConfirmPassword}
               autoCapitalize="none"
               autoCorrect={false}
@@ -400,45 +589,100 @@ export default function RegisterScreen() {
               onPress={() => setShowConfirmPassword(!showConfirmPassword)}
               disabled={isLoading}
             >
-              <Ionicons 
-                name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'} 
-                size={20} 
-                color="#9ca3af" 
+              <Ionicons
+                name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'}
+                size={20}
+                color="#9ca3af"
               />
             </TouchableOpacity>
           </View>
+          {confirmPasswordError ? (
+            <Text style={styles.errorText}>{confirmPasswordError}</Text>
+          ) : null}
+
+          {/* Profile Photo (Optional) */}
+          <Text style={styles.documentLabel}>
+            Foto de perfil <Text style={styles.optional}>(opcional)</Text>
+          </Text>
+          {profilePhoto ? (
+            <View style={styles.documentSelected}>
+              <View style={styles.documentInfo}>
+                <Ionicons name="person-circle" size={24} color="#22c55e" />
+                <View style={styles.documentDetails}>
+                  <Text style={styles.documentName} numberOfLines={1}>
+                    {profilePhoto.name}
+                  </Text>
+                  <Text style={styles.documentSize}>
+                    {(profilePhoto.size / 1024).toFixed(2)} KB
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.removeButton}
+                onPress={() => setProfilePhoto(null)}
+                disabled={isLoading}
+              >
+                <Ionicons name="close" size={16} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.uploadButton}
+              onPress={pickProfilePhoto}
+              disabled={isLoading}
+            >
+              <Ionicons name="camera-outline" size={28} color="#22c55e" />
+              <Text style={styles.uploadText}>Agregar foto de perfil</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Driver-specific Fields */}
           {role === 'driver' && (
             <>
               <Text style={styles.sectionTitle}>Información del vehículo</Text>
-              
+
               <View style={styles.vehicleTypeSelector}>
                 <TouchableOpacity
-                  style={[styles.vehicleButton, vehicleType === 'taxi' && styles.vehicleButtonActive]}
+                  style={[
+                    styles.vehicleButton,
+                    vehicleType === 'taxi' && styles.vehicleButtonActive,
+                  ]}
                   onPress={() => setVehicleType('taxi')}
                   disabled={isLoading}
                 >
-                  <Ionicons 
-                    name="car" 
-                    size={18} 
-                    color={vehicleType === 'taxi' ? '#fff' : '#22c55e'} 
+                  <Ionicons
+                    name="car"
+                    size={18}
+                    color={vehicleType === 'taxi' ? '#fff' : '#22c55e'}
                   />
-                  <Text style={[styles.vehicleButtonText, vehicleType === 'taxi' && styles.vehicleButtonTextActive]}>
+                  <Text
+                    style={[
+                      styles.vehicleButtonText,
+                      vehicleType === 'taxi' && styles.vehicleButtonTextActive,
+                    ]}
+                  >
                     Taxi
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.vehicleButton, vehicleType === 'moto-taxi' && styles.vehicleButtonActive]}
-                  onPress={() => setVehicleType('moto-taxi')}
+                  style={[
+                    styles.vehicleButton,
+                    vehicleType === 'moto_taxi' && styles.vehicleButtonActive,
+                  ]}
+                  onPress={() => setVehicleType('moto_taxi')}
                   disabled={isLoading}
                 >
-                  <Ionicons 
-                    name="bicycle" 
-                    size={18} 
-                    color={vehicleType === 'moto-taxi' ? '#fff' : '#22c55e'} 
+                  <Ionicons
+                    name="bicycle"
+                    size={18}
+                    color={vehicleType === 'moto_taxi' ? '#fff' : '#22c55e'}
                   />
-                  <Text style={[styles.vehicleButtonText, vehicleType === 'moto-taxi' && styles.vehicleButtonTextActive]}>
+                  <Text
+                    style={[
+                      styles.vehicleButtonText,
+                      vehicleType === 'moto_taxi' && styles.vehicleButtonTextActive,
+                    ]}
+                  >
                     Moto-taxi
                   </Text>
                 </TouchableOpacity>
@@ -446,25 +690,31 @@ export default function RegisterScreen() {
 
               <View style={styles.inputWrapper}>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, licensePlateError ? styles.inputError : null]}
                   placeholder="Placa del vehículo"
                   placeholderTextColor="#9ca3af"
                   value={licensePlate}
-                  onChangeText={setLicensePlate}
+                  onChangeText={validateLicensePlateField}
                   autoCapitalize="characters"
                   editable={!isLoading}
                 />
+                {licensePlateError ? (
+                  <Text style={styles.errorText}>{licensePlateError}</Text>
+                ) : null}
               </View>
 
               <View style={styles.inputWrapper}>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, vehicleModelError ? styles.inputError : null]}
                   placeholder="Modelo del vehículo"
                   placeholderTextColor="#9ca3af"
                   value={vehicleModel}
-                  onChangeText={setVehicleModel}
+                  onChangeText={validateVehicleModelField}
                   editable={!isLoading}
                 />
+                {vehicleModelError ? (
+                  <Text style={styles.errorText}>{vehicleModelError}</Text>
+                ) : null}
               </View>
 
               {/* Driver License Document */}
@@ -557,7 +807,7 @@ export default function RegisterScreen() {
           {/* Login Link */}
           <View style={styles.loginRow}>
             <Text style={styles.loginText}>¿Ya tienes cuenta? </Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => router.push('/(auth)/login' as any)}
               disabled={isLoading}
             >
@@ -657,22 +907,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 10,
   },
-  logoText: {
-    fontSize: 40,
-    fontWeight: 'bold',
+  logoImage: {
+    width: 280,
+    height: 80,
     marginBottom: 8,
-  },
-  logoUrban: {
-    color: '#fff',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 4,
-  },
-  logoTaxi: {
-    color: '#ff9800',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 4,
   },
   tagline: {
     fontSize: 14,
@@ -766,6 +1004,16 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     backgroundColor: '#fff',
   },
+  inputError: {
+    borderColor: '#ef4444',
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 20,
+    marginBottom: 8,
+  },
   eyeIcon: {
     position: 'absolute',
     right: 18,
@@ -814,6 +1062,10 @@ const styles = StyleSheet.create({
   },
   required: {
     color: '#ef4444',
+  },
+  optional: {
+    color: '#6b7280',
+    fontWeight: '400',
   },
   uploadButton: {
     height: 80,

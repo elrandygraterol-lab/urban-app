@@ -15,6 +15,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { rideAPI } from '../../services/api';
 import { Ride } from '../../src/types';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/theme';
+import { formatCurrency, Currency } from '../../utils/currency';
 
 interface RideHistoryItem extends Ride {
   driver?: {
@@ -23,6 +24,7 @@ interface RideHistoryItem extends Ride {
     licensePlate: string;
     rating: number;
   };
+  currency?: Currency;
 }
 
 export default function PassengerHistoryScreen() {
@@ -31,63 +33,77 @@ export default function PassengerHistoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedRide, setSelectedRide] = useState<RideHistoryItem | null>(null);
-  
+
   // Filtros de fecha
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
-  const loadRideHistory = useCallback(async (filters?: { startDate?: string; endDate?: string }) => {
-    try {
-      console.log('🔄 [HISTORY] Cargando historial de viajes...');
-      console.log('🔍 [HISTORY] Filtros aplicados:', filters);
-      
-      setLoading(true);
-      const response = await rideAPI.getRideHistory(filters);
-      
-      console.log('📦 [HISTORY] Respuesta completa del API:', JSON.stringify(response, null, 2));
-      console.log('📊 [HISTORY] response.data:', response.data);
-      console.log('📊 [HISTORY] response.data.rides:', response.data?.rides);
-      console.log('📊 [HISTORY] Tipo de response.data:', typeof response.data);
-      console.log('📊 [HISTORY] Es array response.data?:', Array.isArray(response.data));
-      console.log('📊 [HISTORY] Es array response.data.rides?:', Array.isArray(response.data?.rides));
-      
-      // Validación defensiva: asegurar que siempre tengamos un array
-      let ridesData: RideHistoryItem[] = [];
-      
-      if (response.data?.rides && Array.isArray(response.data.rides)) {
-        ridesData = response.data.rides;
-        console.log('✅ [HISTORY] Usando response.data.rides (array con', ridesData.length, 'elementos)');
-      } else if (Array.isArray(response.data)) {
-        ridesData = response.data;
-        console.log('✅ [HISTORY] Usando response.data directamente (array con', ridesData.length, 'elementos)');
-      } else {
-        console.warn('⚠️ [HISTORY] Respuesta inesperada del API, usando array vacío');
-        console.warn('⚠️ [HISTORY] Estructura recibida:', response.data);
-        ridesData = [];
+  const loadRideHistory = useCallback(
+    async (filters?: { startDate?: string; endDate?: string }) => {
+      try {
+        console.log('🔄 [HISTORY] Cargando historial de viajes...');
+        console.log('🔍 [HISTORY] Filtros aplicados:', filters);
+
+        setLoading(true);
+        const response = await rideAPI.getRideHistory(filters);
+
+        console.log('📦 [HISTORY] Respuesta completa del API:', JSON.stringify(response, null, 2));
+        console.log('📊 [HISTORY] response.data:', response.data);
+        console.log('📊 [HISTORY] response.data.rides:', response.data?.rides);
+        console.log('📊 [HISTORY] Tipo de response.data:', typeof response.data);
+        console.log('📊 [HISTORY] Es array response.data?:', Array.isArray(response.data));
+        console.log(
+          '📊 [HISTORY] Es array response.data.rides?:',
+          Array.isArray(response.data?.rides)
+        );
+
+        // Validación defensiva: asegurar que siempre tengamos un array
+        let ridesData: RideHistoryItem[] = [];
+
+        if (response.data?.rides && Array.isArray(response.data.rides)) {
+          ridesData = response.data.rides;
+          console.log(
+            '✅ [HISTORY] Usando response.data.rides (array con',
+            ridesData.length,
+            'elementos)'
+          );
+        } else if (Array.isArray(response.data)) {
+          ridesData = response.data;
+          console.log(
+            '✅ [HISTORY] Usando response.data directamente (array con',
+            ridesData.length,
+            'elementos)'
+          );
+        } else {
+          console.warn('⚠️ [HISTORY] Respuesta inesperada del API, usando array vacío');
+          console.warn('⚠️ [HISTORY] Estructura recibida:', response.data);
+          ridesData = [];
+        }
+
+        console.log('✅ [HISTORY] Historial cargado exitosamente:', ridesData.length, 'viajes');
+        console.log('📋 [HISTORY] Viajes:', JSON.stringify(ridesData, null, 2));
+
+        setRides(ridesData);
+      } catch (error) {
+        console.error('❌ [HISTORY] Error cargando historial:', error);
+        console.error('❌ [HISTORY] Detalles del error:', JSON.stringify(error, null, 2));
+
+        if (error instanceof Error) {
+          console.error('❌ [HISTORY] Mensaje de error:', error.message);
+          console.error('❌ [HISTORY] Stack trace:', error.stack);
+        }
+
+        // En caso de error, asegurar que rides sea un array vacío
+        setRides([]);
+      } finally {
+        setLoading(false);
+        console.log('🏁 [HISTORY] Carga finalizada');
       }
-      
-      console.log('✅ [HISTORY] Historial cargado exitosamente:', ridesData.length, 'viajes');
-      console.log('📋 [HISTORY] Viajes:', JSON.stringify(ridesData, null, 2));
-      
-      setRides(ridesData);
-    } catch (error) {
-      console.error('❌ [HISTORY] Error cargando historial:', error);
-      console.error('❌ [HISTORY] Detalles del error:', JSON.stringify(error, null, 2));
-      
-      if (error instanceof Error) {
-        console.error('❌ [HISTORY] Mensaje de error:', error.message);
-        console.error('❌ [HISTORY] Stack trace:', error.stack);
-      }
-      
-      // En caso de error, asegurar que rides sea un array vacío
-      setRides([]);
-    } finally {
-      setLoading(false);
-      console.log('🏁 [HISTORY] Carga finalizada');
-    }
-  }, []);
+    },
+    []
+  );
 
   const getFilters = useCallback(() => {
     const filters: { startDate?: string; endDate?: string } = {};
@@ -144,8 +160,8 @@ export default function PassengerHistoryScreen() {
     return `${hours}:${minutes}`;
   };
 
-  const formatCurrency = (amount: number) => {
-    return `Bs. ${amount.toFixed(2)}`;
+  const formatCurrencyAmount = (amount: number, currency?: Currency) => {
+    return formatCurrency(amount, currency || 'VES');
   };
 
   const getVehicleTypeLabel = (type: string) => {
@@ -169,21 +185,15 @@ export default function PassengerHistoryScreen() {
             />
           </View>
           <View style={styles.rideHeaderInfo}>
-            <Text style={styles.rideDate}>
-              {formatDate(ride.completedAt || ride.requestedAt)}
-            </Text>
-            <Text style={styles.rideTime}>
-              {formatTime(ride.completedAt || ride.requestedAt)}
-            </Text>
+            <Text style={styles.rideDate}>{formatDate(ride.completedAt || ride.requestedAt)}</Text>
+            <Text style={styles.rideTime}>{formatTime(ride.completedAt || ride.requestedAt)}</Text>
           </View>
         </View>
         <View style={styles.rideFare}>
           <Text style={styles.rideFareAmount}>
-            {formatCurrency(ride.finalFare || ride.estimatedFare || 0)}
+            {formatCurrencyAmount(ride.finalFare || ride.estimatedFare || 0, ride.currency)}
           </Text>
-          <Text style={styles.rideVehicleType}>
-            {getVehicleTypeLabel(ride.vehicleType)}
-          </Text>
+          <Text style={styles.rideVehicleType}>{getVehicleTypeLabel(ride.vehicleType)}</Text>
         </View>
       </View>
 
@@ -209,9 +219,7 @@ export default function PassengerHistoryScreen() {
           <Text style={styles.driverName}>{ride.driver.name}</Text>
           <View style={styles.driverRating}>
             <Ionicons name="star" size={12} color="#f59e0b" />
-            <Text style={styles.driverRatingText}>
-              {ride.driver.rating.toFixed(1)}
-            </Text>
+            <Text style={styles.driverRatingText}>{ride.driver.rating.toFixed(1)}</Text>
           </View>
         </View>
       )}
@@ -269,7 +277,7 @@ export default function PassengerHistoryScreen() {
               <View style={styles.detailSection}>
                 <Text style={styles.detailLabel}>Tarifa</Text>
                 <Text style={styles.detailValueLarge}>
-                  {formatCurrency(selectedRide.finalFare || selectedRide.estimatedFare || 0)}
+                  {formatCurrencyAmount(selectedRide.finalFare || selectedRide.estimatedFare || 0, selectedRide.currency)}
                 </Text>
               </View>
 
@@ -283,16 +291,12 @@ export default function PassengerHistoryScreen() {
 
                   <View style={styles.detailSection}>
                     <Text style={styles.detailLabel}>Vehículo</Text>
-                    <Text style={styles.detailValue}>
-                      {selectedRide.driver.vehicleModel}
-                    </Text>
+                    <Text style={styles.detailValue}>{selectedRide.driver.vehicleModel}</Text>
                   </View>
 
                   <View style={styles.detailSection}>
                     <Text style={styles.detailLabel}>Placa</Text>
-                    <Text style={styles.detailValue}>
-                      {selectedRide.driver.licensePlate}
-                    </Text>
+                    <Text style={styles.detailValue}>{selectedRide.driver.licensePlate}</Text>
                   </View>
 
                   <View style={styles.detailSection}>
@@ -320,9 +324,7 @@ export default function PassengerHistoryScreen() {
               {selectedRide.actualDuration && (
                 <View style={styles.detailSection}>
                   <Text style={styles.detailLabel}>Duración</Text>
-                  <Text style={styles.detailValue}>
-                    {selectedRide.actualDuration} minutos
-                  </Text>
+                  <Text style={styles.detailValue}>{selectedRide.actualDuration} minutos</Text>
                 </View>
               )}
             </ScrollView>
@@ -376,10 +378,7 @@ export default function PassengerHistoryScreen() {
 
           <View style={styles.filterSection}>
             <Text style={styles.filterLabel}>Fecha de Fin</Text>
-            <TouchableOpacity
-              style={styles.dateButton}
-              onPress={() => setShowEndDatePicker(true)}
-            >
+            <TouchableOpacity style={styles.dateButton} onPress={() => setShowEndDatePicker(true)}>
               <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
               <Text style={styles.dateButtonText}>
                 {endDate ? formatDate(endDate.toISOString()) : 'Seleccionar fecha'}
@@ -440,13 +439,11 @@ export default function PassengerHistoryScreen() {
           <View>
             <Text style={styles.title}>Historial de Viajes</Text>
             <Text style={styles.subtitle}>
-              {safeRides.length} {safeRides.length === 1 ? 'viaje completado' : 'viajes completados'}
+              {safeRides.length}{' '}
+              {safeRides.length === 1 ? 'viaje completado' : 'viajes completados'}
             </Text>
           </View>
-          <TouchableOpacity
-            style={styles.filterIconButton}
-            onPress={() => setShowFilters(true)}
-          >
+          <TouchableOpacity style={styles.filterIconButton} onPress={() => setShowFilters(true)}>
             <Ionicons
               name="filter"
               size={24}
@@ -462,10 +459,10 @@ export default function PassengerHistoryScreen() {
               {startDate && endDate
                 ? `${formatDate(startDate.toISOString())} - ${formatDate(endDate.toISOString())}`
                 : startDate
-                ? `Desde ${formatDate(startDate.toISOString())}`
-                : endDate
-                ? `Hasta ${formatDate(endDate.toISOString())}`
-                : ''}
+                  ? `Desde ${formatDate(startDate.toISOString())}`
+                  : endDate
+                    ? `Hasta ${formatDate(endDate.toISOString())}`
+                    : ''}
             </Text>
             <TouchableOpacity onPress={clearFilters}>
               <Ionicons name="close-circle" size={20} color={Colors.primary} />
@@ -505,9 +502,7 @@ export default function PassengerHistoryScreen() {
             />
           }
         >
-          <View style={styles.ridesList}>
-            {safeRides.map(renderRideCard)}
-          </View>
+          <View style={styles.ridesList}>{safeRides.map(renderRideCard)}</View>
         </ScrollView>
       )}
 

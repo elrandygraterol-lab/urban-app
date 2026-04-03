@@ -1,8 +1,8 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { Platform, ScrollView, StyleSheet, TouchableOpacity, View, FlatList } from 'react-native';//FlatList para trabajar con listas largas que se renderizan obviamente se puede trabajar con ScrollView pero no es optimo.
-import { useSafeAreaInsets } from 'react-native-safe-area-context';//componente para manejar las areas seguras de dispositivos(iconos de hora bateria y parte inferior)
+import { Platform, ScrollView, StyleSheet, TouchableOpacity, View, FlatList } from 'react-native'; //FlatList para trabajar con listas largas que se renderizan obviamente se puede trabajar con ScrollView pero no es optimo.
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; //componente para manejar las areas seguras de dispositivos(iconos de hora bateria y parte inferior)
 
 import { ThemedText } from '@/components/themed-text';
 

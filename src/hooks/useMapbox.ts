@@ -1,6 +1,6 @@
 /**
  * useMapbox Hook
- * 
+ *
  * Hook personalizado para utilidades de Mapbox
  * Incluye:
  * - Geocodificación
@@ -43,32 +43,29 @@ export const useMapbox = () => {
   /**
    * Geocodificar una dirección
    */
-  const geocodeAddress = useCallback(
-    async (address: string): Promise<Location | null> => {
-      try {
-        setLoading(true);
-        setError(null);
+  const geocodeAddress = useCallback(async (address: string): Promise<Location | null> => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        const response = await axios.post(`${API_BASE_URL}/maps/geocode`, {
-          address,
-        });
+      const response = await axios.post(`${API_BASE_URL}/maps/geocode`, {
+        address,
+      });
 
-        if (response.data.success) {
-          return response.data.data;
-        }
-
-        throw new Error('Geocodificación fallida');
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Error geocodificando';
-        setError(errorMessage);
-        logger.error('Error geocodificando dirección', { address, error: err });
-        return null;
-      } finally {
-        setLoading(false);
+      if (response.data.success) {
+        return response.data.data;
       }
-    },
-    []
-  );
+
+      throw new Error('Geocodificación fallida');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error geocodificando';
+      setError(errorMessage);
+      logger.error('Error geocodificando dirección', { address, error: err });
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   /**
    * Reverse geocodificar (coordenadas -> dirección)
@@ -90,7 +87,8 @@ export const useMapbox = () => {
 
         throw new Error('Reverse geocodificación fallida');
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Error en reverse geocodificación';
+        const errorMessage =
+          err instanceof Error ? err.message : 'Error en reverse geocodificación';
         setError(errorMessage);
         logger.error('Error en reverse geocodificación', { latitude, longitude, error: err });
         return null;
@@ -105,11 +103,7 @@ export const useMapbox = () => {
    * Buscar lugares
    */
   const searchPlaces = useCallback(
-    async (
-      query: string,
-      latitude?: number,
-      longitude?: number
-    ): Promise<Place[]> => {
+    async (query: string, latitude?: number, longitude?: number): Promise<Place[]> => {
       try {
         setLoading(true);
         setError(null);
@@ -143,10 +137,7 @@ export const useMapbox = () => {
    * Obtener ruta entre dos puntos
    */
   const getRoute = useCallback(
-    async (
-      pickupLocation: Location,
-      dropoffLocation: Location
-    ): Promise<RouteInfo | null> => {
+    async (pickupLocation: Location, dropoffLocation: Location): Promise<RouteInfo | null> => {
       try {
         setLoading(true);
         setError(null);

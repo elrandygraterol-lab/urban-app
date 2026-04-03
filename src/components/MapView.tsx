@@ -1,6 +1,6 @@
 /**
  * MapView Component
- * 
+ *
  * Componente principal para mostrar mapas con Google Maps SDK
  * Soporta:
  * - Marcadores de pickup/dropoff
@@ -60,19 +60,19 @@ export const MapView: React.FC<MapViewProps> = ({
       return [driverLocation.longitude, driverLocation.latitude];
     }
     // Centro por defecto (Nueva York)
-    return [-74.0060, 40.7128];
+    return [-74.006, 40.7128];
   };
 
   // Calcular bounds para mostrar todas las ubicaciones
   const calculateBounds = () => {
     const locations = [pickupLocation, dropoffLocation, driverLocation].filter(
-      (loc) => loc !== undefined
+      loc => loc !== undefined
     ) as Location[];
 
     if (locations.length === 0) return null;
 
-    const lats = locations.map((loc) => loc.latitude);
-    const lngs = locations.map((loc) => loc.longitude);
+    const lats = locations.map(loc => loc.latitude);
+    const lngs = locations.map(loc => loc.longitude);
 
     const minLat = Math.min(...lats);
     const maxLat = Math.max(...lats);
@@ -121,8 +121,14 @@ export const MapView: React.FC<MapViewProps> = ({
         // Mostrar todas las ubicaciones
         mapRef.current.fitToCoordinates(
           [
-            { latitude: bounds.latitude - bounds.latitudeDelta / 2, longitude: bounds.longitude - bounds.longitudeDelta / 2 },
-            { latitude: bounds.latitude + bounds.latitudeDelta / 2, longitude: bounds.longitude + bounds.longitudeDelta / 2 },
+            {
+              latitude: bounds.latitude - bounds.latitudeDelta / 2,
+              longitude: bounds.longitude - bounds.longitudeDelta / 2,
+            },
+            {
+              latitude: bounds.latitude + bounds.latitudeDelta / 2,
+              longitude: bounds.longitude + bounds.longitudeDelta / 2,
+            },
           ],
           {
             edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
@@ -141,7 +147,7 @@ export const MapView: React.FC<MapViewProps> = ({
       return [];
     }
 
-    return routeCoordinates.map((coord) => ({
+    return routeCoordinates.map(coord => ({
       latitude: coord[1],
       longitude: coord[0],
     }));
@@ -175,7 +181,7 @@ export const MapView: React.FC<MapViewProps> = ({
         }}
         onMapReady={handleMapReady}
         showsUserLocation={showUserLocation}
-        onUserLocationChange={(event) => {
+        onUserLocationChange={event => {
           if (onLocationChange && event.nativeEvent.coordinate) {
             onLocationChange({
               latitude: event.nativeEvent.coordinate.latitude,

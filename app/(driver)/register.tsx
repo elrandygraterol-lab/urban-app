@@ -23,7 +23,7 @@ export default function DriverRegistrationScreen() {
     confirmPassword: '',
     name: '',
     phone: '',
-    vehicleType: 'taxi' as 'taxi' | 'moto-taxi',
+    vehicleType: 'taxi' as 'taxi' | 'moto_taxi',
     licensePlate: '',
     vehicleModel: '',
   });
@@ -34,8 +34,7 @@ export default function DriverRegistrationScreen() {
     const newErrors: Record<string, string> = {};
 
     if (!formData.email) newErrors.email = 'Email es requerido';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))
-      newErrors.email = 'Email inválido';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) newErrors.email = 'Email inválido';
 
     if (!formData.password) newErrors.password = 'Contraseña es requerida';
     else if (formData.password.length < 8)
@@ -82,8 +81,8 @@ export default function DriverRegistrationScreen() {
         [
           {
             text: 'Ir a Login',
-            onPress: () => router.replace('/(auth)/login')
-          }
+            onPress: () => router.replace('/(auth)/login'),
+          },
         ],
         { cancelable: false }
       );
@@ -109,7 +108,7 @@ export default function DriverRegistrationScreen() {
             style={[styles.input, errors.name && styles.inputError]}
             placeholder="Tu nombre"
             value={formData.name}
-            onChangeText={(text) => {
+            onChangeText={text => {
               setFormData({ ...formData, name: text });
               if (errors.name) setErrors({ ...errors, name: '' });
             }}
@@ -124,7 +123,7 @@ export default function DriverRegistrationScreen() {
             style={[styles.input, errors.email && styles.inputError]}
             placeholder="tu@email.com"
             value={formData.email}
-            onChangeText={(text) => {
+            onChangeText={text => {
               setFormData({ ...formData, email: text });
               if (errors.email) setErrors({ ...errors, email: '' });
             }}
@@ -140,7 +139,7 @@ export default function DriverRegistrationScreen() {
             style={[styles.input, errors.phone && styles.inputError]}
             placeholder="Teléfono (ej: 4121234567)"
             value={formData.phone}
-            onChangeText={(text) => {
+            onChangeText={text => {
               setFormData({ ...formData, phone: text });
               if (errors.phone) setErrors({ ...errors, phone: '' });
             }}
@@ -156,7 +155,7 @@ export default function DriverRegistrationScreen() {
             style={[styles.input, errors.password && styles.inputError]}
             placeholder="Mínimo 8 caracteres"
             value={formData.password}
-            onChangeText={(text) => {
+            onChangeText={text => {
               setFormData({ ...formData, password: text });
               if (errors.password) setErrors({ ...errors, password: '' });
             }}
@@ -172,16 +171,14 @@ export default function DriverRegistrationScreen() {
             style={[styles.input, errors.confirmPassword && styles.inputError]}
             placeholder="Repite tu contraseña"
             value={formData.confirmPassword}
-            onChangeText={(text) => {
+            onChangeText={text => {
               setFormData({ ...formData, confirmPassword: text });
               if (errors.confirmPassword) setErrors({ ...errors, confirmPassword: '' });
             }}
             secureTextEntry
             editable={!isLoading}
           />
-          {errors.confirmPassword && (
-            <Text style={styles.errorText}>{errors.confirmPassword}</Text>
-          )}
+          {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
         </View>
       </View>
 
@@ -192,7 +189,7 @@ export default function DriverRegistrationScreen() {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Tipo de Vehículo</Text>
           <View style={styles.vehicleTypeContainer}>
-            {(['taxi', 'moto-taxi'] as const).map((type) => (
+            {(['taxi', 'moto_taxi'] as const).map(type => (
               <TouchableOpacity
                 key={type}
                 style={[
@@ -221,15 +218,13 @@ export default function DriverRegistrationScreen() {
             style={[styles.input, errors.licensePlate && styles.inputError]}
             placeholder="ABC-1234"
             value={formData.licensePlate}
-            onChangeText={(text) => {
+            onChangeText={text => {
               setFormData({ ...formData, licensePlate: text.toUpperCase() });
               if (errors.licensePlate) setErrors({ ...errors, licensePlate: '' });
             }}
             editable={!isLoading}
           />
-          {errors.licensePlate && (
-            <Text style={styles.errorText}>{errors.licensePlate}</Text>
-          )}
+          {errors.licensePlate && <Text style={styles.errorText}>{errors.licensePlate}</Text>}
         </View>
 
         <View style={styles.inputGroup}>
@@ -238,15 +233,13 @@ export default function DriverRegistrationScreen() {
             style={[styles.input, errors.vehicleModel && styles.inputError]}
             placeholder="Toyota Corolla 2020"
             value={formData.vehicleModel}
-            onChangeText={(text) => {
+            onChangeText={text => {
               setFormData({ ...formData, vehicleModel: text });
               if (errors.vehicleModel) setErrors({ ...errors, vehicleModel: '' });
             }}
             editable={!isLoading}
           />
-          {errors.vehicleModel && (
-            <Text style={styles.errorText}>{errors.vehicleModel}</Text>
-          )}
+          {errors.vehicleModel && <Text style={styles.errorText}>{errors.vehicleModel}</Text>}
         </View>
       </View>
 
@@ -264,10 +257,7 @@ export default function DriverRegistrationScreen() {
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => router.back()}
-          disabled={isLoading}
-        >
+        <TouchableOpacity onPress={() => router.back()} disabled={isLoading}>
           <Text style={styles.backLink}>Volver</Text>
         </TouchableOpacity>
       </View>

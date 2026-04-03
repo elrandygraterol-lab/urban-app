@@ -53,11 +53,11 @@ export default function PaymentScreen({ visible, rideId, onClose }: PaymentScree
   const loadRideDetails = async () => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const response = await rideAPI.getRide(rideId);
       const ride = response.data.ride;
-      
+
       setRideDetails({
         id: ride.id,
         pickupAddress: ride.pickupAddress,
@@ -77,12 +77,12 @@ export default function PaymentScreen({ visible, rideId, onClose }: PaymentScree
           name: ride.driver?.name || 'Conductor',
         },
       });
-      
+
       // Si el método de pago NO es efectivo, procesar automáticamente
       if (ride.paymentMethodId && ride.paymentMethodId !== 'cash') {
         await processPaymentAutomatically(ride.paymentMethodId);
       }
-      
+
       setIsLoading(false);
     } catch (error: any) {
       console.error('Error loading ride details:', error);
@@ -93,7 +93,7 @@ export default function PaymentScreen({ visible, rideId, onClose }: PaymentScree
 
   const processPaymentAutomatically = async (paymentMethodId: string) => {
     setIsProcessingPayment(true);
-    
+
     try {
       await paymentAPI.processPayment(rideId, paymentMethodId);
       setPaymentCompleted(true);
@@ -102,15 +102,15 @@ export default function PaymentScreen({ visible, rideId, onClose }: PaymentScree
       console.error('Error processing payment:', error);
       setIsProcessingPayment(false);
       setError(
-        error.response?.data?.error?.message || 
-        'Error al procesar el pago. Por favor intenta nuevamente.'
+        error.response?.data?.error?.message ||
+          'Error al procesar el pago. Por favor intenta nuevamente.'
       );
     }
   };
 
   const handleRetryPayment = async () => {
     if (!rideDetails) return;
-    
+
     setError(null);
     await processPaymentAutomatically(rideDetails.paymentMethodId);
   };
@@ -122,7 +122,7 @@ export default function PaymentScreen({ visible, rideId, onClose }: PaymentScree
     setPaymentCompleted(false);
     setRideDetails(null);
     setError(null);
-    
+
     onClose();
   };
 
@@ -134,12 +134,7 @@ export default function PaymentScreen({ visible, rideId, onClose }: PaymentScree
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={false}
-      onRequestClose={handleClose}
-    >
+    <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={handleClose}>
       <View style={styles.container}>
         {isLoading ? (
           <View style={styles.loadingContainer}>
@@ -160,31 +155,31 @@ export default function PaymentScreen({ visible, rideId, onClose }: PaymentScree
               <>
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Resumen del Viaje</Text>
-                  
+
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>🟢 Origen:</Text>
                     <Text style={styles.summaryValue}>{rideDetails.pickupAddress}</Text>
                   </View>
-                  
+
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>🔴 Destino:</Text>
                     <Text style={styles.summaryValue}>{rideDetails.destinationAddress}</Text>
                   </View>
-                  
+
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>⏱️ Duración:</Text>
                     <Text style={styles.summaryValue}>
                       {rideDetails.actualDurationMinutes} minutos
                     </Text>
                   </View>
-                  
+
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>📍 Distancia:</Text>
                     <Text style={styles.summaryValue}>
                       {rideDetails.actualDistanceKm.toFixed(2)} km
                     </Text>
                   </View>
-                  
+
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>🚗 Conductor:</Text>
                     <Text style={styles.summaryValue}>{rideDetails.driver.name}</Text>
@@ -194,93 +189,88 @@ export default function PaymentScreen({ visible, rideId, onClose }: PaymentScree
                 {/* Fare Breakdown */}
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Desglose de Tarifa</Text>
-                  
+
                   <View style={styles.fareRow}>
                     <Text style={styles.fareLabel}>Tarifa base:</Text>
                     <Text style={styles.fareValue}>
                       Bs. {rideDetails.fareBreakdown.baseFare.toFixed(2)}
                     </Text>
                   </View>
-                  
+
                   <View style={styles.fareRow}>
                     <Text style={styles.fareLabel}>
-                      Por km (Bs. {rideDetails.fareBreakdown.perKmRate.toFixed(2)} × {rideDetails.fareBreakdown.distance.toFixed(2)} km):
+                      Por km (Bs. {rideDetails.fareBreakdown.perKmRate.toFixed(2)} ×{' '}
+                      {rideDetails.fareBreakdown.distance.toFixed(2)} km):
                     </Text>
                     <Text style={styles.fareValue}>
-                      Bs. {(rideDetails.fareBreakdown.perKmRate * rideDetails.fareBreakdown.distance).toFixed(2)}
+                      Bs.{' '}
+                      {(
+                        rideDetails.fareBreakdown.perKmRate * rideDetails.fareBreakdown.distance
+                      ).toFixed(2)}
                     </Text>
                   </View>
-                  
+
                   <View style={styles.fareRow}>
                     <Text style={styles.fareLabel}>
-                      Por minuto (Bs. {rideDetails.fareBreakdown.perMinuteRate.toFixed(2)} × {rideDetails.fareBreakdown.duration} min):
+                      Por minuto (Bs. {rideDetails.fareBreakdown.perMinuteRate.toFixed(2)} ×{' '}
+                      {rideDetails.fareBreakdown.duration} min):
                     </Text>
                     <Text style={styles.fareValue}>
-                      Bs. {(rideDetails.fareBreakdown.perMinuteRate * rideDetails.fareBreakdown.duration).toFixed(2)}
+                      Bs.{' '}
+                      {(
+                        rideDetails.fareBreakdown.perMinuteRate * rideDetails.fareBreakdown.duration
+                      ).toFixed(2)}
                     </Text>
                   </View>
-                  
+
                   <View style={styles.totalRow}>
                     <Text style={styles.totalLabel}>Total:</Text>
-                    <Text style={styles.totalValue}>
-                      Bs. {rideDetails.finalFare.toFixed(2)}
-                    </Text>
+                    <Text style={styles.totalValue}>Bs. {rideDetails.finalFare.toFixed(2)}</Text>
                   </View>
                 </View>
 
                 {/* Payment Method */}
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Método de Pago</Text>
-                  
+
                   <View style={styles.paymentMethodCard}>
                     <Text style={styles.paymentMethodIcon}>💳</Text>
                     <Text style={styles.paymentMethodText}>
                       {getPaymentMethodLabel(rideDetails.paymentMethodId)}
                     </Text>
                   </View>
-                  
+
                   {/* Cash Payment Message */}
                   {rideDetails.paymentMethodId === 'cash' && (
                     <View style={styles.cashMessageContainer}>
                       <Text style={styles.cashMessageIcon}>💵</Text>
-                      <Text style={styles.cashMessageText}>
-                        Paga al conductor en efectivo
-                      </Text>
+                      <Text style={styles.cashMessageText}>Paga al conductor en efectivo</Text>
                     </View>
                   )}
-                  
+
                   {/* Card/Wallet Payment Processing */}
                   {rideDetails.paymentMethodId !== 'cash' && (
                     <>
                       {isProcessingPayment && (
                         <View style={styles.processingContainer}>
                           <ActivityIndicator size="small" color="#22c55e" />
-                          <Text style={styles.processingText}>
-                            Procesando pago...
-                          </Text>
+                          <Text style={styles.processingText}>Procesando pago...</Text>
                         </View>
                       )}
-                      
+
                       {paymentCompleted && !error && (
                         <View style={styles.successContainer}>
                           <Text style={styles.successIcon}>✅</Text>
-                          <Text style={styles.successText}>
-                            Pago procesado exitosamente
-                          </Text>
+                          <Text style={styles.successText}>Pago procesado exitosamente</Text>
                         </View>
                       )}
-                      
+
                       {error && (
                         <View style={styles.errorContainer}>
                           <Text style={styles.errorIcon}>❌</Text>
                           <Text style={styles.errorText}>{error}</Text>
-                          <TouchableOpacity
-                            style={styles.retryButton}
-                            onPress={handleRetryPayment}
-                          >
-                            <Text style={styles.retryButtonText}>
-                              Reintentar Pago
-                            </Text>
+                          <TouchableOpacity style={styles.retryButton} onPress={handleRetryPayment}>
+                            <Text style={styles.retryButtonText}>Reintentar Pago</Text>
                           </TouchableOpacity>
                         </View>
                       )}
@@ -295,10 +285,7 @@ export default function PaymentScreen({ visible, rideId, onClose }: PaymentScree
         {/* Continue Button */}
         {!isLoading && (
           <View style={styles.footer}>
-            <TouchableOpacity
-              style={styles.continueButton}
-              onPress={handleClose}
-            >
+            <TouchableOpacity style={styles.continueButton} onPress={handleClose}>
               <Text style={styles.continueButtonText}>Continuar</Text>
             </TouchableOpacity>
           </View>

@@ -71,7 +71,9 @@ export default function RatingModal({
             maxWidth: 400,
           }}
         >
-          <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.darkGray, marginBottom: 8 }}>
+          <Text
+            style={{ fontSize: 18, fontWeight: 'bold', color: colors.darkGray, marginBottom: 8 }}
+          >
             Rate {passengerName}
           </Text>
           <Text style={{ fontSize: 14, color: colors.lightGray, marginBottom: 24 }}>
@@ -79,8 +81,10 @@ export default function RatingModal({
           </Text>
 
           {/* Star Rating */}
-          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 24 }}>
-            {[1, 2, 3, 4, 5].map((star) => (
+          <View
+            style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 24 }}
+          >
+            {[1, 2, 3, 4, 5].map(star => (
               <TouchableOpacity key={star} onPress={() => setRating(star)}>
                 <Text style={{ fontSize: 32 }}>{star <= rating ? '⭐' : '☆'}</Text>
               </TouchableOpacity>

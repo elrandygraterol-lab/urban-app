@@ -8,44 +8,44 @@ import { Platform } from 'react-native';
 // UrbanTaxi Brand Colors
 export const Colors = {
   // Primary Colors (Updated to match admin panel green-400/green-500)
-  primary: '#22c55e',        // Main green (green-500) for primary actions
-  primaryLight: '#4ade80',   // Light green (green-400) for gradients
-  primaryDark: '#16a34a',    // Dark green (green-600) for hover states
-  secondary: '#10b981',      // Emerald green for secondary actions
-  light: '#86efac',          // Light green (green-300) for backgrounds
-  
+  primary: '#22c55e', // Main green (green-500) for primary actions
+  primaryLight: '#4ade80', // Light green (green-400) for gradients
+  primaryDark: '#16a34a', // Dark green (green-600) for hover states
+  secondary: '#10b981', // Emerald green for secondary actions
+  light: '#86efac', // Light green (green-300) for backgrounds
+
   // Accent Colors
-  orange: '#f59e0b',         // Amber for cancel/warning actions
-  lightOrange: '#fbbf24',    // Light amber for hover cancel states
-  
+  orange: '#f59e0b', // Amber for cancel/warning actions
+  lightOrange: '#fbbf24', // Light amber for hover cancel states
+
   // Neutral Colors
-  darkGray: '#1f2937',       // Dark gray for headings and primary text
-  mediumGray: '#6b7280',     // Medium gray for secondary text
-  lightGray: '#9ca3af',      // Light gray for placeholders
-  white: '#FFFFFF',          // White for backgrounds and cards
-  black: '#000000',          // Black for text
-  background: '#f9fafb',     // Light background
-  
+  darkGray: '#1f2937', // Dark gray for headings and primary text
+  mediumGray: '#6b7280', // Medium gray for secondary text
+  lightGray: '#9ca3af', // Light gray for placeholders
+  white: '#FFFFFF', // White for backgrounds and cards
+  black: '#000000', // Black for text
+  background: '#f9fafb', // Light background
+
   // Semantic Colors
   success: '#22c55e',
   warning: '#f59e0b',
   error: '#ef4444',
   info: '#3b82f6',
-  
+
   // UI Element Colors
   border: '#e5e7eb',
   inputBorder: '#d1d5db',
   inputFocus: '#22c55e',
   placeholder: '#9ca3af',
   cardBackground: '#FFFFFF',
-  
+
   // Button Colors
   buttonPrimary: '#22c55e',
   buttonPrimaryHover: '#16a34a',
   buttonCancel: '#f59e0b',
   buttonCancelHover: '#d97706',
   buttonDisabled: '#d1d5db',
-  
+
   // Text Colors
   textPrimary: '#1f2937',
   textSecondary: '#6b7280',

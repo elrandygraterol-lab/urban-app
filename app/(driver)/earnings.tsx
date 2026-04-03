@@ -50,7 +50,9 @@ export default function DriverEarningsScreen() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+      <View
+        style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}
+      >
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -59,7 +61,9 @@ export default function DriverEarningsScreen() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
       <View style={{ padding: 16 }}>
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: colors.darkGray, marginBottom: 16 }}>
+        <Text
+          style={{ fontSize: 24, fontWeight: 'bold', color: colors.darkGray, marginBottom: 16 }}
+        >
           Earnings
         </Text>
 
@@ -89,7 +93,9 @@ export default function DriverEarningsScreen() {
               alignItems: 'center',
             }}
           >
-            <Text style={{ fontSize: 12, color: colors.lightGray, marginBottom: 4 }}>This Week</Text>
+            <Text style={{ fontSize: 12, color: colors.lightGray, marginBottom: 4 }}>
+              This Week
+            </Text>
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.primary }}>
               ${earnings?.week.toFixed(2)}
             </Text>
@@ -104,7 +110,9 @@ export default function DriverEarningsScreen() {
               alignItems: 'center',
             }}
           >
-            <Text style={{ fontSize: 12, color: colors.lightGray, marginBottom: 4 }}>This Month</Text>
+            <Text style={{ fontSize: 12, color: colors.lightGray, marginBottom: 4 }}>
+              This Month
+            </Text>
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: colors.primary }}>
               ${earnings?.month.toFixed(2)}
             </Text>
@@ -113,7 +121,9 @@ export default function DriverEarningsScreen() {
 
         {/* Rides Completed */}
         <View style={{ marginBottom: 24 }}>
-          <Text style={{ fontSize: 16, fontWeight: '600', color: colors.darkGray, marginBottom: 8 }}>
+          <Text
+            style={{ fontSize: 16, fontWeight: '600', color: colors.darkGray, marginBottom: 8 }}
+          >
             Rides Completed Today: {earnings?.ridesCompleted}
           </Text>
         </View>
@@ -124,7 +134,7 @@ export default function DriverEarningsScreen() {
         </Text>
 
         {earnings?.rides && earnings.rides.length > 0 ? (
-          earnings.rides.map((ride) => (
+          earnings.rides.map(ride => (
             <View
               key={ride.id}
               style={{
@@ -134,7 +144,13 @@ export default function DriverEarningsScreen() {
                 borderRadius: 8,
               }}
             >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                }}
+              >
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 12, color: colors.lightGray, marginBottom: 4 }}>
                     {new Date(ride.date).toLocaleTimeString()}

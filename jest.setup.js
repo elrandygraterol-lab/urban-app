@@ -6,6 +6,43 @@ global.__DEV__ = true;
 // Provide React globally for react-test-renderer
 global.React = require('react');
 
+// Mock React Native
+jest.mock('react-native', () => {
+  const RN = {
+    Platform: {
+      OS: 'ios',
+      select: jest.fn(obj => obj.ios || obj.default),
+    },
+    StyleSheet: {
+      create: jest.fn(styles => styles),
+      flatten: jest.fn(style => style),
+    },
+    View: 'View',
+    Text: 'Text',
+    TouchableOpacity: 'TouchableOpacity',
+    ScrollView: 'ScrollView',
+    ActivityIndicator: 'ActivityIndicator',
+    Switch: 'Switch',
+    Alert: {
+      alert: jest.fn(),
+    },
+    Dimensions: {
+      get: jest.fn(() => ({ width: 375, height: 667 })),
+    },
+  };
+  return RN;
+});
+
+// Mock Expo Vector Icons
+jest.mock('@expo/vector-icons', () => {
+  const React = require('react');
+  return {
+    Ionicons: props => React.createElement('Ionicons', props),
+    MaterialIcons: props => React.createElement('MaterialIcons', props),
+    FontAwesome: props => React.createElement('FontAwesome', props),
+  };
+});
+
 // Mock AsyncStorage
 jest.mock('@react-native-async-storage/async-storage', () => ({
   setItem: jest.fn(),

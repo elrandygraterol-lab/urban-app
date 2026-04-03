@@ -35,7 +35,9 @@ export default function RideHistoryScreen() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+      <View
+        style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}
+      >
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -44,7 +46,9 @@ export default function RideHistoryScreen() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
       <View style={{ padding: 16 }}>
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: colors.darkGray, marginBottom: 16 }}>
+        <Text
+          style={{ fontSize: 24, fontWeight: 'bold', color: colors.darkGray, marginBottom: 16 }}
+        >
           Ride History
         </Text>
 
@@ -53,7 +57,7 @@ export default function RideHistoryScreen() {
             No completed rides yet
           </Text>
         ) : (
-          rides.map((ride) => (
+          rides.map(ride => (
             <View
               key={ride.id}
               style={{
@@ -63,12 +67,27 @@ export default function RideHistoryScreen() {
                 borderRadius: 12,
               }}
             >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  marginBottom: 12,
+                }}
+              >
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 12, color: colors.lightGray, marginBottom: 4 }}>
-                    {new Date(ride.date).toLocaleDateString()} at {new Date(ride.date).toLocaleTimeString()}
+                    {new Date(ride.date).toLocaleDateString()} at{' '}
+                    {new Date(ride.date).toLocaleTimeString()}
                   </Text>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: colors.darkGray, marginBottom: 4 }}>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: '600',
+                      color: colors.darkGray,
+                      marginBottom: 4,
+                    }}
+                  >
                     From: {ride.pickupAddress}
                   </Text>
                   <Text style={{ fontSize: 14, fontWeight: '600', color: colors.darkGray }}>
@@ -76,7 +95,14 @@ export default function RideHistoryScreen() {
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: colors.primary, marginBottom: 4 }}>
+                  <Text
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 'bold',
+                      color: colors.primary,
+                      marginBottom: 4,
+                    }}
+                  >
                     ${ride.fare.toFixed(2)}
                   </Text>
                   <Text style={{ fontSize: 12, color: colors.lightGray }}>
@@ -85,7 +111,15 @@ export default function RideHistoryScreen() {
                 </View>
               </View>
 
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E0E0E0' }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  paddingTop: 12,
+                  borderTopWidth: 1,
+                  borderTopColor: '#E0E0E0',
+                }}
+              >
                 <Text style={{ fontSize: 12, color: colors.lightGray }}>
                   Duration: {Math.round(ride.duration / 60)} min
                 </Text>

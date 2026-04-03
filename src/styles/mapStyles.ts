@@ -1,6 +1,6 @@
 /**
  * Map Styles
- * 
+ *
  * Estilos personalizados para Mapbox GL Native
  * Incluye:
  * - Colores de UrbanTaxi

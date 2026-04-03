@@ -46,14 +46,13 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Configurar índices para optimización de consultas
     - _Requisitos: Todos_
 
-
   - [x] 1.4 Configurar Redis para caché y pub/sub
     - Instalar y configurar cliente Redis
     - Configurar conexión con manejo de errores
     - Implementar utilidades para caché y pub/sub
     - _Requisitos: 7, 14, 17_
 
-  - [-]* 1.5 Configurar framework de testing
+  - [-]\* 1.5 Configurar framework de testing
     - Configurar Jest para backend y frontend
     - Configurar fast-check para property-based testing
     - Crear utilidades de testing (mocks, fixtures)
@@ -76,11 +75,11 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Crear cuenta de pasajero en base de datos
     - _Requisitos: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6_
 
-  - [x]* 2.3 Property test: Valid Registration Creates Account
+  - [x]\* 2.3 Property test: Valid Registration Creates Account
     - **Propiedad 1: Valid Registration Creates Account**
     - **Valida: Requisitos 1.2, 1.4, 1.5, 1.6**
 
-  - [x]* 2.4 Property test: Duplicate Credentials Rejected
+  - [x]\* 2.4 Property test: Duplicate Credentials Rejected
     - **Propiedad 2: Duplicate Credentials Rejected**
     - **Valida: Requisito 1.3**
 
@@ -92,11 +91,11 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Almacenar refresh tokens en Redis
     - _Requisitos: 2.1, 2.2, 2.3, 2.4, 2.5_
 
-  - [x]* 2.6 Property test: Authentication Token Generation
+  - [x]\* 2.6 Property test: Authentication Token Generation
     - **Propiedad 3: Authentication Token Generation**
     - **Valida: Requisito 2.3**
 
-  - [x]* 2.7 Property test: Invalid Credentials Rejected
+  - [x]\* 2.7 Property test: Invalid Credentials Rejected
     - **Propiedad 4: Invalid Credentials Rejected**
     - **Valida: Requisito 2.4**
 
@@ -108,7 +107,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Validar token y actualizar contraseña
     - _Requisitos: 2.6_
 
-  - [x]* 2.9 Property test: Password Recovery Token Generation
+  - [x]\* 2.9 Property test: Password Recovery Token Generation
     - **Propiedad 5: Password Recovery Token Generation**
     - **Valida: Requisito 2.6**
 
@@ -118,13 +117,12 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Manejar tokens expirados y refresh token rotation
     - _Requisitos: 2.3, 2.5_
 
-  - [x]* 2.11 Property test: Password Hashing
+  - [x]\* 2.11 Property test: Password Hashing
     - **Propiedad 43: Password Hashing**
     - **Valida: Requisito 24.1**
 
 - [ ] 3. Checkpoint - Verificar autenticación
   - Asegurar que todos los tests pasen, preguntar al usuario si surgen dudas.
-
 
 - [ ] 4. Implementar registro y verificación de conductores
   - [x] 4.1 Implementar registro de conductores
@@ -134,7 +132,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Almacenar información del vehículo
     - _Requisitos: 3.1, 3.2_
 
-  - [-]* 4.2 Property test: Driver Registration Creates Pending Account
+  - [-]\* 4.2 Property test: Driver Registration Creates Pending Account
     - **Propiedad 6: Driver Registration Creates Pending Account**
     - **Valida: Requisito 3.2**
 
@@ -145,11 +143,11 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Actualizar estado a "pending verification" cuando estén completos
     - _Requisitos: 3.3, 3.4, 3.5_
 
-  - [ ]* 4.4 Property test: Document Completeness Validation
+  - [ ]\* 4.4 Property test: Document Completeness Validation
     - **Propiedad 7: Document Completeness Validation**
     - **Valida: Requisito 3.4**
 
-  - [ ]* 4.5 Property test: Document Upload Triggers Verification Status
+  - [ ]\* 4.5 Property test: Document Upload Triggers Verification Status
     - **Propiedad 8: Document Upload Triggers Verification Status**
     - **Valida: Requisito 3.5**
 
@@ -161,11 +159,11 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Enviar notificaciones de aprobación/rechazo
     - _Requisitos: 4.1, 4.2, 4.3, 4.4_
 
-  - [ ]* 4.7 Property test: Admin Approval Changes Driver Status
+  - [ ]\* 4.7 Property test: Admin Approval Changes Driver Status
     - **Propiedad 10: Admin Approval Changes Driver Status**
     - **Valida: Requisito 4.3**
 
-  - [ ]* 4.8 Property test: Admin Rejection Stores Reason
+  - [ ]\* 4.8 Property test: Admin Rejection Stores Reason
     - **Propiedad 11: Admin Rejection Stores Reason**
     - **Valida: Requisito 4.4**
 
@@ -176,7 +174,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Notificar a administradores
     - _Requisitos: 23.1, 23.2, 23.3, 23.4, 23.5_
 
-  - [ ]* 4.10 Property test: Document Update Triggers Re-verification
+  - [ ]\* 4.10 Property test: Document Update Triggers Re-verification
     - **Propiedad 41: Document Update Triggers Re-verification**
     - **Valida: Requisitos 23.2, 23.3, 23.5**
 
@@ -200,7 +198,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Búsqueda case-insensitive con ILIKE
     - _Requisitos: 13.3_
 
-  - [ ]* 5.4 Property test: User Search Functionality
+  - [ ]\* 5.4 Property test: User Search Functionality
     - **Propiedad 26: User Search Functionality**
     - **Valida: Requisito 13.3**
 
@@ -210,11 +208,11 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Bloquear acceso a usuarios suspendidos en middleware
     - _Requisitos: 13.5, 13.6, 13.7_
 
-  - [ ]* 5.6 Property test: Account Suspension Blocks Access
+  - [ ]\* 5.6 Property test: Account Suspension Blocks Access
     - **Propiedad 27: Account Suspension Blocks Access**
     - **Valida: Requisitos 13.5, 13.7**
 
-  - [ ]* 5.7 Property test: Account Reactivation Restores Access
+  - [ ]\* 5.7 Property test: Account Reactivation Restores Access
     - **Propiedad 28: Account Reactivation Restores Access**
     - **Valida: Requisito 13.6**
 
@@ -224,13 +222,12 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Cumplir con GDPR/derecho al olvido
     - _Requisitos: 24.5_
 
-  - [ ]* 5.9 Property test: Account Deletion Removes Data
+  - [ ]\* 5.9 Property test: Account Deletion Removes Data
     - **Propiedad 45: Account Deletion Removes Data**
     - **Valida: Requisito 24.5**
 
 - [ ] 6. Checkpoint - Verificar gestión de usuarios
   - Asegurar que todos los tests pasen, preguntar al usuario si surgen dudas.
-
 
 - [ ] 7. Implementar configuración de tarifas
   - [x] 7.1 Crear modelo y endpoints de configuración de tarifas
@@ -247,11 +244,11 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Redondear a 2 decimales
     - _Requisitos: 9.1, 9.2, 9.3, 9.4, 9.5, 9.7_
 
-  - [ ]* 7.3 Property test: Fare Calculation Includes All Components
+  - [ ]\* 7.3 Property test: Fare Calculation Includes All Components
     - **Propiedad 12: Fare Calculation Includes All Components**
     - **Valida: Requisitos 5.4, 9.1, 9.2, 9.3, 9.4, 9.5, 9.7**
 
-  - [ ]* 7.4 Property test: Fare Configuration Persistence
+  - [ ]\* 7.4 Property test: Fare Configuration Persistence
     - **Propiedad 29: Fare Configuration Persistence**
     - **Valida: Requisitos 15.1, 15.2, 15.3, 15.4, 15.5, 15.6**
 
@@ -261,7 +258,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Crear endpoint para actualizar estas configuraciones
     - _Requisitos: 15.4, 21.6_
 
-  - [ ]* 7.6 Property test: Cancellation Fee Configuration
+  - [ ]\* 7.6 Property test: Cancellation Fee Configuration
     - **Propiedad 39: Cancellation Fee Configuration**
     - **Valida: Requisito 21.6**
 
@@ -273,7 +270,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Ordenar por distancia y rating
     - _Requisitos: 5.6, 6.1_
 
-  - [ ]* 8.2 Property test: Geospatial Filtering of Drivers
+  - [ ]\* 8.2 Property test: Geospatial Filtering of Drivers
     - **Propiedad 14: Geospatial Filtering of Drivers**
     - **Valida: Requisito 5.6**
 
@@ -285,7 +282,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Crear registro de viaje con estado "pending"
     - _Requisitos: 5.1, 5.2, 5.3, 5.4, 5.7, 8.1_
 
-  - [ ]* 8.4 Property test: Ride Request Creates Ride and Notifies Drivers
+  - [ ]\* 8.4 Property test: Ride Request Creates Ride and Notifies Drivers
     - **Propiedad 13: Ride Request Creates Ride and Notifies Drivers**
     - **Valida: Requisitos 5.5, 8.1**
 
@@ -305,15 +302,15 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Cancelar notificaciones a otros conductores
     - _Requisitos: 6.2, 6.3, 6.4, 6.5, 8.2_
 
-  - [ ]* 8.7 Property test: Driver Acceptance Assigns Ride
+  - [ ]\* 8.7 Property test: Driver Acceptance Assigns Ride
     - **Propiedad 15: Driver Acceptance Assigns Ride**
     - **Valida: Requisitos 6.3, 6.4, 8.2**
 
-  - [ ]* 8.8 Property test: Assignment Cancels Other Notifications
+  - [ ]\* 8.8 Property test: Assignment Cancels Other Notifications
     - **Propiedad 16: Assignment Cancels Other Notifications**
     - **Valida: Requisito 6.5**
 
-  - [ ]* 8.9 Property test: Unverified Drivers Cannot Accept Rides
+  - [ ]\* 8.9 Property test: Unverified Drivers Cannot Accept Rides
     - **Propiedad 9: Unverified Drivers Cannot Accept Rides**
     - **Valida: Requisitos 3.6, 4.5**
 
@@ -326,7 +323,6 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
 - [ ] 9. Checkpoint - Verificar creación y asignación de viajes
   - Asegurar que todos los tests pasen, preguntar al usuario si surgen dudas.
 
-
 - [ ] 10. Implementar estados y ciclo de vida del viaje
   - [x] 10.1 Implementar transiciones de estado del viaje
     - Crear endpoint POST /api/rides/:id/arrive (conductor llegó a pickup)
@@ -336,7 +332,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Actualizar timestamps correspondientes
     - _Requisitos: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-  - [ ]* 10.2 Property test: Ride State Machine Transitions
+  - [ ]\* 10.2 Property test: Ride State Machine Transitions
     - **Propiedad 17: Ride State Machine Transitions**
     - **Valida: Requisitos 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7**
 
@@ -348,15 +344,15 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Notificar a la otra parte
     - _Requisitos: 8.6, 8.7, 21.1, 21.2, 21.3, 21.4, 21.5_
 
-  - [ ]* 10.4 Property test: Cancellation Allowed by State
+  - [ ]\* 10.4 Property test: Cancellation Allowed by State
     - **Propiedad 36: Cancellation Allowed by State**
     - **Valida: Requisitos 21.1, 21.2, 8.6**
 
-  - [ ]* 10.5 Property test: Late Cancellation Fee Applied
+  - [ ]\* 10.5 Property test: Late Cancellation Fee Applied
     - **Propiedad 37: Late Cancellation Fee Applied**
     - **Valida: Requisitos 21.3, 21.5**
 
-  - [ ]* 10.6 Property test: Driver Cancellation Triggers Re-request
+  - [ ]\* 10.6 Property test: Driver Cancellation Triggers Re-request
     - **Propiedad 38: Driver Cancellation Triggers Re-request**
     - **Valida: Requisito 21.4**
 
@@ -388,7 +384,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Emitir evento ride:eta_update al pasajero
     - _Requisitos: 7.3, 7.5_
 
-  - [ ]* 11.4 Property test: ETA Calculation for Active Rides
+  - [ ]\* 11.4 Property test: ETA Calculation for Active Rides
     - **Propiedad 18: ETA Calculation for Active Rides**
     - **Valida: Requisito 7.5**
 
@@ -407,7 +403,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Excluir conductores no disponibles de matching
     - _Requisitos: 19.1, 19.2, 19.3, 19.4_
 
-  - [ ]* 12.2 Property test: Driver Availability Controls Matching
+  - [ ]\* 12.2 Property test: Driver Availability Controls Matching
     - **Propiedad 35: Driver Availability Controls Matching**
     - **Valida: Requisitos 19.2, 19.3, 19.5**
 
@@ -419,7 +415,6 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
 - [ ] 13. Checkpoint - Verificar ciclo completo de viaje
   - Asegurar que todos los tests pasen, preguntar al usuario si surgen dudas.
 
-
 - [ ] 14. Implementar sistema de pagos
   - [x] 14.1 Implementar gestión de métodos de pago
     - Crear modelo PaymentMethod
@@ -429,7 +424,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Soportar efectivo, tarjeta, billetera digital
     - _Requisitos: 10.1, 10.2_
 
-  - [ ]* 14.2 Property test: Payment Method Support
+  - [ ]\* 14.2 Property test: Payment Method Support
     - **Propiedad 19: Payment Method Support**
     - **Valida: Requisito 10.2**
 
@@ -442,11 +437,11 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Calcular ganancias del conductor
     - _Requisitos: 10.3, 10.4, 10.5, 12.6_
 
-  - [ ]* 14.4 Property test: Automatic Payment Processing
+  - [ ]\* 14.4 Property test: Automatic Payment Processing
     - **Propiedad 20: Automatic Payment Processing**
     - **Valida: Requisito 10.5**
 
-  - [ ]* 14.5 Property test: Driver Earnings Calculation
+  - [ ]\* 14.5 Property test: Driver Earnings Calculation
     - **Propiedad 25: Driver Earnings Calculation**
     - **Valida: Requisito 12.6**
 
@@ -457,7 +452,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Almacenar respuesta de pasarela en JSONB
     - _Requisitos: 10.6_
 
-  - [ ]* 14.7 Property test: Failed Payment Notification
+  - [ ]\* 14.7 Property test: Failed Payment Notification
     - **Propiedad 21: Failed Payment Notification**
     - **Valida: Requisito 10.6**
 
@@ -467,7 +462,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Enviar recibo por email usando SendGrid/SES
     - _Requisitos: 10.7_
 
-  - [ ]* 14.9 Property test: Payment Receipt Generation
+  - [ ]\* 14.9 Property test: Payment Receipt Generation
     - **Propiedad 22: Payment Receipt Generation**
     - **Valida: Requisito 10.7**
 
@@ -478,7 +473,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Cumplir con PCI-DSS
     - _Requisitos: 24.3, 24.4_
 
-  - [ ]* 14.11 Property test: Card Number Masking
+  - [ ]\* 14.11 Property test: Card Number Masking
     - **Propiedad 44: Card Number Masking**
     - **Valida: Requisito 24.4**
 
@@ -492,7 +487,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Mostrar prompt después de completar viaje
     - _Requisitos: 11.1, 11.2, 11.3, 11.4, 11.5_
 
-  - [ ]* 15.2 Property test: Rating Value Validation
+  - [ ]\* 15.2 Property test: Rating Value Validation
     - **Propiedad 23: Rating Value Validation**
     - **Valida: Requisitos 11.2, 11.5**
 
@@ -503,7 +498,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Mostrar rating en perfil de conductor
     - _Requisitos: 11.6, 11.7_
 
-  - [ ]* 15.4 Property test: Average Rating Calculation
+  - [ ]\* 15.4 Property test: Average Rating Calculation
     - **Propiedad 24: Average Rating Calculation**
     - **Valida: Requisito 11.6**
 
@@ -515,7 +510,6 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
 
 - [ ] 16. Checkpoint - Verificar pagos y valoraciones
   - Asegurar que todos los tests pasen, preguntar al usuario si surgen dudas.
-
 
 - [ ] 17. Implementar sistema de notificaciones push
   - [x] 17.1 Configurar Firebase Cloud Messaging
@@ -538,7 +532,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Implementar reintentos para fallos temporales
     - _Requisitos: 17.1, 17.2, 17.3, 17.4, 17.5, 17.6_
 
-  - [ ]* 17.4 Property test: Critical Events Trigger Notifications
+  - [ ]\* 17.4 Property test: Critical Events Trigger Notifications
     - **Propiedad 32: Critical Events Trigger Notifications**
     - **Valida: Requisitos 17.1, 17.2, 17.3, 17.4, 17.5, 17.6**
 
@@ -548,7 +542,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Respetar preferencias al enviar notificaciones
     - _Requisitos: 17.7_
 
-  - [ ]* 17.6 Property test: Notification Preferences Respected
+  - [ ]\* 17.6 Property test: Notification Preferences Respected
     - **Propiedad 33: Notification Preferences Respected**
     - **Valida: Requisito 17.7**
 
@@ -566,7 +560,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Validar formato de fechas
     - _Requisitos: 18.3_
 
-  - [ ]* 18.3 Property test: Ride History Filtering
+  - [ ]\* 18.3 Property test: Ride History Filtering
     - **Propiedad 34: Ride History Filtering**
     - **Valida: Requisito 18.3**
 
@@ -595,7 +589,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Calcular tasa de completación de viajes
     - _Requisitos: 16.1, 16.2, 16.3, 16.4, 16.5, 16.7_
 
-  - [ ]* 20.2 Property test: Ride Completion Rate Calculation
+  - [ ]\* 20.2 Property test: Ride Completion Rate Calculation
     - **Propiedad 31: Ride Completion Rate Calculation**
     - **Valida: Requisito 16.7**
 
@@ -613,13 +607,12 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Enviar archivo o URL de descarga
     - _Requisitos: 16.6_
 
-  - [ ]* 20.5 Property test: CSV Export Generation
+  - [ ]\* 20.5 Property test: CSV Export Generation
     - **Propiedad 30: CSV Export Generation**
     - **Valida: Requisito 16.6**
 
 - [ ] 21. Checkpoint - Verificar funcionalidad backend completa
   - Asegurar que todos los tests pasen, preguntar al usuario si surgen dudas.
-
 
 - [ ] 22. Implementar seguridad y rate limiting
   - [x] 22.1 Implementar rate limiting
@@ -629,7 +622,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Límite estricto para /api/auth/login (prevenir brute force)
     - _Requisitos: 24.6_
 
-  - [ ]* 22.2 Property test: Rate Limiting Protection
+  - [ ]\* 22.2 Property test: Rate Limiting Protection
     - **Propiedad 46: Rate Limiting Protection**
     - **Valida: Requisito 24.6**
 
@@ -657,17 +650,17 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
 
   - [x] 23.2 Implementar pantallas de autenticación compartidas
     - Crear LoginScreen siguiendo diseño UrbanTaxi:
-      * Logo UrbanTaxi en la parte superior
-      * Tagline "¿Listo para tu siguiente destino?"
-      * Mensaje "Bienvenido de vuelta"
-      * Selector de rol: "¿Eres pasajero o conductor?"
-      * Input de email/teléfono con borde verde (#00B300), esquinas redondeadas
-      * Input de contraseña con borde verde, icono de ojo para mostrar/ocultar
-      * Checkbox "Recuérdame" con acento verde
-      * Link "¿Olvidaste tu Contraseña?" en verde
-      * Botón primario "Empezar a viajar" (pasajero) o "Empezar a trabajar" (conductor) en verde (#00B300), redondeado
-      * Link "¿Aún no tienes una cuenta? Regístrate aquí." con acento verde
-      * Botones de Google y Apple con fondo blanco
+      - Logo UrbanTaxi en la parte superior
+      - Tagline "¿Listo para tu siguiente destino?"
+      - Mensaje "Bienvenido de vuelta"
+      - Selector de rol: "¿Eres pasajero o conductor?"
+      - Input de email/teléfono con borde verde (#00B300), esquinas redondeadas
+      - Input de contraseña con borde verde, icono de ojo para mostrar/ocultar
+      - Checkbox "Recuérdame" con acento verde
+      - Link "¿Olvidaste tu Contraseña?" en verde
+      - Botón primario "Empezar a viajar" (pasajero) o "Empezar a trabajar" (conductor) en verde (#00B300), redondeado
+      - Link "¿Aún no tienes una cuenta? Regístrate aquí." con acento verde
+      - Botones de Google y Apple con fondo blanco
     - Crear RegisterScreen con selector de rol y el mismo estilo visual
     - Crear ForgotPasswordScreen con estilo consistente
     - Integrar con endpoints de autenticación
@@ -762,7 +755,6 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
 - [x] 24. Checkpoint - Verificar funcionalidad de pasajeros
   - Asegurar que todos los tests pasen, preguntar al usuario si surgen dudas.
 
-
 - [x] 25. Implementar funcionalidad de conductores en la app móvil
   - [x] 25.1 Implementar registro de conductor con documentos
     - Formulario de registro con datos de vehículo
@@ -849,7 +841,6 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
 
 - [x] 26. Checkpoint - Verificar funcionalidad de conductores
   - Asegurar que todos los tests pasen, preguntar al usuario si surgen dudas.
-
 
 - [x] 27. Implementar dashboard administrativo (Admin Dashboard - Express + EJS)
   - [x] 27.1 Configurar proyecto web con Express y express-layout-ejs
@@ -938,7 +929,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Crear componente Logo de UrbanTaxi
     - _Requisitos: 29.1, 29.2, 29.3, 29.4, 29.5, 29.8, 29.9, 29.10_
 
-  - [ ]* 28.2 Property test: Brand Color Consistency
+  - [ ]\* 28.2 Property test: Brand Color Consistency
     - **Propiedad 58: Brand Color Consistency**
     - **Valida: Requisitos 29.1, 29.2, 29.3**
 
@@ -949,17 +940,16 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Detectar idioma del dispositivo
     - _Requisitos: 22.1, 22.2, 22.3, 22.4, 22.5, 29.11, 29.12_
 
-  - [ ]* 28.4 Property test: Device Language Detection
+  - [ ]\* 28.4 Property test: Device Language Detection
     - **Propiedad 40: Device Language Detection**
     - **Valida: Requisito 22.5**
 
-  - [ ]* 28.5 Property test: Login Screen Design Compliance
+  - [ ]\* 28.5 Property test: Login Screen Design Compliance
     - **Propiedad 59: Login Screen Design Compliance**
     - **Valida: Requisitos 29.6, 29.7, 29.8, 29.9, 29.11, 29.12**
 
 - [ ] 29. Checkpoint - Verificar dashboard y multiidioma
   - Asegurar que todos los tests pasen, preguntar al usuario si surgen dudas.
-
 
 - [ ] 30. Integrar servicios externos
   - [x] 30.1 Integrar OpenStreetMap + Nominatim + OSRM
@@ -1004,11 +994,11 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Permitir cancelación hasta 1 hora antes sin cargo
     - _Requisitos: 25.1, 25.2, 25.3, 25.4, 25.5_
 
-  - [ ]* 31.2 Property test: Scheduled Ride Creation
+  - [ ]\* 31.2 Property test: Scheduled Ride Creation
     - **Propiedad 47: Scheduled Ride Creation**
     - **Valida: Requisitos 25.2, 25.3**
 
-  - [ ]* 31.3 Property test: Scheduled Ride Cancellation Window
+  - [ ]\* 31.3 Property test: Scheduled Ride Cancellation Window
     - **Propiedad 48: Scheduled Ride Cancellation Window**
     - **Valida: Requisito 25.4**
 
@@ -1020,15 +1010,15 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Configurar tasa de conversión en admin dashboard
     - _Requisitos: 26.1, 26.2, 26.3, 26.4, 26.5_
 
-  - [ ]* 31.5 Property test: Loyalty Points Award
+  - [ ]\* 31.5 Property test: Loyalty Points Award
     - **Propiedad 49: Loyalty Points Award**
     - **Valida: Requisitos 26.1, 26.2**
 
-  - [ ]* 31.6 Property test: Points Redemption
+  - [ ]\* 31.6 Property test: Points Redemption
     - **Propiedad 50: Points Redemption**
     - **Valida: Requisito 26.4**
 
-  - [ ]* 31.7 Property test: Loyalty Points Configuration
+  - [ ]\* 31.7 Property test: Loyalty Points Configuration
     - **Propiedad 51: Loyalty Points Configuration**
     - **Valida: Requisito 26.5**
 
@@ -1040,15 +1030,15 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Notificar a pasajeros sobre viaje compartido
     - _Requisitos: 27.1, 27.2, 27.3, 27.4, 27.5_
 
-  - [ ]* 31.9 Property test: Shared Ride Matching
+  - [ ]\* 31.9 Property test: Shared Ride Matching
     - **Propiedad 52: Shared Ride Matching**
     - **Valida: Requisito 27.2**
 
-  - [ ]* 31.10 Property test: Shared Ride Discount
+  - [ ]\* 31.10 Property test: Shared Ride Discount
     - **Propiedad 53: Shared Ride Discount**
     - **Valida: Requisito 27.3**
 
-  - [ ]* 31.11 Property test: Shared Ride Passenger Limit
+  - [ ]\* 31.11 Property test: Shared Ride Passenger Limit
     - **Propiedad 54: Shared Ride Passenger Limit**
     - **Valida: Requisito 27.5**
 
@@ -1061,48 +1051,47 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Mostrar badges y progreso en app de conductor
     - _Requisitos: 28.1, 28.2, 28.3, 28.4, 28.5_
 
-  - [ ]* 31.13 Property test: Gamification Badge Awards
+  - [ ]\* 31.13 Property test: Gamification Badge Awards
     - **Propiedad 55: Gamification Badge Awards**
     - **Valida: Requisito 28.1**
 
-  - [ ]* 31.14 Property test: Gamification Goal Tracking
+  - [ ]\* 31.14 Property test: Gamification Goal Tracking
     - **Propiedad 56: Gamification Goal Tracking**
     - **Valida: Requisito 28.3**
 
-  - [ ]* 31.15 Property test: Gamification Bonus Awards
+  - [ ]\* 31.15 Property test: Gamification Bonus Awards
     - **Propiedad 57: Gamification Bonus Awards**
     - **Valida: Requisito 28.5**
 
 - [ ] 32. Checkpoint - Verificar características opcionales
   - Asegurar que todos los tests pasen, preguntar al usuario si surgen dudas.
 
-
-- [ ]* 33. Testing integral y optimización
-  - [ ]* 33.1 Ejecutar suite completa de property tests
+- [ ]\* 33. Testing integral y optimización
+  - [ ]\* 33.1 Ejecutar suite completa de property tests
     - Ejecutar todos los property tests con 100+ iteraciones
     - Verificar que todas las propiedades se cumplan
     - Documentar cualquier fallo encontrado
     - Ajustar implementación si es necesario
 
-  - [ ]* 33.2 Ejecutar suite completa de unit tests
+  - [ ]\* 33.2 Ejecutar suite completa de unit tests
     - Verificar cobertura de código ≥ 80%
     - Ejecutar tests de integración
     - Verificar todos los endpoints de API
     - Validar manejo de errores
 
-  - [ ]* 33.3 Realizar pruebas de carga
+  - [ ]\* 33.3 Realizar pruebas de carga
     - Simular 1000 solicitudes de viaje concurrentes
     - Simular 10,000 actualizaciones de ubicación por segundo
     - Medir tiempos de respuesta (p50, p95, p99)
     - Identificar cuellos de botella
 
-  - [ ]* 33.4 Optimizar consultas de base de datos
+  - [ ]\* 33.4 Optimizar consultas de base de datos
     - Analizar queries lentas con EXPLAIN
     - Agregar índices faltantes
     - Optimizar queries N+1
     - Configurar connection pooling
 
-  - [ ]* 33.5 Implementar caché estratégico
+  - [ ]\* 33.5 Implementar caché estratégico
     - Cachear configuración de tarifas en Redis
     - Cachear ubicaciones de conductores (TTL 30s)
     - Cachear datos de usuario frecuentemente accedidos
@@ -1137,22 +1126,22 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Alertas por fallos de pago
     - _Requisitos: Todos_
 
-- [ ]* 35. Preparar para despliegue
-  - [ ]* 35.1 Configurar Docker para backend
+- [ ]\* 35. Preparar para despliegue
+  - [ ]\* 35.1 Configurar Docker para backend
     - Crear Dockerfile optimizado
     - Crear docker-compose.yml para desarrollo
     - Configurar multi-stage build
     - Optimizar tamaño de imagen
     - _Requisitos: Todos_
 
-  - [ ]* 35.2 Configurar variables de entorno
+  - [ ]\* 35.2 Configurar variables de entorno
     - Crear .env.example con todas las variables
     - Documentar cada variable de entorno
     - Configurar diferentes entornos (dev, staging, prod)
     - Usar secrets manager para producción
     - _Requisitos: Todos_
 
-  - [ ]* 35.3 Configurar CI/CD con GitHub Actions
+  - [ ]\* 35.3 Configurar CI/CD con GitHub Actions
     - Crear workflow para tests automáticos
     - Crear workflow para build de backend
     - Crear workflow para build de apps móviles con EAS
@@ -1160,25 +1149,24 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Configurar despliegue manual a producción
     - _Requisitos: Todos_
 
-  - [ ]* 35.4 Configurar base de datos de producción
+  - [ ]\* 35.4 Configurar base de datos de producción
     - Provisionar PostgreSQL en RDS o similar
     - Configurar backups automáticos
     - Configurar réplicas de lectura
     - Habilitar point-in-time recovery
     - _Requisitos: Todos_
 
-  - [ ]* 35.5 Configurar Redis de producción
+  - [ ]\* 35.5 Configurar Redis de producción
     - Provisionar Redis en ElastiCache o similar
     - Configurar persistencia
     - Configurar clustering si es necesario
     - _Requisitos: Todos_
 
-- [ ]* 36. Checkpoint - Verificar preparación para despliegue
+- [ ]\* 36. Checkpoint - Verificar preparación para despliegue
   - Asegurar que todos los tests pasen, preguntar al usuario si surgen dudas.
 
-
-- [ ]* 37. Desplegar backend
-  - [ ]* 37.1 Desplegar a staging
+- [ ]\* 37. Desplegar backend
+  - [ ]\* 37.1 Desplegar a staging
     - Configurar servidor en AWS EC2/ECS o DigitalOcean
     - Configurar load balancer
     - Desplegar contenedor Docker
@@ -1186,35 +1174,35 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Verificar health checks
     - _Requisitos: Todos_
 
-  - [ ]* 37.2 Configurar dominio y SSL
+  - [ ]\* 37.2 Configurar dominio y SSL
     - Configurar dominio personalizado
     - Configurar certificado SSL con Let's Encrypt
     - Configurar CloudFlare para CDN y DDoS protection
     - _Requisitos: 24.2_
 
-  - [ ]* 37.3 Ejecutar pruebas en staging
+  - [ ]\* 37.3 Ejecutar pruebas en staging
     - Ejecutar suite de tests E2E
     - Verificar integración con servicios externos
     - Probar flujos críticos manualmente
     - Verificar WebSockets funcionan correctamente
     - _Requisitos: Todos_
 
-  - [ ]* 37.4 Desplegar a producción
+  - [ ]\* 37.4 Desplegar a producción
     - Configurar auto-scaling
     - Desplegar con estrategia blue-green
     - Ejecutar smoke tests
     - Monitorear métricas post-despliegue
     - _Requisitos: Todos_
 
-- [ ]* 38. Desplegar aplicación móvil unificada
-  - [ ]* 38.1 Configurar EAS Build
+- [ ]\* 38. Desplegar aplicación móvil unificada
+  - [ ]\* 38.1 Configurar EAS Build
     - Instalar EAS CLI
     - Configurar eas.json con perfiles de build
     - Configurar credenciales de firma para Android e iOS
     - Configurar app.json con identificadores únicos
     - _Requisitos: Todos_
 
-  - [ ]* 38.2 Build y despliegue Android (App unificada)
+  - [ ]\* 38.2 Build y despliegue Android (App unificada)
     - Ejecutar `eas build --platform android --profile production`
     - Generar AAB firmado
     - Crear listing en Google Play Console
@@ -1223,7 +1211,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Configurar release gradual (10% → 50% → 100%)
     - _Requisitos: Todos_
 
-  - [ ]* 38.3 Build y despliegue iOS (App unificada)
+  - [ ]\* 38.3 Build y despliegue iOS (App unificada)
     - Ejecutar `eas build --platform ios --profile production`
     - Generar IPA firmado
     - Subir a App Store Connect con EAS Submit
@@ -1233,15 +1221,15 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Enviar para revisión de Apple
     - _Requisitos: Todos_
 
-- [ ]* 39. Desplegar dashboard web administrativo
-  - [ ]* 39.1 Preparar vistas EJS para producción
+- [ ]\* 39. Desplegar dashboard web administrativo
+  - [ ]\* 39.1 Preparar vistas EJS para producción
     - Minificar CSS y JavaScript
     - Optimizar imágenes
     - Configurar caché de assets estáticos
     - Crear archivo .env.production con variables
     - _Requisitos: Todos_
 
-  - [ ]* 39.2 Desplegar a servidor de producción
+  - [ ]\* 39.2 Desplegar a servidor de producción
     - Desplegar backend Express con vistas EJS
     - Configurar dominio personalizado (ej: admin.urbantaxi.com)
     - Configurar certificado SSL con Let's Encrypt
@@ -1249,7 +1237,7 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Habilitar compresión gzip
     - _Requisitos: Todos_
 
-  - [ ]* 39.3 Configurar seguridad del dashboard
+  - [ ]\* 39.3 Configurar seguridad del dashboard
     - Implementar CSRF protection con csurf
     - Configurar rate limiting para login
     - Implementar 2FA para administradores (opcional)
@@ -1257,14 +1245,14 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Implementar audit logging de acciones de admin
     - _Requisitos: 24.2, 24.6_
 
-- [ ]* 40. Post-despliegue y monitoreo
-  - [ ]* 40.1 Configurar analytics
+- [ ]\* 40. Post-despliegue y monitoreo
+  - [ ]\* 40.1 Configurar analytics
     - Integrar Google Analytics o Mixpanel
     - Trackear eventos clave (registro, solicitud de viaje, pago)
     - Configurar funnels de conversión
     - _Requisitos: Todos_
 
-  - [ ]* 40.2 Monitorear métricas de negocio
+  - [ ]\* 40.2 Monitorear métricas de negocio
     - Viajes por hora/día
     - Tasa de conversión de solicitudes
     - Ingresos diarios
@@ -1272,20 +1260,20 @@ Este plan de implementación cubre el desarrollo completo de la plataforma de ta
     - Tiempo promedio de espera
     - _Requisitos: 16.1, 16.2, 16.3, 16.4, 16.7_
 
-  - [ ]* 40.3 Configurar sistema de feedback
+  - [ ]\* 40.3 Configurar sistema de feedback
     - Implementar formulario de feedback en apps
     - Monitorear ratings y reviews en stores
     - Configurar sistema de tickets de soporte
     - _Requisitos: 11_
 
-  - [ ]* 40.4 Documentar APIs
+  - [ ]\* 40.4 Documentar APIs
     - Generar documentación con Swagger/OpenAPI
     - Documentar todos los endpoints
     - Incluir ejemplos de requests/responses
     - Publicar documentación para integraciones futuras
     - _Requisitos: Todos_
 
-- [ ]* 41. Checkpoint final - Verificar despliegue completo
+- [ ]\* 41. Checkpoint final - Verificar despliegue completo
   - Asegurar que todos los tests pasen, preguntar al usuario si surgen dudas.
 
 ## Notas

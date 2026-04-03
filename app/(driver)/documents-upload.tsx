@@ -16,7 +16,13 @@ import { useAuthStore } from '@/store/authStore';
 import { Colors as COLORS } from '@/constants/theme';
 import { uploadDocumentToCloudinary } from '@/services/cloudinary';
 
-type DocumentType = 'drivers_license' | 'vehicle_registration' | 'insurance' | 'vehicle_photo_front' | 'vehicle_photo_back' | 'vehicle_photo_side';
+type DocumentType =
+  | 'drivers_license'
+  | 'vehicle_registration'
+  | 'insurance'
+  | 'vehicle_photo_front'
+  | 'vehicle_photo_back'
+  | 'vehicle_photo_side';
 
 interface DocumentUpload {
   type: DocumentType;
@@ -28,11 +34,31 @@ interface DocumentUpload {
 
 const REQUIRED_DOCUMENTS: DocumentUpload[] = [
   { type: 'drivers_license', label: 'Licencia de Conducir', isUploading: false, isUploaded: false },
-  { type: 'vehicle_registration', label: 'Registro del Vehículo', isUploading: false, isUploaded: false },
+  {
+    type: 'vehicle_registration',
+    label: 'Registro del Vehículo',
+    isUploading: false,
+    isUploaded: false,
+  },
   { type: 'insurance', label: 'Póliza de Seguro', isUploading: false, isUploaded: false },
-  { type: 'vehicle_photo_front', label: 'Foto Frontal del Vehículo', isUploading: false, isUploaded: false },
-  { type: 'vehicle_photo_back', label: 'Foto Trasera del Vehículo', isUploading: false, isUploaded: false },
-  { type: 'vehicle_photo_side', label: 'Foto Lateral del Vehículo', isUploading: false, isUploaded: false },
+  {
+    type: 'vehicle_photo_front',
+    label: 'Foto Frontal del Vehículo',
+    isUploading: false,
+    isUploaded: false,
+  },
+  {
+    type: 'vehicle_photo_back',
+    label: 'Foto Trasera del Vehículo',
+    isUploading: false,
+    isUploaded: false,
+  },
+  {
+    type: 'vehicle_photo_side',
+    label: 'Foto Lateral del Vehículo',
+    isUploading: false,
+    isUploaded: false,
+  },
 ];
 
 export default function DocumentsUploadScreen() {
@@ -81,11 +107,7 @@ export default function DocumentsUploadScreen() {
       setDocuments(newDocuments);
 
       // Upload to Cloudinary
-      const cloudinaryResponse = await uploadDocumentToCloudinary(
-        doc.uri,
-        doc.type,
-        user!.id
-      );
+      const cloudinaryResponse = await uploadDocumentToCloudinary(doc.uri, doc.type, user!.id);
 
       // Send to backend with Cloudinary URL
       const formData = new FormData();
@@ -104,11 +126,14 @@ export default function DocumentsUploadScreen() {
       const newDocuments = [...documents];
       newDocuments[index].isUploading = false;
       setDocuments(newDocuments);
-      Alert.alert('Error', error instanceof Error ? error.message : 'No se pudo subir el documento');
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'No se pudo subir el documento'
+      );
     }
   };
 
-  const allDocumentsUploaded = documents.every((doc) => doc.isUploaded);
+  const allDocumentsUploaded = documents.every(doc => doc.isUploaded);
 
   const handleSubmit = async () => {
     if (!allDocumentsUploaded) {
@@ -131,7 +156,9 @@ export default function DocumentsUploadScreen() {
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
         <Text style={styles.title}>Documentos de Verificación</Text>
-        <Text style={styles.subtitle}>Sube todos los documentos requeridos para verificar tu cuenta</Text>
+        <Text style={styles.subtitle}>
+          Sube todos los documentos requeridos para verificar tu cuenta
+        </Text>
       </View>
 
       <View style={styles.progressContainer}>
@@ -139,12 +166,14 @@ export default function DocumentsUploadScreen() {
           <View
             style={[
               styles.progressFill,
-              { width: `${(documents.filter((d) => d.isUploaded).length / documents.length) * 100}%` },
+              {
+                width: `${(documents.filter(d => d.isUploaded).length / documents.length) * 100}%`,
+              },
             ]}
           />
         </View>
         <Text style={styles.progressText}>
-          {documents.filter((d) => d.isUploaded).length} de {documents.length} documentos
+          {documents.filter(d => d.isUploaded).length} de {documents.length} documentos
         </Text>
       </View>
 
@@ -156,9 +185,7 @@ export default function DocumentsUploadScreen() {
               {doc.isUploaded && <Text style={styles.uploadedBadge}>✓ Subido</Text>}
             </View>
 
-            {doc.uri && (
-              <Image source={{ uri: doc.uri }} style={styles.documentPreview} />
-            )}
+            {doc.uri && <Image source={{ uri: doc.uri }} style={styles.documentPreview} />}
 
             <View style={styles.documentActions}>
               <TouchableOpacity
@@ -179,9 +206,7 @@ export default function DocumentsUploadScreen() {
                 {doc.isUploading ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.uploadButtonText}>
-                    {doc.isUploaded ? 'Subido' : 'Subir'}
-                  </Text>
+                  <Text style={styles.uploadButtonText}>{doc.isUploaded ? 'Subido' : 'Subir'}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -191,7 +216,10 @@ export default function DocumentsUploadScreen() {
 
       <View style={styles.buttonContainer}>
         <TouchableOpacity
-          style={[styles.submitButton, (!allDocumentsUploaded || isSubmitting) && styles.buttonDisabled]}
+          style={[
+            styles.submitButton,
+            (!allDocumentsUploaded || isSubmitting) && styles.buttonDisabled,
+          ]}
           onPress={handleSubmit}
           disabled={!allDocumentsUploaded || isSubmitting}
         >

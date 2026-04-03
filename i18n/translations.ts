@@ -25,10 +25,12 @@ export const translations = {
       logout: 'Cerrar Sesión',
       deleteAccount: 'Eliminar Cuenta',
       deleteConfirmTitle: '¿Eliminar cuenta?',
-      deleteConfirmMessage: 'Esta acción no se puede deshacer. Se eliminarán todos tus datos permanentemente.',
+      deleteConfirmMessage:
+        'Esta acción no se puede deshacer. Se eliminarán todos tus datos permanentemente.',
       deleteConfirmButton: 'Sí, eliminar',
       deleteSecondConfirmTitle: '¿Estás completamente seguro?',
-      deleteSecondConfirmMessage: 'Esta es tu última oportunidad. Una vez eliminada, no podrás recuperar tu cuenta ni tus datos.',
+      deleteSecondConfirmMessage:
+        'Esta es tu última oportunidad. Una vez eliminada, no podrás recuperar tu cuenta ni tus datos.',
       deleteSecondConfirmButton: 'Eliminar definitivamente',
       logoutConfirmTitle: '¿Cerrar sesión?',
       logoutConfirmMessage: '¿Estás seguro que deseas cerrar sesión?',
@@ -66,10 +68,12 @@ export const translations = {
       logout: 'Logout',
       deleteAccount: 'Delete Account',
       deleteConfirmTitle: 'Delete account?',
-      deleteConfirmMessage: 'This action cannot be undone. All your data will be permanently deleted.',
+      deleteConfirmMessage:
+        'This action cannot be undone. All your data will be permanently deleted.',
       deleteConfirmButton: 'Yes, delete',
       deleteSecondConfirmTitle: 'Are you completely sure?',
-      deleteSecondConfirmMessage: 'This is your last chance. Once deleted, you cannot recover your account or data.',
+      deleteSecondConfirmMessage:
+        'This is your last chance. Once deleted, you cannot recover your account or data.',
       deleteSecondConfirmButton: 'Delete permanently',
       logoutConfirmTitle: 'Logout?',
       logoutConfirmMessage: 'Are you sure you want to logout?',

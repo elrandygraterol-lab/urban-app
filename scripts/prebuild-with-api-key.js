@@ -16,15 +16,22 @@ try {
   execSync('npx expo prebuild --clean --platform android', {
     stdio: 'inherit',
     cwd: projectRoot,
-    env: { ...process.env }
+    env: { ...process.env },
   });
   console.log('\n✅ Prebuild completado\n');
 
   // Step 2: Inject API key
   console.log('\n💉 Paso 2/3: Inyectando API Key...\n');
-  
-  const manifestPath = path.join(projectRoot, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
-  
+
+  const manifestPath = path.join(
+    projectRoot,
+    'android',
+    'app',
+    'src',
+    'main',
+    'AndroidManifest.xml'
+  );
+
   if (!fs.existsSync(manifestPath)) {
     console.error('❌ ERROR: AndroidManifest.xml no existe en:', manifestPath);
     process.exit(1);
@@ -47,24 +54,26 @@ try {
     }
 
     // Inyectar la API key
-    const apiKeyMetaData = '\n    <!-- Google Maps API Key -->\n    <meta-data android:name="com.google.android.geo.API_KEY" android:value="AIzaSyDu-vsndSIMluuvLfmGf_sAhQiNDliznrU"/>';
+    const apiKeyMetaData =
+      '\n    <!-- Google Maps API Key -->\n    <meta-data android:name="com.google.android.geo.API_KEY" android:value="AIzaSyDu-vsndSIMluuvLfmGf_sAhQiNDliznrU"/>';
     manifestContent = manifestContent.replace(applicationTagRegex, `$1${apiKeyMetaData}`);
-    
+
     fs.writeFileSync(manifestPath, manifestContent, 'utf8');
     console.log('✅ API Key inyectada exitosamente\n');
   }
 
   // Step 3: Verify API key
   console.log('\n🔍 Paso 3/3: Verificando API Key...\n');
-  
+
   const verifyContent = fs.readFileSync(manifestPath, 'utf8');
-  const verifyRegex = /<meta-data\s+android:name="com\.google\.android\.geo\.API_KEY"\s+android:value="([^"]+)"\s*\/>/;
+  const verifyRegex =
+    /<meta-data\s+android:name="com\.google\.android\.geo\.API_KEY"\s+android:value="([^"]+)"\s*\/>/;
   const verifyMatch = verifyContent.match(verifyRegex);
 
   if (verifyMatch) {
     const apiKey = verifyMatch[1];
     console.log('✅ API Key encontrada:', apiKey);
-    
+
     if (apiKey === 'AIzaSyDu-vsndSIMluuvLfmGf_sAhQiNDliznrU') {
       console.log('✅ API Key es correcta\n');
     } else {
@@ -78,7 +87,6 @@ try {
 
   console.log('\n✅ Prebuild con API Key completado exitosamente!\n');
   process.exit(0);
-  
 } catch (error) {
   console.error('\n❌ ERROR en prebuild:');
   console.error('Mensaje:', error.message);

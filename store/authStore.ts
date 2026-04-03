@@ -18,7 +18,7 @@ interface AuthState {
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  
+
   // Actions
   setUser: (user: User | null) => void;
   setToken: (token: string | null) => Promise<void>;
@@ -35,8 +35,15 @@ interface RegisterData {
   name: string;
   phone: string;
   role: 'passenger' | 'driver';
+  // Profile photo (optional for both roles)
+  profilePhoto?: {
+    uri: string;
+    name: string;
+    type: string;
+    size: number;
+  } | null;
   // Driver-specific fields
-  vehicleType?: 'taxi' | 'moto-taxi';
+  vehicleType?: 'taxi' | 'moto_taxi';
   licensePlate?: string;
   vehicleModel?: string;
   // Driver documents
@@ -55,6 +62,7 @@ interface RegisterData {
 }
 
 const TOKEN_KEY = 'auth_token';
+const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_KEY = 'auth_user';
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -63,11 +71,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isLoading: false,
   isAuthenticated: false,
 
-  setUser: (user) => {
+  setUser: user => {
     set({ user, isAuthenticated: !!user });
   },
 
-  setToken: async (token) => {
+  setToken: async token => {
     if (token) {
       await SecureStore.setItemAsync(TOKEN_KEY, token);
     } else {
@@ -96,17 +104,45 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('[LOGIN] Error response:', errorData);
-        throw new Error(errorData?.error?.message || 'Login failed');
+
+        // Extract error message
+        let errorMessage = 'Login failed';
+
+        if (errorData?.error) {
+          errorMessage = errorData.error.message || errorMessage;
+
+          // If there are validation details, format them
+          if (errorData.error.details && Array.isArray(errorData.error.details)) {
+            const validationErrors = errorData.error.details
+              .map((detail: any) => {
+                const field = detail.field || detail.path?.[0] || 'Campo';
+                const message = detail.message || 'inválido';
+                return `• ${field}: ${message}`;
+              })
+              .join('\n');
+
+            if (validationErrors) {
+              errorMessage = `Errores de validación:\n\n${validationErrors}`;
+            }
+          }
+        } else if (errorData?.message) {
+          errorMessage = errorData.message;
+        }
+
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
       console.log('[LOGIN] Success! Full result:', JSON.stringify(result));
-      
-      // Extract data from response (handle both formats)
-      const token = result.data?.tokens?.accessToken || result.token;
-      const user = result.data?.user || result.user;
 
-      console.log('[LOGIN] Token exists:', !!token);
+      // Extract data from response (handle both formats)
+      const tokens = result.data?.tokens || result.tokens;
+      const user = result.data?.user || result.user;
+      const accessToken = tokens?.accessToken || result.token;
+      const refreshToken = tokens?.refreshToken;
+
+      console.log('[LOGIN] Token exists:', !!accessToken);
+      console.log('[LOGIN] Refresh token exists:', !!refreshToken);
       console.log('[LOGIN] User exists:', !!user);
       console.log('[LOGIN] User data:', user ? JSON.stringify(user) : 'null');
 
@@ -116,25 +152,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       // Validate token exists
-      if (!token) {
+      if (!accessToken) {
         throw new Error('No token received from server');
       }
 
-      // If role is specified and doesn't match, throw error
-      if (role && user.role !== role) {
-        throw new Error(`Esta cuenta es de ${user.role === 'passenger' ? 'pasajero' : 'conductor'}. Por favor selecciona el rol correcto.`);
+      // Note: We don't validate role here because the backend returns the correct role
+      // The user can login regardless of which role button they pressed
+
+      console.log('[LOGIN] Saving tokens to SecureStore...');
+      await SecureStore.setItemAsync(TOKEN_KEY, accessToken);
+      if (refreshToken) {
+        await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
       }
 
-      console.log('[LOGIN] Saving token to SecureStore...');
-      await get().setToken(token);
-      
       console.log('[LOGIN] Saving user to SecureStore...');
       await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
-      
+
       console.log('[LOGIN] Setting state with user and token...');
       // IMPORTANT: Set both user AND token in state so socket can use it
-      set({ user, token, isAuthenticated: true });
-      
+      set({ user, token: accessToken, isAuthenticated: true });
+
       console.log('[LOGIN] Complete! User authenticated:', user.email);
     } catch (error) {
       console.error('[LOGIN] Error:', error);
@@ -144,12 +181,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  register: async (data) => {
+  register: async data => {
     set({ isLoading: true });
     try {
-      const endpoint = data.role === 'driver' 
-        ? '/api/auth/register/driver' 
-        : '/api/auth/register/passenger';
+      const endpoint =
+        data.role === 'driver' ? '/api/auth/register/driver' : '/api/auth/register/passenger';
 
       const url = `${process.env.EXPO_PUBLIC_API_URL}${endpoint}`;
       console.log('[REGISTER] Starting registration...');
@@ -158,13 +194,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // Create FormData for file uploads
       const formData = new FormData();
-      
+
       // Add basic fields
       formData.append('email', data.email);
       formData.append('password', data.password);
       formData.append('name', data.name);
       formData.append('phone', data.phone);
       formData.append('role', data.role);
+
+      // Add profile photo if provided (optional for both roles)
+      if (data.profilePhoto) {
+        const photoFile = {
+          uri: data.profilePhoto.uri,
+          name: data.profilePhoto.name,
+          type: data.profilePhoto.type,
+        } as any;
+        formData.append('profilePhoto', photoFile);
+      }
 
       // Add driver-specific fields
       if (data.role === 'driver') {
@@ -205,12 +251,37 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('[REGISTER] Error response:', errorData);
-        throw new Error(errorData?.error?.message || errorData?.message || 'Registration failed');
+
+        // Extract validation details if available
+        let errorMessage = 'Registration failed';
+
+        if (errorData?.error) {
+          errorMessage = errorData.error.message || errorMessage;
+
+          // If there are validation details, format them
+          if (errorData.error.details && Array.isArray(errorData.error.details)) {
+            const validationErrors = errorData.error.details
+              .map((detail: any) => {
+                const field = detail.field || detail.path?.[0] || 'Campo';
+                const message = detail.message || 'inválido';
+                return `• ${field}: ${message}`;
+              })
+              .join('\n');
+
+            if (validationErrors) {
+              errorMessage = `Errores de validación:\n\n${validationErrors}`;
+            }
+          }
+        } else if (errorData?.message) {
+          errorMessage = errorData.message;
+        }
+
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
       console.log('[REGISTER] Success! Full result:', JSON.stringify(result));
-      
+
       // Registration successful - user should login manually
       // We don't auto-authenticate to avoid navigation conflicts
       console.log('[REGISTER] Complete! User should now login.');
@@ -224,6 +295,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     await SecureStore.deleteItemAsync(TOKEN_KEY);
+    await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
     await SecureStore.deleteItemAsync(USER_KEY);
     set({ user: null, token: null, isAuthenticated: false });
   },
@@ -245,7 +317,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  switchRole: (role) => {
+  switchRole: role => {
     const { user } = get();
     if (user) {
       set({ user: { ...user, role } });

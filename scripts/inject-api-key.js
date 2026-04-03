@@ -3,7 +3,15 @@ const path = require('path');
 
 console.log('\n💉 Inyectando API Key en AndroidManifest.xml...\n');
 
-const manifestPath = path.join(__dirname, '..', 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
+const manifestPath = path.join(
+  __dirname,
+  '..',
+  'android',
+  'app',
+  'src',
+  'main',
+  'AndroidManifest.xml'
+);
 
 if (!fs.existsSync(manifestPath)) {
   console.error('❌ ERROR: AndroidManifest.xml no existe');
@@ -31,12 +39,10 @@ if (!match) {
 }
 
 // Inyectar la API key justo después de la etiqueta <application>
-const apiKeyMetaData = '\n    <!-- Google Maps API Key -->\n    <meta-data android:name="com.google.android.geo.API_KEY" android:value="AIzaSyDu-vsndSIMluuvLfmGf_sAhQiNDliznrU"/>';
+const apiKeyMetaData =
+  '\n    <!-- Google Maps API Key -->\n    <meta-data android:name="com.google.android.geo.API_KEY" android:value="AIzaSyDu-vsndSIMluuvLfmGf_sAhQiNDliznrU"/>';
 
-manifestContent = manifestContent.replace(
-  applicationTagRegex,
-  `$1${apiKeyMetaData}`
-);
+manifestContent = manifestContent.replace(applicationTagRegex, `$1${apiKeyMetaData}`);
 
 // Guardar el archivo modificado
 fs.writeFileSync(manifestPath, manifestContent, 'utf8');

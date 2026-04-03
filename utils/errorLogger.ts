@@ -35,27 +35,27 @@ export class ErrorLogger {
 
   logError(context: string, error: any, additionalInfo?: any) {
     this.errorCount++;
-    
+
     const timestamp = new Date().toISOString();
     const errorInfo = this.extractErrorInfo(error);
 
     // Use original console.error to avoid infinite loops
     const originalError = (this as any).originalConsoleError || console.error.bind(console);
-    
+
     originalError('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     originalError(`🔴 ERROR #${this.errorCount} [${timestamp}]`);
     originalError(`📍 Context: ${context}`);
     originalError(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    
+
     if (errorInfo.message) {
       originalError(`💬 Message: ${errorInfo.message}`);
     }
-    
+
     if (errorInfo.stack) {
       originalError(`📚 Stack Trace:`);
       originalError(errorInfo.stack);
     }
-    
+
     if (errorInfo.name) {
       originalError(`🏷️  Error Type: ${errorInfo.name}`);
     }
@@ -69,10 +69,10 @@ export class ErrorLogger {
 
   logWarning(context: string, warning: any) {
     const timestamp = new Date().toISOString();
-    
+
     // Use original console.warn to avoid infinite loops
     const originalWarn = (this as any).originalConsoleWarn || console.warn.bind(console);
-    
+
     originalWarn('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     originalWarn(`⚠️  WARNING [${timestamp}]`);
     originalWarn(`📍 Context: ${context}`);
@@ -83,20 +83,20 @@ export class ErrorLogger {
 
   logInfo(context: string, message: string, data?: any) {
     const timestamp = new Date().toISOString();
-    
+
     // Use original console.log to avoid any potential issues
     const originalLog = (this as any).originalConsoleLog || console.log.bind(console);
-    
+
     originalLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     originalLog(`ℹ️  INFO [${timestamp}]`);
     originalLog(`📍 Context: ${context}`);
     originalLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     originalLog(`💬 ${message}`);
-    
+
     if (data) {
       originalLog(`📦 Data:`, data);
     }
-    
+
     originalLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
   }
 

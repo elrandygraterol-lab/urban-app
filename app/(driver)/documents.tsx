@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, Text, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
+import {
+  View,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  Image,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '@/store/authStore';
 import { api } from '@/services/api';
@@ -19,7 +27,9 @@ export default function DocumentsScreen() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [reVerificationStatus, setReVerificationStatus] = useState<'pending' | 'approved' | 'rejected' | null>(null);
+  const [reVerificationStatus, setReVerificationStatus] = useState<
+    'pending' | 'approved' | 'rejected' | null
+  >(null);
 
   useEffect(() => {
     fetchDocuments();
@@ -30,7 +40,7 @@ export default function DocumentsScreen() {
       setLoading(true);
       const response = await api.get(`/api/users/drivers/${user?.id}/documents`);
       setDocuments(response.data);
-      
+
       // Check re-verification status
       const driverResponse = await api.get(`/api/users/drivers/${user?.id}`);
       setReVerificationStatus(driverResponse.data.verification_status);
@@ -61,7 +71,7 @@ export default function DocumentsScreen() {
   const uploadDocument = async (uri: string, documentType: string) => {
     try {
       setUploading(true);
-      
+
       // Upload to Cloudinary
       const cloudinaryResponse = await uploadDocumentToCloudinary(
         uri,
@@ -83,14 +93,17 @@ export default function DocumentsScreen() {
       setReVerificationStatus('pending');
       fetchDocuments();
     } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'No se pudo subir el documento');
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'No se pudo subir el documento'
+      );
     } finally {
       setUploading(false);
     }
   };
 
   const documentTypes = [
-    { id: 'drivers_license', label: 'Driver\'s License' },
+    { id: 'drivers_license', label: "Driver's License" },
     { id: 'vehicle_registration', label: 'Vehicle Registration' },
     { id: 'insurance', label: 'Insurance Certificate' },
     { id: 'vehicle_photo_front', label: 'Vehicle Front Photo' },
@@ -100,7 +113,9 @@ export default function DocumentsScreen() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+      <View
+        style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}
+      >
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -114,15 +129,20 @@ export default function DocumentsScreen() {
         </Text>
 
         {reVerificationStatus === 'pending' && (
-          <View style={{ backgroundColor: '#FFF3CD', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+          <View
+            style={{ backgroundColor: '#FFF3CD', padding: 12, borderRadius: 8, marginBottom: 16 }}
+          >
             <Text style={{ color: '#856404', fontSize: 14 }}>
-              Your documents are pending re-verification. You can continue accepting rides while we review them.
+              Your documents are pending re-verification. You can continue accepting rides while we
+              review them.
             </Text>
           </View>
         )}
 
         {reVerificationStatus === 'rejected' && (
-          <View style={{ backgroundColor: '#F8D7DA', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+          <View
+            style={{ backgroundColor: '#F8D7DA', padding: 12, borderRadius: 8, marginBottom: 16 }}
+          >
             <Text style={{ color: '#721C24', fontSize: 14 }}>
               Some documents were rejected. Please upload updated versions.
             </Text>
@@ -134,14 +154,25 @@ export default function DocumentsScreen() {
         </Text>
 
         {documents.length === 0 ? (
-          <Text style={{ color: colors.lightGray, marginBottom: 16 }}>No documents uploaded yet</Text>
+          <Text style={{ color: colors.lightGray, marginBottom: 16 }}>
+            No documents uploaded yet
+          </Text>
         ) : (
-          documents.map((doc) => (
-            <View key={doc.id} style={{ marginBottom: 12, padding: 12, backgroundColor: '#F5F5F5', borderRadius: 8 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          documents.map(doc => (
+            <View
+              key={doc.id}
+              style={{ marginBottom: 12, padding: 12, backgroundColor: '#F5F5F5', borderRadius: 8 }}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontWeight: '600', color: colors.darkGray }}>
-                    {documentTypes.find((d) => d.id === doc.type)?.label}
+                    {documentTypes.find(d => d.id === doc.type)?.label}
                   </Text>
                   <Text style={{ fontSize: 12, color: colors.lightGray, marginTop: 4 }}>
                     Uploaded: {new Date(doc.uploadedAt).toLocaleDateString()}
@@ -156,8 +187,8 @@ export default function DocumentsScreen() {
                       doc.status === 'approved'
                         ? '#D4EDDA'
                         : doc.status === 'rejected'
-                        ? '#F8D7DA'
-                        : '#E2E3E5',
+                          ? '#F8D7DA'
+                          : '#E2E3E5',
                   }}
                 >
                   <Text
@@ -168,8 +199,8 @@ export default function DocumentsScreen() {
                         doc.status === 'approved'
                           ? '#155724'
                           : doc.status === 'rejected'
-                          ? '#721C24'
-                          : '#383D41',
+                            ? '#721C24'
+                            : '#383D41',
                     }}
                   >
                     {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
@@ -186,11 +217,19 @@ export default function DocumentsScreen() {
           ))
         )}
 
-        <Text style={{ fontSize: 16, fontWeight: '600', color: colors.darkGray, marginBottom: 12, marginTop: 16 }}>
+        <Text
+          style={{
+            fontSize: 16,
+            fontWeight: '600',
+            color: colors.darkGray,
+            marginBottom: 12,
+            marginTop: 16,
+          }}
+        >
           Upload Updated Documents
         </Text>
 
-        {documentTypes.map((docType) => (
+        {documentTypes.map(docType => (
           <TouchableOpacity
             key={docType.id}
             onPress={() => pickImage(docType.id)}

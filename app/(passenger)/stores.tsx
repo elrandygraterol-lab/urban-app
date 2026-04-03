@@ -1,9 +1,5 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-} from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function StoresScreen() {
@@ -11,9 +7,7 @@ export default function StoresScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Tiendas</Text>
-        <Text style={styles.subtitle}>
-          Descubre tiendas y servicios cercanos
-        </Text>
+        <Text style={styles.subtitle}>Descubre tiendas y servicios cercanos</Text>
       </View>
 
       <View style={styles.content}>

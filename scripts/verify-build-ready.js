@@ -14,12 +14,7 @@ let hasErrors = false;
 let hasWarnings = false;
 
 // Verificar archivos requeridos
-const requiredFiles = [
-  'app.json',
-  'eas.json',
-  'package.json',
-  '.npmrc'
-];
+const requiredFiles = ['app.json', 'eas.json', 'package.json', '.npmrc'];
 
 console.log('📁 Verificando archivos requeridos:');
 requiredFiles.forEach(file => {
@@ -32,29 +27,22 @@ requiredFiles.forEach(file => {
 console.log('\n📦 Verificando package.json:');
 try {
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
-  
+
   // Verificar dependencias críticas
-  const criticalDeps = [
-    'expo',
-    'expo-dev-client',
-    'react',
-    'react-native',
-    'expo-router'
-  ];
-  
+  const criticalDeps = ['expo', 'expo-dev-client', 'react', 'react-native', 'expo-router'];
+
   criticalDeps.forEach(dep => {
     const exists = pkg.dependencies && pkg.dependencies[dep];
     console.log(`  ${exists ? '✅' : '❌'} ${dep}: ${exists || 'NO INSTALADO'}`);
     if (!exists) hasErrors = true;
   });
-  
+
   // Verificar versión de React
   const reactVersion = pkg.dependencies.react;
   if (reactVersion && reactVersion.includes('19')) {
     console.log('  ⚠️  React 19 detectado - puede causar problemas');
     hasWarnings = true;
   }
-  
 } catch (error) {
   console.log('  ❌ Error leyendo package.json:', error.message);
   hasErrors = true;
@@ -64,21 +52,20 @@ try {
 console.log('\n⚙️  Verificando eas.json:');
 try {
   const eas = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'eas.json'), 'utf8'));
-  
+
   const hasDevelopment = eas.build && eas.build.development;
   console.log(`  ${hasDevelopment ? '✅' : '❌'} Perfil "development" configurado`);
   if (!hasDevelopment) hasErrors = true;
-  
+
   if (hasDevelopment) {
     const hasDevClient = eas.build.development.developmentClient === true;
     console.log(`  ${hasDevClient ? '✅' : '❌'} developmentClient habilitado`);
     if (!hasDevClient) hasErrors = true;
-    
+
     const hasAndroid = eas.build.development.android;
     console.log(`  ${hasAndroid ? '✅' : '❌'} Configuración Android presente`);
     if (!hasAndroid) hasErrors = true;
   }
-  
 } catch (error) {
   console.log('  ❌ Error leyendo eas.json:', error.message);
   hasErrors = true;
@@ -88,15 +75,15 @@ try {
 console.log('\n📱 Verificando app.json:');
 try {
   const app = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'app.json'), 'utf8'));
-  
-  const hasProjectId = app.expo && app.expo.extra && app.expo.extra.eas && app.expo.extra.eas.projectId;
+
+  const hasProjectId =
+    app.expo && app.expo.extra && app.expo.extra.eas && app.expo.extra.eas.projectId;
   console.log(`  ${hasProjectId ? '✅' : '❌'} EAS Project ID configurado`);
   if (!hasProjectId) hasErrors = true;
-  
+
   const hasAndroidPackage = app.expo && app.expo.android && app.expo.android.package;
   console.log(`  ${hasAndroidPackage ? '✅' : '❌'} Android package configurado`);
   if (!hasAndroidPackage) hasErrors = true;
-  
 } catch (error) {
   console.log('  ❌ Error leyendo app.json:', error.message);
   hasErrors = true;

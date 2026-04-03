@@ -1,6 +1,6 @@
 // User types
 export type UserRole = 'passenger' | 'driver' | 'admin';
-export type VehicleType = 'taxi' | 'moto-taxi';
+export type VehicleType = 'taxi' | 'moto_taxi';
 
 export interface User {
   id: string;
@@ -41,12 +41,12 @@ export interface DriverProfile {
 }
 
 // Ride types
-export type RideStatus = 
-  | 'pending' 
-  | 'accepted' 
-  | 'arrived' 
-  | 'in_progress' 
-  | 'completed' 
+export type RideStatus =
+  | 'pending'
+  | 'accepted'
+  | 'arrived'
+  | 'in_progress'
+  | 'completed'
   | 'cancelled';
 
 export interface Location {

@@ -10,7 +10,7 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
       type: 'empty',
     };
   }
-  
+
   // Use default resolution for everything else
   return context.resolveRequest(context, moduleName, platform);
 };
