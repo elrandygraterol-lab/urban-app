@@ -100,11 +100,45 @@ export default function LoginScreen() {
       // No pasamos rol - el backend detecta automáticamente el rol del usuario
       await login(email.trim(), password);
     } catch (error: any) {
-      const errorMessage =
-        error?.response?.data?.error?.message ||
-        error?.message ||
-        'Credenciales inválidas. Por favor intenta de nuevo.';
-      Alert.alert('Error de autenticación', errorMessage);
+      const rawMessage: string =
+        error?.response?.data?.error?.message || error?.message || '';
+
+      // Driver pending admin approval — show friendly message, no technical details
+      const isPendingApproval =
+        rawMessage.toLowerCase().includes('pending') ||
+        rawMessage.toLowerCase().includes('not approved') ||
+        rawMessage.toLowerCase().includes('pendiente') ||
+        rawMessage.toLowerCase().includes('aprobado') ||
+        rawMessage.toLowerCase().includes('verificacion') ||
+        rawMessage.toLowerCase().includes('verificación') ||
+        rawMessage.toLowerCase().includes('under review') ||
+        rawMessage.toLowerCase().includes('awaiting');
+
+      if (isPendingApproval) {
+        Alert.alert(
+          '⏳ Cuenta en revisión',
+          'Tu cuenta de conductor aún no ha sido aprobada por un administrador. Por favor espera a que sea revisada y aprobada antes de iniciar sesión.',
+          [{ text: 'Entendido' }]
+        );
+        return;
+      }
+
+      // Invalid credentials
+      if (
+        rawMessage.toLowerCase().includes('invalid') ||
+        rawMessage.toLowerCase().includes('incorrect') ||
+        rawMessage.toLowerCase().includes('inválid') ||
+        rawMessage.toLowerCase().includes('incorrecta') ||
+        rawMessage.toLowerCase().includes('wrong') ||
+        rawMessage.toLowerCase().includes('not found') ||
+        rawMessage.toLowerCase().includes('no encontrado')
+      ) {
+        Alert.alert('Credenciales incorrectas', 'El email/teléfono o la contraseña son incorrectos. Por favor intenta de nuevo.');
+        return;
+      }
+
+      // Generic fallback — never show raw technical errors
+      Alert.alert('Error al iniciar sesión', 'No se pudo iniciar sesión. Verifica tu conexión a internet e intenta de nuevo.');
     }
   };
 

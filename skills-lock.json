@@ -1,10 +1,30 @@
 {
   "version": 1,
   "skills": {
+    "expo": {
+      "source": "pproenca/dot-skills",
+      "sourceType": "github",
+      "computedHash": "c4154d8caf98cf11ef0285098a27555784bc0c4b340822f1f6b656b2857d60c0"
+    },
+    "expo-api-routes": {
+      "source": "expo/skills",
+      "sourceType": "github",
+      "computedHash": "267bd3bfa27718103a74458df1e875ff6f6db31cba2ebe1d8a527cf25da39761"
+    },
     "expo-dev-client": {
       "source": "expo/skills",
       "sourceType": "github",
       "computedHash": "ea568acdc9036b82b969159757456e9a4cdfae7f645ac2fad5fdf0f734f53568"
+    },
+    "expo-react-native-performance": {
+      "source": "pproenca/dot-skills",
+      "sourceType": "github",
+      "computedHash": "6fb56ac57c3b2967bf9ae44219e8945d66b1b736912b96eaa7a194ff85cfd124"
+    },
+    "expo-react-native-typescript": {
+      "source": "mindrally/skills",
+      "sourceType": "github",
+      "computedHash": "ae6a3db1d4b800bf9d69e64600bbdccadbacd22b127feeb71a041c56ad4f1e55"
     },
     "react-native-best-practices": {
       "source": "callstackincubator/agent-skills",

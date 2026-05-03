@@ -4,6 +4,9 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
+import { useNotificationStore } from '@/store/notificationStore';
+import { useNotificationManager } from '@/hooks/useNotificationManager';
+import { rideAPI } from '@/services/api';
 
 // Configure how notifications are handled when app is in foreground
 Notifications.setNotificationHandler({
@@ -21,9 +24,40 @@ export interface NotificationData {
   rideId?: string;
   driverId?: string;
   passengerId?: string;
+  storeId?: string;
+  reviewId?: string;
+  reason?: string;
   [key: string]: any;
 }
 
+/**
+ * iOS Push Notifications via APNs — Configuration Requirements
+ *
+ * For iOS push notifications to work, the following must be in place:
+ *
+ * 1. `GoogleService-Info.plist` must be present at the project root (`app/GoogleService-Info.plist`).
+ *    This file is generated from the Firebase Console for the bundle ID `com.urbantaxi.passenger`
+ *    and is referenced in `app.config.js` under `ios.googleServicesFile`.
+ *    EAS Build copies it into the native `ios/` directory automatically during the build process.
+ *
+ * 2. The `app.config.js` must include:
+ *    ```js
+ *    ios: {
+ *      googleServicesFile: './GoogleService-Info.plist',
+ *      // ...
+ *    }
+ *    ```
+ *    This is already configured. Do NOT remove it or iOS push notifications via APNs will break.
+ *
+ * 3. An APNs key or certificate must be configured in the Expo EAS dashboard for the project
+ *    (projectId: 18144406-d79f-4baa-8918-1f31ecedd9a5).
+ *
+ * 4. iOS permissions (`alert`, `badge`, `sound`) are requested during initialization below
+ *    via `Notifications.requestPermissionsAsync({ ios: { allowAlert, allowBadge, allowSound } })`.
+ *
+ * NOTE: Push notifications are NOT supported in Expo Go on iOS (SDK 53+).
+ *       A Development Build or Production Build is required.
+ */
 export const useNotifications = () => {
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notifications.Notification | null>(null);
@@ -32,6 +66,8 @@ export const useNotifications = () => {
   const responseListener = useRef<Notifications.Subscription | undefined>(undefined);
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
+  const { incrementUnreadCount } = useNotificationStore();
+  const { showToast } = useNotificationManager();
 
   // Check if running in Expo Go
   const isExpoGo = Constants.appOwnership === 'expo';
@@ -75,6 +111,16 @@ export const useNotifications = () => {
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
       console.log('Notification received in foreground:', notification);
       setNotification(notification);
+
+      // Increment unread count for store notifications
+      const data = notification.request.content.data as NotificationData;
+      if (
+        data.type === 'store_approved' ||
+        data.type === 'store_rejected' ||
+        data.type === 'new_review'
+      ) {
+        incrementUnreadCount();
+      }
     });
 
     // Listener for when user taps on notification
@@ -128,20 +174,45 @@ export const useNotifications = () => {
     // This happens when using development builds connected to Metro
     if (isDevice || isDevBuild) {
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
 
       console.log('[NOTIFICATIONS] Current permission status:', existingStatus);
 
       if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-        console.log('[NOTIFICATIONS] Requested permissions, new status:', status);
+        let finalStatus = existingStatus;
+        if (Platform.OS === 'ios') {
+          const { status } = await Notifications.requestPermissionsAsync({
+            ios: {
+              allowAlert: true,
+              allowBadge: true,
+              allowSound: true,
+            },
+          });
+          finalStatus = status;
+        } else {
+          const { status } = await Notifications.requestPermissionsAsync();
+          finalStatus = status;
+        }
+        console.log('[NOTIFICATIONS] Requested permissions, new status:', finalStatus);
+
+        if (finalStatus !== 'granted') {
+          console.error('[NOTIFICATIONS] ❌ Permission not granted for push notifications');
+          throw new Error('Permission not granted for push notifications');
+        }
       }
 
-      if (finalStatus !== 'granted') {
-        console.error('[NOTIFICATIONS] ❌ Permission not granted for push notifications');
-        throw new Error('Permission not granted for push notifications');
-      }
+      // Register RIDE_REQUEST notification category with interactive actions
+      await Notifications.setNotificationCategoryAsync('RIDE_REQUEST', [
+        {
+          identifier: 'ACCEPT_RIDE',
+          buttonTitle: 'Aceptar',
+          options: { opensAppToForeground: true },
+        },
+        {
+          identifier: 'REJECT_RIDE',
+          buttonTitle: 'Rechazar',
+          options: { opensAppToForeground: false, isDestructive: true },
+        },
+      ]);
 
       // Get the Expo push token with retry logic
       const projectId = Constants.expoConfig?.extra?.eas?.projectId;
@@ -185,6 +256,19 @@ export const useNotifications = () => {
             err.message?.includes('429') ||
             err.message?.includes('ECONNREFUSED') ||
             err.message?.includes('ETIMEDOUT');
+
+          // FCM SERVICE_NOT_AVAILABLE = emulator sin Google Play Services, no reintentar
+          const isFcmPermanent =
+            err.message?.includes('SERVICE_NOT_AVAILABLE') ||
+            err.message?.includes('java.io.IOException') ||
+            err.message?.includes('ExecutionException');
+
+          if (isFcmPermanent) {
+            console.warn(
+              '[NOTIFICATIONS] ⚠️ FCM no disponible (emulador sin Google Play Services o dispositivo incompatible). Las notificaciones push no estarán disponibles.'
+            );
+            return null; // Salir sin lanzar error
+          }
 
           if (isTransient && attempt < retries) {
             const waitTime = attempt * 2000; // 2s, 4s, 6s
@@ -244,14 +328,57 @@ export const useNotifications = () => {
     }
   };
 
-  const handleNotificationResponse = (response: Notifications.NotificationResponse) => {
+  const handleNotificationResponse = async (response: Notifications.NotificationResponse) => {
     const data = response.notification.request.content.data as NotificationData;
+    const actionIdentifier = response.actionIdentifier;
 
-    console.log('[NOTIFICATIONS] Handling notification tap:', data);
+    console.log('[NOTIFICATIONS] Handling notification tap:', data, 'action:', actionIdentifier);
+
+    // Handle interactive notification actions
+    if (actionIdentifier === 'ACCEPT_RIDE') {
+      const rideId = data.rideId;
+      if (rideId) {
+        try {
+          await rideAPI.acceptRide(rideId);
+        } catch (error) {
+          showToast('La solicitud ya no está disponible', 'warning');
+        }
+      }
+      return;
+    }
+
+    if (actionIdentifier === 'REJECT_RIDE') {
+      const rideId = data.rideId;
+      if (rideId) {
+        await rideAPI.rejectRide(rideId);
+      }
+      return;
+    }
 
     // Navigate to appropriate screen based on notification type
     if (data.type) {
       switch (data.type) {
+        // Store-related notifications
+        case 'store_approved':
+        case 'store_rejected':
+          // Navigate to store details screen
+          if (data.storeId) {
+            console.log('[NOTIFICATIONS] Navigating to store details:', data.storeId);
+            router.push(`/(tabs)/stores/${data.storeId}` as any);
+          } else {
+            // Navigate to my stores list if no specific store ID
+            router.push('/(tabs)/stores/my-stores' as any);
+          }
+          break;
+
+        case 'new_review':
+          // Navigate to store details screen where reviews are displayed
+          if (data.storeId) {
+            console.log('[NOTIFICATIONS] Navigating to store details for review:', data.storeId);
+            router.push(`/(tabs)/stores/${data.storeId}` as any);
+          }
+          break;
+
         case 'payment_completed':
           // Navigate to earnings screen for driver
           console.log('[NOTIFICATIONS] Navigating to earnings screen');

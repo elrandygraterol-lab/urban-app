@@ -14,17 +14,24 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { paymentAPI } from '@/services/api';
 
 interface MobilePaymentModalProps {
   visible: boolean;
   amount: number;
   rideId: string;
   onPaymentComplete: (paymentData: {
-    method: 'mobile_payment' | 'transfer' | 'cash';
+    method: 'mobile_payment' | 'cash';
     referenceNumber?: string;
     phoneNumber?: string;
-    accountNumber?: string;
     bankName?: string;
+    // P2C specific fields
+    referencia?: string;
+    fecha?: string;
+    banco?: string;
+    telefonoP?: string;  // Usar telefonoP según documentación VOB
+    identificacion?: string;  // Usar identificacion según documentación VOB
+    pagador?: string;  // Usar pagador según documentación VOB
   }) => void;
   onCancel: () => void;
 }
@@ -32,18 +39,16 @@ interface MobilePaymentModalProps {
 // Datos de prueba para el pago móvil
 const TEST_PAYMENT_DATA = {
   mobile: {
-    bankPhone: '0414-1234567',
-    referenceNumber: '123456789',
-    bankName: 'Banco de Venezuela',
-  },
-  transfer: {
-    accountNumber: '01020123456789012345',
-    referenceNumber: '987654321',
-    bankName: 'Banesco',
+    referencia: '123456789012',
+    fecha: '15/12/2024',
+    banco: 'venezuela',
+    telefonoP: '5844122144339',
+    identificacion: 'V25213842',
+    pagador: 'Juan Pérez',
   },
 };
 
-type PaymentMethod = 'mobile' | 'transfer' | 'cash';
+type PaymentMethod = 'mobile' | 'cash';
 
 const INITIAL_TIME = 5 * 60; // 5 minutos en segundos
 const EXTENSION_TIME = 3 * 60; // 3 minutos en segundos
@@ -60,16 +65,22 @@ export default function MobilePaymentModal({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mobile');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [referenceNumber, setReferenceNumber] = useState('');
-  const [accountNumber, setAccountNumber] = useState('');
   const [selectedBank, setSelectedBank] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showTestData, setShowTestData] = useState(true);
+
+  // P2C specific fields
+  const [referencia, setReferencia] = useState('');
+  const [fecha, setFecha] = useState('');
+  const [telefonoP, setTelefonoP] = useState('');
+  const [identificacion, setIdentificacion] = useState('');
+  const [pagador, setPagador] = useState('');
 
   // Timer states
   const [timeRemaining, setTimeRemaining] = useState(INITIAL_TIME);
   const [extensionsUsed, setExtensionsUsed] = useState(0);
   const [isTimerActive, setIsTimerActive] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const banks = [
     { id: 'banesco', name: 'Banesco', phone: '0134', account: '0134' },
@@ -78,9 +89,9 @@ export default function MobilePaymentModal({
     { id: 'provincial', name: 'Provincial', phone: '0108', account: '0108' },
   ];
 
-  // Timer effect
+  // Timer effect - Solo para pago móvil
   useEffect(() => {
-    if (visible && paymentMethod !== 'cash') {
+    if (visible && paymentMethod === 'mobile') {
       setIsTimerActive(true);
       setTimeRemaining(INITIAL_TIME);
       setExtensionsUsed(0);
@@ -99,7 +110,7 @@ export default function MobilePaymentModal({
   }, [visible, paymentMethod]);
 
   useEffect(() => {
-    if (isTimerActive && paymentMethod !== 'cash') {
+    if (isTimerActive && paymentMethod === 'mobile') {
       timerRef.current = setInterval(() => {
         setTimeRemaining(prev => {
           if (prev <= 1) {
@@ -181,13 +192,13 @@ export default function MobilePaymentModal({
 
   const handleUseTestData = () => {
     if (paymentMethod === 'mobile') {
-      setPhoneNumber(TEST_PAYMENT_DATA.mobile.bankPhone);
-      setReferenceNumber(TEST_PAYMENT_DATA.mobile.referenceNumber);
-      setSelectedBank('venezuela');
-    } else if (paymentMethod === 'transfer') {
-      setAccountNumber(TEST_PAYMENT_DATA.transfer.accountNumber);
-      setReferenceNumber(TEST_PAYMENT_DATA.transfer.referenceNumber);
-      setSelectedBank('banesco');
+      // P2C test data - usando datos oficiales de la documentación VOB
+      setReferencia(TEST_PAYMENT_DATA.mobile.referencia);
+      setFecha(TEST_PAYMENT_DATA.mobile.fecha);
+      setSelectedBank(TEST_PAYMENT_DATA.mobile.banco);
+      setTelefonoP(TEST_PAYMENT_DATA.mobile.telefonoP);
+      setIdentificacion(TEST_PAYMENT_DATA.mobile.identificacion);
+      setPagador(TEST_PAYMENT_DATA.mobile.pagador);
     }
     setShowTestData(false);
   };
@@ -195,13 +206,18 @@ export default function MobilePaymentModal({
   const resetForm = () => {
     setPhoneNumber('');
     setReferenceNumber('');
-    setAccountNumber('');
     setSelectedBank('');
     setShowTestData(true);
     setPaymentMethod('mobile');
     setTimeRemaining(INITIAL_TIME);
     setExtensionsUsed(0);
     setIsTimerActive(false);
+    // Reset P2C fields
+    setReferencia('');
+    setFecha('');
+    setTelefonoP('');
+    setIdentificacion('');
+    setPagador('');
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
@@ -232,72 +248,142 @@ export default function MobilePaymentModal({
     }
 
     if (paymentMethod === 'mobile') {
-      // Validar pago móvil
-      if (!phoneNumber || !referenceNumber || !selectedBank) {
-        Alert.alert('Error', 'Por favor completa todos los campos');
+      // Validar pago móvil P2C
+      if (!referencia || !fecha || !selectedBank || !telefonoP || !identificacion || !pagador) {
+        Alert.alert('Error', 'Por favor completa todos los campos del Pago Móvil');
         return;
       }
 
-      if (phoneNumber.length < 10) {
+      // Validar longitud de referencia - si > 12 chars, tomar últimos 12 dígitos
+      let referenciaFinal = referencia;
+      if (referencia.length > 12) {
+        referenciaFinal = referencia.slice(-12);
+      }
+
+      if (telefonoP.length < 10) {
         Alert.alert('Error', 'Número de teléfono inválido');
         return;
       }
 
-      if (referenceNumber.length < 6) {
-        Alert.alert('Error', 'Número de referencia inválido');
-        return;
-      }
-    } else if (paymentMethod === 'transfer') {
-      // Validar transferencia
-      if (!accountNumber || !referenceNumber || !selectedBank) {
-        Alert.alert('Error', 'Por favor completa todos los campos');
+      if (identificacion.length < 6) {
+        Alert.alert('Error', 'Identificación inválida');
         return;
       }
 
-      if (accountNumber.length < 20) {
-        Alert.alert('Error', 'Número de cuenta inválido');
-        return;
-      }
-
-      if (referenceNumber.length < 6) {
-        Alert.alert('Error', 'Número de referencia inválido');
+      if (pagador.trim().length < 2) {
+        Alert.alert('Error', 'Nombre del pagador inválido');
         return;
       }
     }
 
     setIsProcessing(true);
 
-    // Simular procesamiento de pago (2 segundos)
-    setTimeout(() => {
-      setIsProcessing(false);
+    try {
+      if (paymentMethod === 'mobile') {
+        const selectedBankData = banks.find(b => b.id === selectedBank);
+        
+        // Usar referencia final (últimos 12 dígitos si es necesario)
+        let referenciaFinal = referencia;
+        if (referencia.length > 12) {
+          referenciaFinal = referencia.slice(-12);
+        }
+        
+        // Call P2C verification API - Requisito 2.1
+        const response = await paymentAPI.verifyP2CPayment(rideId, {
+          referencia: referenciaFinal,
+          fecha,
+          banco: selectedBankData?.name || '',
+          telefonoP,  // Usar telefonoP
+          monto: amount,
+          identificacion,  // Usar identificacion
+          pagador,  // Usar pagador
+        });
 
-      const methodName = paymentMethod === 'mobile' ? 'Pago Móvil' : 'Transferencia';
-      const selectedBankData = banks.find(b => b.id === selectedBank);
+        console.log('✅ P2C Payment verified:', response.data);
 
-      // Preparar datos del pago
-      const paymentData = {
-        method: paymentMethod === 'mobile' ? ('mobile_payment' as const) : ('transfer' as const),
-        referenceNumber,
-        phoneNumber: paymentMethod === 'mobile' ? phoneNumber : undefined,
-        accountNumber: paymentMethod === 'transfer' ? accountNumber : undefined,
-        bankName: selectedBankData?.name,
-      };
+        // Preparar datos del pago P2C
+        const paymentData = {
+          method: 'mobile_payment' as const,
+          referencia: referenciaFinal,
+          fecha,
+          banco: selectedBankData?.name,
+          telefonoP,
+          monto: amount,
+          identificacion,
+          pagador,
+        };
 
-      // Simular pago exitoso
-      Alert.alert(
-        'Pago Exitoso',
-        `Tu ${methodName} de Bs. ${amount.toFixed(2)} ha sido procesado correctamente.\n\nReferencia: ${referenceNumber}`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              resetForm();
-              onPaymentComplete(paymentData);
+        // Show success message - Requisito 2.2 (200 response)
+        Alert.alert(
+          'Pago Verificado',
+          `Tu Pago Móvil de Bs. ${amount.toFixed(2)} ha sido verificado exitosamente.\n\nReferencia: ${referenciaFinal}`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                resetForm();
+                onPaymentComplete(paymentData);
+              },
             },
-          },
-        ]
-      );
-    }, 2000);
+          ]
+        );
+      }
+    } catch (error: any) {
+      console.error('Payment processing error:', error);
+      
+      // Handle different error responses according to requirements
+      let errorMessage = 'Error procesando el pago. Por favor intenta nuevamente.';
+      let showRetry = true;
+
+      if (error.response) {
+        const status = error.response.status;
+        const data = error.response.data;
+
+        switch (status) {
+          case 422:
+            // Pago rechazado (Requisitos 2.3, 2.6, 2.7, 2.8)
+            // Handles: status="R"/"RM", E001, E010, E021 errors
+            errorMessage = data.message || 'Pago rechazado por el banco. Verifica los datos ingresados.';
+            showRetry = false;
+            break;
+          case 409:
+            // Pago ya procesado (Requisito 2.4)
+            // Handles: BVC-PAID error
+            errorMessage = 'Este pago ya ha sido procesado anteriormente.';
+            showRetry = false;
+            break;
+          case 404:
+            // Pago no encontrado (Requisito 2.5)
+            // Handles: PAYMENT-NOT-FOUND error
+            errorMessage = 'El pago no fue encontrado en el banco. Verifica los datos.';
+            showRetry = false;
+            break;
+          case 503:
+            // Servicio no disponible (Requisito 8.5)
+            // Handles: VOB system unavailable
+            errorMessage = 'El servicio de pagos no está disponible. Por favor intenta más tarde.';
+            showRetry = true;
+            break;
+          default:
+            errorMessage = data.message || errorMessage;
+        }
+      }
+
+      const alertButtons: any[] = [
+        { text: 'OK', style: 'cancel' as const },
+      ];
+
+      if (showRetry) {
+        alertButtons.unshift({
+          text: 'Reintentar',
+          onPress: handleSubmitPayment,
+        });
+      }
+
+      Alert.alert('Error de Pago', errorMessage, alertButtons);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleCancel = () => {
@@ -330,8 +416,8 @@ export default function MobilePaymentModal({
               <Text style={styles.subtitle}>Selecciona tu método de pago preferido</Text>
             </View>
 
-            {/* Timer - Solo para pago móvil y transferencia */}
-            {paymentMethod !== 'cash' && (
+            {/* Timer - Solo para pago móvil */}
+            {paymentMethod === 'mobile' && (
               <View style={[styles.timerContainer, { borderColor: getTimerColor() }]}>
                 <View style={styles.timerContent}>
                   <Ionicons name="time-outline" size={24} color={getTimerColor()} />
@@ -359,7 +445,7 @@ export default function MobilePaymentModal({
               <Text style={styles.amountValue}>Bs. {amount.toFixed(2)}</Text>
             </View>
 
-            {/* Payment Method Selection */}
+            {/* Payment Method Selection - Solo Pago Móvil y Efectivo */}
             <View style={styles.section}>
               <Text style={styles.label}>Método de Pago</Text>
               <View style={styles.paymentMethodGrid}>
@@ -386,30 +472,8 @@ export default function MobilePaymentModal({
                   >
                     Pago Móvil
                   </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.paymentMethodButton,
-                    paymentMethod === 'transfer' && styles.paymentMethodButtonSelected,
-                  ]}
-                  onPress={() => {
-                    setPaymentMethod('transfer');
-                    setShowTestData(true);
-                  }}
-                >
-                  <Ionicons
-                    name="swap-horizontal-outline"
-                    size={32}
-                    color={paymentMethod === 'transfer' ? Colors.primary : Colors.mediumGray}
-                  />
-                  <Text
-                    style={[
-                      styles.paymentMethodText,
-                      paymentMethod === 'transfer' && styles.paymentMethodTextSelected,
-                    ]}
-                  >
-                    Transferencia
+                  <Text style={styles.paymentMethodSubtext}>
+                    Verificación automática
                   </Text>
                 </TouchableOpacity>
 
@@ -433,6 +497,9 @@ export default function MobilePaymentModal({
                   >
                     Efectivo
                   </Text>
+                  <Text style={styles.paymentMethodSubtext}>
+                    Pagar al conductor
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -447,8 +514,8 @@ export default function MobilePaymentModal({
               </View>
             )}
 
-            {/* Test Data Banner - Solo para pago móvil y transferencia */}
-            {paymentMethod !== 'cash' && showTestData && (
+            {/* Test Data Banner - Solo para pago móvil */}
+            {paymentMethod === 'mobile' && showTestData && (
               <TouchableOpacity style={styles.testDataBanner} onPress={handleUseTestData}>
                 <Ionicons name="information-circle" size={24} color={Colors.primary} />
                 <View style={styles.testDataText}>
@@ -459,7 +526,7 @@ export default function MobilePaymentModal({
               </TouchableOpacity>
             )}
 
-            {/* Payment Forms */}
+            {/* Payment Forms - Solo Pago Móvil */}
             {paymentMethod === 'mobile' && (
               <>
                 {/* Bank Selection - Dropdown Style */}
@@ -494,115 +561,95 @@ export default function MobilePaymentModal({
                   </View>
                 </View>
 
-                {/* Phone Number */}
+                {/* Referencia */}
                 <View style={styles.section}>
-                  <Text style={styles.label}>Teléfono del Banco</Text>
+                  <Text style={styles.label}>Referencia (máx 12 caracteres)</Text>
+                  <View style={styles.inputContainer}>
+                    <Ionicons name="document-text-outline" size={20} color={Colors.mediumGray} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="123456789012"
+                      value={referencia}
+                      onChangeText={setReferencia}
+                      keyboardType="default"
+                      maxLength={12}
+                    />
+                  </View>
+                </View>
+
+                {/* Fecha */}
+                <View style={styles.section}>
+                  <Text style={styles.label}>Fecha (DD/MM/YYYY)</Text>
+                  <View style={styles.inputContainer}>
+                    <Ionicons name="calendar-outline" size={20} color={Colors.mediumGray} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="15/12/2024"
+                      value={fecha}
+                      onChangeText={setFecha}
+                      keyboardType="numeric"
+                      maxLength={10}
+                    />
+                  </View>
+                </View>
+
+                {/* Teléfono */}
+                <View style={styles.section}>
+                  <Text style={styles.label}>Teléfono</Text>
                   <View style={styles.inputContainer}>
                     <Ionicons name="call-outline" size={20} color={Colors.mediumGray} />
                     <TextInput
                       style={styles.input}
-                      placeholder="0414-1234567"
-                      value={phoneNumber}
-                      onChangeText={setPhoneNumber}
+                      placeholder="5844122144339"
+                      value={telefonoP}
+                      onChangeText={setTelefonoP}
                       keyboardType="phone-pad"
                       maxLength={15}
                     />
                   </View>
                 </View>
 
-                {/* Reference Number */}
+                {/* Identificación */}
                 <View style={styles.section}>
-                  <Text style={styles.label}>Número de Referencia</Text>
-                  <View style={styles.inputContainer}>
-                    <Ionicons name="document-text-outline" size={20} color={Colors.mediumGray} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="123456789"
-                      value={referenceNumber}
-                      onChangeText={setReferenceNumber}
-                      keyboardType="number-pad"
-                      maxLength={20}
-                    />
-                  </View>
-                </View>
-              </>
-            )}
-
-            {paymentMethod === 'transfer' && (
-              <>
-                {/* Bank Selection - Dropdown Style */}
-                <View style={styles.section}>
-                  <Text style={styles.label}>Banco</Text>
-                  <View style={styles.bankDropdownContainer}>
-                    {banks.map(bank => (
-                      <TouchableOpacity
-                        key={bank.id}
-                        style={[
-                          styles.bankButton,
-                          selectedBank === bank.id && styles.bankButtonSelected,
-                        ]}
-                        onPress={() => setSelectedBank(bank.id)}
-                      >
-                        <View style={styles.bankButtonContent}>
-                          <Text
-                            style={[
-                              styles.bankButtonText,
-                              selectedBank === bank.id && styles.bankButtonTextSelected,
-                            ]}
-                          >
-                            {bank.name}
-                          </Text>
-                          <Text style={styles.bankCode}>{bank.account}</Text>
-                        </View>
-                        {selectedBank === bank.id && (
-                          <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-
-                {/* Account Number */}
-                <View style={styles.section}>
-                  <Text style={styles.label}>Número de Cuenta</Text>
+                  <Text style={styles.label}>Identificación</Text>
                   <View style={styles.inputContainer}>
                     <Ionicons name="card-outline" size={20} color={Colors.mediumGray} />
                     <TextInput
                       style={styles.input}
-                      placeholder="01020123456789012345"
-                      value={accountNumber}
-                      onChangeText={setAccountNumber}
-                      keyboardType="number-pad"
-                      maxLength={20}
+                      placeholder="V25213842"
+                      value={identificacion}
+                      onChangeText={setIdentificacion}
+                      keyboardType="default"
+                      maxLength={15}
                     />
                   </View>
                 </View>
 
-                {/* Reference Number */}
+                {/* Nombre del Pagador */}
                 <View style={styles.section}>
-                  <Text style={styles.label}>Número de Referencia</Text>
+                  <Text style={styles.label}>Nombre del Pagador</Text>
                   <View style={styles.inputContainer}>
-                    <Ionicons name="document-text-outline" size={20} color={Colors.mediumGray} />
+                    <Ionicons name="person-outline" size={20} color={Colors.mediumGray} />
                     <TextInput
                       style={styles.input}
-                      placeholder="987654321"
-                      value={referenceNumber}
-                      onChangeText={setReferenceNumber}
-                      keyboardType="number-pad"
-                      maxLength={20}
+                      placeholder="Juan Pérez"
+                      value={pagador}
+                      onChangeText={setPagador}
+                      keyboardType="default"
+                      maxLength={50}
                     />
                   </View>
                 </View>
               </>
             )}
 
-            {/* Info Box */}
-            {paymentMethod !== 'cash' && (
+            {/* Info Box - Solo para pago móvil */}
+            {paymentMethod === 'mobile' && (
               <View style={styles.infoBox}>
                 <Ionicons name="information-circle-outline" size={20} color={Colors.primary} />
                 <Text style={styles.infoText}>
-                  El pago será verificado automáticamente. Asegúrate de ingresar los datos
-                  correctos.
+                  El pago móvil será verificado automáticamente con el banco VOB. Asegúrate de 
+                  ingresar los datos exactos de tu transacción.
                 </Text>
               </View>
             )}
@@ -757,6 +804,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
     textAlign: 'center',
+  },
+  paymentMethodSubtext: {
+    fontSize: 10,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 2,
   },
   paymentMethodTextSelected: {
     color: Colors.primary,

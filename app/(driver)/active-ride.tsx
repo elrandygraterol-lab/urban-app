@@ -22,8 +22,13 @@ import { getSocket, onPaymentConfirmed } from '@/services/socket';
 import { useSound } from '@/hooks/useSound';
 import { Colors as colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { DriverTaxiIcon, PassengerIcon, DropoffIcon } from '@/src/components/map/markers';
+import { bearingAlongRoute, animateNavigationCamera, computeNearestStepIndex, computeNearestRouteIndex, haversineDistance } from '@/src/utils/mapNav';
 import { formatCurrency, Currency } from '@/utils/currency';
 import { formatAddressForCard } from '@/utils/addressFormatter';
+import { useDriverStore } from '@/store/driverStore';
+import { useRideTracking } from '@/hooks/useRideTracking';
+import { useTTS } from '@/hooks/useTTS';
 
 interface Ride {
   id: string;
@@ -46,6 +51,15 @@ interface RouteCoordinate {
   longitude: number;
 }
 
+interface Step {
+  instruction: string;
+  name: string;
+  distance: number;   // km al siguiente punto de maniobra
+  duration: number;   // minutos
+  maneuver?: { type: string };
+  location?: { latitude: number; longitude: number };
+}
+
 export default function ActiveRideScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
@@ -53,7 +67,7 @@ export default function ActiveRideScreen() {
   const { playNotificationSound } = useSound();
   const mapRef = useRef<MapView>(null);
   const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
-  
+
   const [ride, setRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(true);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -61,12 +75,15 @@ export default function ActiveRideScreen() {
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [routeDistance, setRouteDistance] = useState<number | null>(null);
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
-  const [heading, setHeading] = useState<number>(0); // Driver's heading/direction
+  const [heading, setHeading] = useState<number>(0);
+  const [routeBearing, setRouteBearing] = useState<number>(0);
   const lastRouteUpdateRef = useRef<number>(0); // Timestamp of last route update
   const ROUTE_UPDATE_INTERVAL = 30000; // Update route every 30 seconds (30000ms)
 
   // Payment state
   const [isPaymentConfirmed, setIsPaymentConfirmed] = useState(false);
+  // Track passenger's current payment method (updated via WebSocket, Req. 3.4)
+  const [passengerPaymentMode, setPassengerPaymentMode] = useState<'cash' | 'pago_movil' | 'dual'>('cash');
 
   // Rating modal states
   const [showRatingModal, setShowRatingModal] = useState(false);
@@ -77,6 +94,22 @@ export default function ActiveRideScreen() {
 
   // Panel collapse state
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
+
+  const [isApproximateRoute, setIsApproximateRoute] = useState(false);
+
+  const [routeSteps, setRouteSteps] = useState<Step[]>([]);
+  const [nearestStepIndex, setNearestStepIndex] = useState<number>(0);
+  const [nearestRouteIndex, setNearestRouteIndex] = useState<number>(0);
+  const announcedStepIndexRef = useRef<number>(-1);
+
+  const { addEarning } = useDriverStore();
+  const tts = useTTS();
+
+  // GPS tracking hook — sends location to backend every 10s during in_progress rides
+  const { isTracking: isGpsTracking, permissionDenied: gpsPermissionDenied } = useRideTracking(
+    rideId || null,
+    ride?.status ?? ''
+  );
 
   useEffect(() => {
     fetchRide();
@@ -102,6 +135,13 @@ export default function ActiveRideScreen() {
     }
   }, [ride?.status, location]);
 
+  // Stop TTS when ride is completed or arrived
+  useEffect(() => {
+    if (ride?.status === 'arrived' || ride?.status === 'completed') {
+      tts.stop();
+    }
+  }, [ride?.status]);
+
   // State to track if user has manually interacted with map
   const [userInteractedWithMap, setUserInteractedWithMap] = useState(false);
   const [isInitialMapSetup, setIsInitialMapSetup] = useState(true);
@@ -111,18 +151,50 @@ export default function ActiveRideScreen() {
     if (location && mapRef.current && ride && !userInteractedWithMap) {
       // Only auto-center when actively navigating (accepted or in_progress)
       if (ride.status === 'accepted' || ride.status === 'in_progress') {
-        mapRef.current.animateCamera(
-          {
-            center: location,
-            zoom: 17, // Close zoom for navigation
-            heading: heading, // Rotate map based on driver's direction
-            pitch: 50, // 3D perspective
-          },
-          { duration: 500 }
-        );
+        animateNavigationCamera(mapRef, location, routeBearing || heading, {
+          duration: 500,
+          zoom: 17,
+          pitch: 50,
+        });
       }
     }
-  }, [location, ride?.status, heading, userInteractedWithMap]);
+  }, [location, ride?.status, heading, routeBearing, userInteractedWithMap]);
+
+  useEffect(() => {
+    if (!location || routeCoordinates.length < 2) {
+      setRouteBearing(heading || 0);
+      return;
+    }
+    const brng = bearingAlongRoute(routeCoordinates, location);
+    setRouteBearing(brng);
+  }, [location, routeCoordinates, heading]);
+
+  // Update nearest step and route index when location changes
+  useEffect(() => {
+    if (!location) return;
+
+    if (routeSteps.length > 0) {
+      const stepIdx = computeNearestStepIndex(routeSteps, location);
+      setNearestStepIndex(stepIdx);
+
+      // TTS announcement: speak when within 200m of the maneuver point
+      const step = routeSteps[stepIdx];
+      if (step?.location) {
+        const distToManeuver = haversineDistance(location, step.location);
+        if (distToManeuver <= 200 && stepIdx !== announcedStepIndexRef.current) {
+          // Last step: announce arrival
+          const isLastStep = stepIdx === routeSteps.length - 1;
+          tts.speak(isLastStep ? 'Has llegado a tu destino' : step.instruction);
+          announcedStepIndexRef.current = stepIdx;
+        }
+      }
+    }
+
+    if (routeCoordinates.length >= 2) {
+      const routeIdx = computeNearestRouteIndex(routeCoordinates, location);
+      setNearestRouteIndex(routeIdx);
+    }
+  }, [location, routeSteps, routeCoordinates]);
 
   const fetchRide = async () => {
     try {
@@ -149,7 +221,7 @@ export default function ActiveRideScreen() {
         longitude: currentLocation.coords.longitude,
       };
       setLocation(coords);
-      
+
       // Set initial heading if available
       if (currentLocation.coords.heading !== null && currentLocation.coords.heading !== undefined) {
         setHeading(currentLocation.coords.heading);
@@ -167,11 +239,11 @@ export default function ActiveRideScreen() {
             latitude: newLocation.coords.latitude,
             longitude: newLocation.coords.longitude,
           };
-          
+
           console.log('[ACTIVE_RIDE] 📍 Location updated:', newCoords);
-          
+
           setLocation(newCoords);
-          
+
           // Update heading if available
           if (newLocation.coords.heading !== null && newLocation.coords.heading !== undefined) {
             setHeading(newLocation.coords.heading);
@@ -191,7 +263,7 @@ export default function ActiveRideScreen() {
               });
             }
           }
-          
+
           // Check if we should update the route (every 30 seconds)
           const now = Date.now();
           if (now - lastRouteUpdateRef.current > ROUTE_UPDATE_INTERVAL) {
@@ -247,6 +319,14 @@ export default function ActiveRideScreen() {
         setRouteCoordinates(routeData.coordinates);
         setRouteDistance(routeData.distance);
         setRouteDuration(routeData.duration);
+        setIsApproximateRoute(false);
+
+        // Save route steps for turn-by-turn navigation
+        setRouteSteps(routeData.steps ?? []);
+        // Reset navigation progress on route recalculation
+        setNearestRouteIndex(0);
+        setNearestStepIndex(0);
+        announcedStepIndexRef.current = -1;
 
         console.log('[ACTIVE_RIDE] Route loaded:', {
           points: routeData.coordinates.length,
@@ -265,7 +345,11 @@ export default function ActiveRideScreen() {
       }
     } catch (error) {
       console.error('[ACTIVE_RIDE] Failed to fetch route:', error);
-      // Don't show error to user, route is optional
+      // Fallback to straight line if OSRM fails
+      if (origin && destination) {
+        setRouteCoordinates([origin, destination]);
+        setIsApproximateRoute(true);
+      }
     } finally {
       setLoadingRoute(false);
     }
@@ -369,7 +453,7 @@ export default function ActiveRideScreen() {
 
       // Build cancellation message
       let message = `El pasajero ha cancelado el viaje`;
-      
+
       if (data.cancellationReason) {
         message += `\n\nMotivo: ${data.cancellationReason}`;
       }
@@ -396,7 +480,30 @@ export default function ActiveRideScreen() {
       );
 
       // Update ride state to reflect cancellation
-      setRide(prev => (prev ? { ...prev, status: 'cancelled' } : null));
+      // Since 'cancelled' is not a valid status in the Ride interface,
+      // we simply set ride to null to indicate the ride is no longer active.
+      setRide(null);
+    };
+
+    // Listen for payment method change by passenger (Req. 3.4)
+    const handlePaymentMethodChanged = (data: {
+      rideId: string;
+      newMethod: 'pago_movil';
+      pagoMovilReference: string;
+      changedAt: string;
+    }) => {
+      if (data.rideId !== rideId) return;
+
+      console.log('[ACTIVE_RIDE] 💳 PAYMENT METHOD CHANGED:', data);
+
+      setPassengerPaymentMode('pago_movil');
+      playNotificationSound();
+
+      Alert.alert(
+        'Método de Pago Actualizado',
+        `El pasajero ha cambiado su método de pago a Pago Móvil.\n\nReferencia: ${data.pagoMovilReference}`,
+        [{ text: 'Entendido' }]
+      );
     };
 
     // Listen for payment confirmation
@@ -441,6 +548,7 @@ export default function ActiveRideScreen() {
     socket.on('ride:status_changed', handleStatusChanged);
     socket.on('ride:completed', handleRideCompleted);
     socket.on('ride:cancelled', handleRideCancelled);
+    socket.on('ride:payment_method_changed', handlePaymentMethodChanged);
     onPaymentConfirmed(handlePaymentConfirmed);
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
@@ -461,14 +569,15 @@ export default function ActiveRideScreen() {
     // Cleanup function
     return () => {
       console.log('[ACTIVE_RIDE] Cleaning up socket listeners');
-      
+
       // Leave the ride room
       console.log('[ACTIVE_RIDE] 🔌 Leaving ride room:', `ride:${rideId}`);
       socket.emit('leave_ride', { rideId });
-      
+
       socket.off('ride:status_changed', handleStatusChanged);
       socket.off('ride:completed', handleRideCompleted);
       socket.off('ride:cancelled', handleRideCancelled);
+      socket.off('ride:payment_method_changed', handlePaymentMethodChanged);
       socket.off('ride:payment_confirmed', handlePaymentConfirmed);
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
@@ -485,29 +594,34 @@ export default function ActiveRideScreen() {
             : `/api/rides/${rideId}/complete`;
 
       const response = await api.post(endpoint);
-      
+
       // If completing the ride, show rating modal immediately
       if (newStatus === 'completed') {
         const rideData = response.data.data || response.data;
-        
+
         // Store final fare from response
         if (rideData.finalFare) {
           setFinalFare(rideData.finalFare);
+          // Add earning to wallet
+          addEarning(rideData.finalFare, ride?.currency || 'VES', ride?.id);
+        } else if (ride?.estimatedFare) {
+          // Fallback if finalFare is not provided
+          addEarning(ride.estimatedFare, ride.currency || 'VES', ride.id);
         }
-        
+
         // Update ride state
         setRide(prev => (prev ? { ...prev, status: 'completed' } : null));
-        
+
         // Show rating modal
         setShowRatingModal(true);
-        
+
         // Play notification sound
         playNotificationSound();
       } else {
         // For other status changes, just fetch the updated ride
         fetchRide();
       }
-      
+
       // Route will be updated automatically by useEffect when status changes
     } catch (error) {
       console.error(`Failed to update ride status to ${newStatus}:`, error);
@@ -532,6 +646,64 @@ export default function ActiveRideScreen() {
         console.error('Error making call:', err);
         // Don't show technical error to user
       });
+  };
+
+  const handleOpenExternalNav = () => {
+    if (!ride) return;
+
+    // Determine destination based on ride status
+    const destCoords =
+      ride.status === 'accepted'
+        ? ride.pickupLocation
+        : ride.destinationLocation;
+
+    const { latitude: lat, longitude: lng } = destCoords;
+
+    // Build deep link options filtered by platform
+    const options: Array<{ label: string; url: string }> = [
+      {
+        label: 'Waze',
+        url: `waze://?ll=${lat},${lng}&navigate=yes`,
+      },
+      {
+        label: 'Google Maps',
+        url: Platform.OS === 'ios'
+          ? `google.maps://?daddr=${lat},${lng}`
+          : `geo:0,0?q=${lat},${lng}`,
+      },
+    ];
+
+    if (Platform.OS === 'ios') {
+      options.push({
+        label: 'Apple Maps',
+        url: `maps://?daddr=${lat},${lng}`,
+      });
+    }
+
+    const openApp = async (url: string, label: string) => {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert(
+          'App no disponible',
+          `${label} no está instalado en este dispositivo.`,
+          [{ text: 'Aceptar' }]
+        );
+      }
+    };
+
+    Alert.alert(
+      'Abrir navegación',
+      'Selecciona tu app de navegación:',
+      [
+        ...options.map(opt => ({
+          text: opt.label,
+          onPress: () => openApp(opt.url, opt.label),
+        })),
+        { text: 'Cancelar', style: 'cancel' as const },
+      ]
+    );
   };
 
   const handleSubmitRating = async () => {
@@ -571,17 +743,15 @@ export default function ActiveRideScreen() {
       console.error('Failed to submit rating:', error);
       setIsSubmittingRating(false);
 
-      Alert.alert(
-        'Error',
-        'No se pudo enviar la valoración. Por favor, intenta de nuevo.',
-        [{ text: 'Aceptar' }]
-      );
+      Alert.alert('Error', 'No se pudo enviar la valoración. Por favor, intenta de nuevo.', [
+        { text: 'Aceptar' },
+      ]);
     }
   };
 
   const handleSkipRating = () => {
     setShowRatingModal(false);
-    
+
     // Navigate home after skipping
     Alert.alert(
       '🎉 Viaje Completado',
@@ -597,6 +767,32 @@ export default function ActiveRideScreen() {
       ],
       { cancelable: false }
     );
+  };
+
+  // Navigation Banner component (inline)
+  const currentStep = routeSteps.length > 0 ? routeSteps[nearestStepIndex] : null;
+  const distanceToManeuver = currentStep?.location && location
+    ? haversineDistance(location, currentStep.location)
+    : null;
+  const isImminent = distanceToManeuver !== null && distanceToManeuver < 50;
+
+  const getManeuverIcon = (type?: string): any => {
+    switch (type) {
+      case 'depart': return 'navigate-outline';
+      case 'turn-left': return 'arrow-back';
+      case 'turn-right': return 'arrow-forward';
+      case 'turn-sharp-left': return 'return-up-back';
+      case 'turn-sharp-right': return 'return-up-forward';
+      case 'uturn-left':
+      case 'uturn-right': return 'refresh';
+      case 'arrive': return 'flag';
+      default: return 'arrow-up';
+    }
+  };
+
+  const formatDistance = (meters: number): string => {
+    if (meters >= 1000) return `${(meters / 1000).toFixed(1)} km`;
+    return `${Math.round(meters)} m`;
   };
 
   if (loading || !ride) {
@@ -679,29 +875,12 @@ export default function ActiveRideScreen() {
               description="Conductor"
               anchor={{ x: 0.5, y: 0.5 }}
               flat={true}
-              rotation={heading}
+              rotation={routeBearing || heading}
             >
-              <View
-                style={{
-                  backgroundColor: ride.status === 'in_progress' ? '#FF8C00' : colors.primary,
-                  padding: 10,
-                  borderRadius: 25,
-                  borderWidth: 4,
-                  borderColor: '#fff',
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 4,
-                  elevation: 5,
-                }}
-              >
-                <Ionicons name="navigate" size={24} color="#fff" />
-              </View>
+              <DriverTaxiIcon />
             </Marker>
           )}
 
-          {/* Pickup location marker - Orange with person icon */}
-          {/* Only show if ride is not in progress (passenger not picked up yet) */}
           {(ride.status === 'accepted' || ride.status === 'arrived') && (
             <Marker
               coordinate={ride.pickupLocation}
@@ -709,39 +888,7 @@ export default function ActiveRideScreen() {
               description={ride.pickupAddress}
               anchor={{ x: 0.5, y: 1 }}
             >
-              <View style={{ alignItems: 'center' }}>
-                <View
-                  style={{
-                    backgroundColor: '#FF8C00',
-                    padding: 12,
-                    borderRadius: 25,
-                    borderWidth: 3,
-                    borderColor: '#fff',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 4,
-                    elevation: 5,
-                  }}
-                >
-                  <Ionicons name="person" size={24} color="#fff" />
-                </View>
-                <View
-                  style={{
-                    width: 0,
-                    height: 0,
-                    backgroundColor: 'transparent',
-                    borderStyle: 'solid',
-                    borderLeftWidth: 8,
-                    borderRightWidth: 8,
-                    borderTopWidth: 12,
-                    borderLeftColor: 'transparent',
-                    borderRightColor: 'transparent',
-                    borderTopColor: '#fff',
-                    marginTop: -3,
-                  }}
-                />
-              </View>
+              <PassengerIcon size={22} />
             </Marker>
           )}
 
@@ -752,45 +899,17 @@ export default function ActiveRideScreen() {
             description={ride.destinationAddress}
             anchor={{ x: 0.5, y: 1 }}
           >
-            <View style={{ alignItems: 'center' }}>
-              <View
-                style={{
-                  backgroundColor: '#22c55e',
-                  padding: 12,
-                  borderRadius: 25,
-                  borderWidth: 3,
-                  borderColor: '#fff',
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 4,
-                  elevation: 5,
-                }}
-              >
-                <Ionicons name="flag" size={24} color="#fff" />
-              </View>
-              <View
-                style={{
-                  width: 0,
-                  height: 0,
-                  backgroundColor: 'transparent',
-                  borderStyle: 'solid',
-                  borderLeftWidth: 8,
-                  borderRightWidth: 8,
-                  borderTopWidth: 12,
-                  borderLeftColor: 'transparent',
-                  borderRightColor: 'transparent',
-                  borderTopColor: '#fff',
-                  marginTop: -3,
-                }}
-              />
-            </View>
+            <DropoffIcon size={24} />
           </Marker>
 
           {/* Route polyline - Different colors based on ride status */}
           {routeCoordinates.length > 0 && (
             <Polyline
-              coordinates={routeCoordinates}
+              coordinates={
+                routeCoordinates.length >= 2 && nearestRouteIndex > 0
+                  ? routeCoordinates.slice(nearestRouteIndex)
+                  : routeCoordinates
+              }
               strokeColor={
                 ride.status === 'accepted' || ride.status === 'arrived'
                   ? '#FF8C00' // Orange for going to pickup
@@ -803,6 +922,201 @@ export default function ActiveRideScreen() {
           )}
         </MapView>
       )}
+
+      {/* Approximate Route Banner */}
+      {isApproximateRoute && (
+        <View style={{
+          position: 'absolute',
+          top: 10,
+          left: 16,
+          right: 16,
+          backgroundColor: '#fef3c7',
+          borderRadius: 8,
+          padding: 10,
+          flexDirection: 'row',
+          alignItems: 'center',
+          borderWidth: 1,
+          borderColor: '#f59e0b',
+          zIndex: 100,
+        }}>
+          <Ionicons name="warning" size={16} color="#92400e" />
+          <Text style={{
+            fontSize: 13,
+            color: '#92400e',
+            marginLeft: 8,
+            fontWeight: '500',
+            flex: 1,
+          }}>
+            ⚠️ Ruta aproximada — sin conexión al servidor de rutas
+          </Text>
+        </View>
+      )}
+
+      {/* GPS Permission Denied Banner */}
+      {gpsPermissionDenied && ride.status === 'in_progress' && (
+        <View style={{
+          position: 'absolute',
+          top: isApproximateRoute ? 60 : 10,
+          left: 16,
+          right: 16,
+          backgroundColor: '#fee2e2',
+          borderRadius: 8,
+          padding: 10,
+          flexDirection: 'row',
+          alignItems: 'center',
+          borderWidth: 1,
+          borderColor: '#ef4444',
+          zIndex: 100,
+        }}>
+          <Ionicons name="location-outline" size={16} color="#991b1b" />
+          <Text style={{
+            fontSize: 13,
+            color: '#991b1b',
+            marginLeft: 8,
+            fontWeight: '500',
+            flex: 1,
+          }}>
+            GPS desactivado — la distancia real no se registrará
+          </Text>
+        </View>
+      )}
+
+      {/* GPS Active Indicator */}
+      {isGpsTracking && (
+        <View style={{
+          position: 'absolute',
+          top: 12,
+          right: 16,
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: 'rgba(0,0,0,0.55)',
+          borderRadius: 12,
+          paddingHorizontal: 8,
+          paddingVertical: 4,
+          zIndex: 101,
+        }}>
+          <View style={{
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+            backgroundColor: '#22c55e',
+            marginRight: 5,
+          }} />
+          <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>GPS</Text>
+        </View>
+      )}
+
+      {/* Navigation Banner - Turn-by-turn instructions */}
+      {currentStep &&
+        ride.status !== 'arrived' &&
+        ride.status !== 'completed' && (
+          <View
+            style={{
+              position: 'absolute',
+              top: 10,
+              left: 16,
+              right: 56, // leave space for GPS indicator on the right
+              backgroundColor: isImminent ? '#1a56db' : 'rgba(15, 23, 42, 0.92)',
+              borderRadius: 12,
+              padding: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              zIndex: 200,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.3,
+              shadowRadius: 4,
+              elevation: 6,
+            }}
+          >
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: isImminent ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.15)',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <Ionicons
+                name={getManeuverIcon(currentStep.maneuver?.type)}
+                size={22}
+                color="#fff"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  color: '#fff',
+                  fontSize: 15,
+                  fontWeight: '700',
+                  lineHeight: 20,
+                }}
+                numberOfLines={1}
+              >
+                {currentStep.instruction}
+              </Text>
+              {currentStep.name ? (
+                <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 1 }} numberOfLines={1}>
+                  {currentStep.name}
+                </Text>
+              ) : null}
+            </View>
+            {distanceToManeuver !== null && (
+              <Text
+                style={{
+                  color: isImminent ? '#fbbf24' : 'rgba(255,255,255,0.9)',
+                  fontSize: 13,
+                  fontWeight: '700',
+                  minWidth: 48,
+                  textAlign: 'right',
+                }}
+              >
+                {formatDistance(distanceToManeuver)}
+              </Text>
+            )}
+          </View>
+        )}
+
+      {/* Recenter Button — visible when user has manually interacted with map */}
+      {userInteractedWithMap &&
+        ride.status !== 'arrived' &&
+        ride.status !== 'completed' && (
+          <TouchableOpacity
+            onPress={() => {
+              setUserInteractedWithMap(false);
+              if (location) {
+                animateNavigationCamera(mapRef, location, routeBearing || heading, {
+                  duration: 500,
+                  zoom: 17,
+                  pitch: 50,
+                });
+              }
+            }}
+            style={{
+              position: 'absolute',
+              bottom: 160,
+              right: 16,
+              width: 48,
+              height: 48,
+              borderRadius: 24,
+              backgroundColor: '#fff',
+              justifyContent: 'center',
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 4,
+              elevation: 5,
+              zIndex: 150,
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="locate" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        )}
 
       {/* Loading route indicator */}
       {loadingRoute && (
@@ -832,7 +1146,7 @@ export default function ActiveRideScreen() {
             position: 'absolute',
             top: 60,
             alignSelf: 'center',
-            backgroundColor: 
+            backgroundColor:
               ride.status === 'accepted' || ride.status === 'arrived'
                 ? '#FF8C00' // Orange for going to pickup
                 : '#22c55e', // Green for going to destination
@@ -918,9 +1232,7 @@ export default function ActiveRideScreen() {
                 flexDirection: 'row',
                 alignItems: 'center',
                 backgroundColor:
-                  ride.status === 'accepted' || ride.status === 'arrived'
-                    ? '#FFF4E6'
-                    : '#E8F5E9',
+                  ride.status === 'accepted' || ride.status === 'arrived' ? '#FFF4E6' : '#E8F5E9',
                 padding: 14,
                 borderRadius: 16,
                 marginBottom: 20,
@@ -930,9 +1242,7 @@ export default function ActiveRideScreen() {
               <View
                 style={{
                   backgroundColor:
-                    ride.status === 'accepted' || ride.status === 'arrived'
-                      ? '#FF8C00'
-                      : '#22c55e',
+                    ride.status === 'accepted' || ride.status === 'arrived' ? '#FF8C00' : '#22c55e',
                   width: 48,
                   height: 48,
                   borderRadius: 24,
@@ -1191,7 +1501,52 @@ export default function ActiveRideScreen() {
                   {formatCurrency(ride.estimatedFare, ride.currency || 'VES')}
                 </Text>
               </View>
+
+              {/* Payment method indicator — updates in real-time via WebSocket (Req. 3.4) */}
+              <View
+                style={{
+                  backgroundColor: passengerPaymentMode === 'pago_movil' ? '#eff6ff' : '#f9fafb',
+                  padding: 10,
+                  borderRadius: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  borderWidth: 1,
+                  borderColor: passengerPaymentMode === 'pago_movil' ? '#bfdbfe' : '#e5e7eb',
+                }}
+              >
+                <Ionicons
+                  name={passengerPaymentMode === 'pago_movil' ? 'phone-portrait-outline' : 'cash-outline'}
+                  size={16}
+                  color={passengerPaymentMode === 'pago_movil' ? '#3b82f6' : colors.mediumGray}
+                />
+                <Text style={{ fontSize: 13, color: passengerPaymentMode === 'pago_movil' ? '#3b82f6' : colors.mediumGray, fontWeight: '500' }}>
+                  {passengerPaymentMode === 'pago_movil' ? 'Pago Móvil' : 'Efectivo'}
+                </Text>
+              </View>
             </View>
+
+            {/* External Navigation Button */}
+            {(ride.status === 'accepted' || ride.status === 'in_progress') && (
+              <TouchableOpacity
+                onPress={handleOpenExternalNav}
+                style={{
+                  backgroundColor: '#F3F4F6',
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginBottom: 12,
+                }}
+              >
+                <Ionicons name="navigate-outline" size={18} color={colors.darkGray} />
+                <Text style={{ color: colors.darkGray, fontSize: 15, fontWeight: '600' }}>
+                  Abrir en app de navegación
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {/* Action Button */}
             {ride.status === 'accepted' && (
@@ -1236,7 +1591,14 @@ export default function ActiveRideScreen() {
                   >
                     <ActivityIndicator size="small" color="#FF8C00" />
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF8C00', marginBottom: 4 }}>
+                      <Text
+                        style={{
+                          fontSize: 15,
+                          fontWeight: '600',
+                          color: '#FF8C00',
+                          marginBottom: 4,
+                        }}
+                      >
                         Esperando confirmación de pago
                       </Text>
                       <Text style={{ fontSize: 13, color: '#666' }}>
@@ -1266,10 +1628,10 @@ export default function ActiveRideScreen() {
                     gap: 8,
                   }}
                 >
-                  <Ionicons 
-                    name={isPaymentConfirmed ? "play-circle" : "time-outline"} 
-                    size={20} 
-                    color="#fff" 
+                  <Ionicons
+                    name={isPaymentConfirmed ? 'play-circle' : 'time-outline'}
+                    size={20}
+                    color="#fff"
                   />
                   <Text style={{ color: '#fff', fontSize: 17, fontWeight: 'bold' }}>
                     {isPaymentConfirmed ? 'Iniciar Viaje' : 'Esperando Pago'}
@@ -1429,10 +1791,10 @@ export default function ActiveRideScreen() {
                       padding: 4,
                     }}
                   >
-                    <Ionicons 
-                      name={star <= passengerRating ? "star" : "star-outline"} 
-                      size={40} 
-                      color={star <= passengerRating ? "#FFD700" : "#D1D5DB"} 
+                    <Ionicons
+                      name={star <= passengerRating ? 'star' : 'star-outline'}
+                      size={40}
+                      color={star <= passengerRating ? '#FFD700' : '#D1D5DB'}
                     />
                   </TouchableOpacity>
                 ))}
@@ -1522,7 +1884,8 @@ export default function ActiveRideScreen() {
                   flex: 1,
                   paddingVertical: 14,
                   borderRadius: 12,
-                  backgroundColor: passengerRating === 0 || isSubmittingRating ? '#D1D5DB' : colors.primary,
+                  backgroundColor:
+                    passengerRating === 0 || isSubmittingRating ? '#D1D5DB' : colors.primary,
                   alignItems: 'center',
                 }}
                 onPress={handleSubmitRating}

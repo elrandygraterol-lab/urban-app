@@ -13,6 +13,7 @@ import {
   Modal,
   Linking,
 } from 'react-native';
+import Svg, { Path, G } from 'react-native-svg';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -25,6 +26,14 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  DriverTaxiIcon,
+  PassengerIcon,
+  PickupIcon,
+  DropoffIcon,
+  SecondPickupIcon,
+} from '@/src/components/map/markers';
+import { computeBearing } from '@/src/utils/mapNav';
 import { useAuthStore } from '@/store/authStore';
 import { rideAPI, paymentAPI, ratingAPI } from '@/services/api';
 import mapsService from '@/services/mapsService';
@@ -49,6 +58,35 @@ import { useSound } from '@/hooks/useSound';
 import { useCancellationPolicy } from '@/hooks/useCancellationPolicy';
 import MobilePaymentModal from '@/components/MobilePaymentModal';
 import { formatCurrency, Currency } from '@/utils/currency';
+import { useTourState } from '@/hooks/useTourState';
+import { useCopilot, walkthroughable, CopilotStep } from 'react-native-copilot';
+import AddressAutocomplete from '@/components/AddressAutocomplete';
+import CenterLocationButton from '@/components/CenterLocationButton';
+
+const WalkthroughView = walkthroughable(View);
+const WalkthroughTouchableOpacity = walkthroughable(TouchableOpacity);
+
+/** Motorcycle SVG icon — more accurate than Ionicons bicycle */
+function MotoIcon({ color = '#6B7280', size = 22 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size * 0.6} viewBox="0 0 48 30">
+      <G fill={color}>
+        {/* Rear wheel */}
+        <Path d="M8 30a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-3a5 5 0 1 0 0-10 5 5 0 0 0 0 10z" />
+        {/* Front wheel */}
+        <Path d="M40 30a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-3a5 5 0 1 0 0-10 5 5 0 0 0 0 10z" />
+        {/* Body / frame */}
+        <Path d="M14 22l6-12h8l4 6h6v3H31l-4-6h-5l-5 9H14z" />
+        {/* Handlebar */}
+        <Path d="M34 10h6v3h-6z" />
+        {/* Seat */}
+        <Path d="M18 10h10v3H18z" />
+        {/* Engine block */}
+        <Path d="M20 13h8l2 4H18z" />
+      </G>
+    </Svg>
+  );
+}
 
 interface LocationCoords {
   latitude: number;
@@ -86,6 +124,7 @@ interface DriverInfo {
 interface ActiveRide {
   id: string;
   status: 'pending' | 'accepted' | 'arrived' | 'in_progress' | 'completed' | 'cancelled';
+  paymentMode?: 'cash' | 'pago_movil' | 'dual';
   driver?: DriverInfo;
   eta?: {
     estimatedMinutes: number;
@@ -116,6 +155,14 @@ export default function PassengerHomeScreen() {
   const [destinationAddress, setDestinationAddress] = useState('');
   const [pickupAddress, setPickupAddress] = useState('');
   const [isEditingPickup, setIsEditingPickup] = useState(false);
+  
+  // Full addresses for internal use (precision)
+  const [destinationFullAddress, setDestinationFullAddress] = useState('');
+  const [pickupFullAddress, setPickupFullAddress] = useState('');
+
+  // Source tracking for custom place visual distinction
+  const [pickupLocationSource, setPickupLocationSource] = useState<'custom' | 'nominatim' | null>(null);
+  const [destinationLocationSource, setDestinationLocationSource] = useState<'custom' | 'nominatim' | null>(null);
 
   // Map selection mode states
   const [mapSelectionMode, setMapSelectionMode] = useState<'none' | 'pickup' | 'destination'>(
@@ -133,18 +180,28 @@ export default function PassengerHomeScreen() {
   const [fareCurrency, setFareCurrency] = useState<Currency>('VES');
   const [fareBreakdown, setFareBreakdown] = useState<{
     baseFare: number;
-    perKmRate: number;
-    perMinuteRate: number;
-    distance: number;
-    duration: number;
+    distanceCost: number;
+    durationCost: number;
+    // Dual currency
+    dualPrice?: { usd: number; ves: number };
+    exchangeRate?: number;
+    // keep these for fallback display
+    perKmRate?: number;
+    perMinuteRate?: number;
+    distance?: number;
+    duration?: number; // Duración en minutos
+    // Time surcharge info
+    timeSurcharge?: {
+      applied: boolean;
+      amount: number;
+      type: 'percentage' | 'fixed';
+      value: number;
+    };
   } | null>(null);
-  const [primaryFareConfig, setPrimaryFareConfig] = useState<{
-    baseFare: number;
-    perKmRate: number;
-    perMinuteRate: number;
-    surgeMultiplier: number;
-  } | null>(null);
+  const [isCalculatingFare, setIsCalculatingFare] = useState(false);
+  const [zoneInfo, setZoneInfo] = useState<{ zoneId: string | null; zoneName: string | null; usedFallback: boolean } | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<RouteCoordinates[]>([]);
+  const [isApproximateRoute, setIsApproximateRoute] = useState(false);
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
 
   // Active ride tracking states
@@ -152,23 +209,38 @@ export default function PassengerHomeScreen() {
   const [driverLocation, setDriverLocation] = useState<LocationCoords | null>(null);
   const [driverHeading, setDriverHeading] = useState<number>(0); // Driver's heading/direction
   const [isSocketConnected, setIsSocketConnected] = useState(false);
+  const prevDriverLocationRef = useRef<LocationCoords | null>(null);
 
   // Cancellation modal states
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancellationFeeWarning, setCancellationFeeWarning] = useState<string | null>(null);
-  
+
   // Animation values for cancel modal
   const modalScale = useSharedValue(0);
   const modalOpacity = useSharedValue(0);
   const modalTranslateY = useSharedValue(50);
   const buttonScale = useSharedValue(1);
-  
+
   // Safe area insets for modal
   const insets = useSafeAreaInsets();
-  
+
+  // Copilot (Tour) state
+  const { start: startTour } = useCopilot();
+  const { hasSeenTour, markTourAsSeen } = useTourState('passenger_home');
+
+  useEffect(() => {
+    if (hasSeenTour === false && !isLoadingLocation && currentLocation) {
+      setTimeout(() => {
+        startTour();
+        markTourAsSeen();
+      }, 1000);
+    }
+  }, [hasSeenTour, isLoadingLocation, currentLocation, startTour, markTourAsSeen]);
+
   // Use cancellation policy hook - only fetch when ride is in a cancellable state AND user is authenticated
-  const canFetchPolicy = !!token && !!activeRide && ['pending', 'accepted', 'arrived'].includes(activeRide.status);
+  const canFetchPolicy =
+    !!token && !!activeRide && ['pending', 'accepted', 'arrived'].includes(activeRide.status);
   const { policy: cancellationPolicy, loading: loadingPolicy } = useCancellationPolicy(
     activeRide?.id || null,
     { enabled: canFetchPolicy }
@@ -181,6 +253,10 @@ export default function PassengerHomeScreen() {
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [finalFare, setFinalFare] = useState<number | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'digital_wallet'>('cash');
+
+  // Change payment method during active ride (Req. 3)
+  const [showChangePaymentModal, setShowChangePaymentModal] = useState(false);
+  const [isChangingPayment, setIsChangingPayment] = useState(false);
 
   // Rating modal states
   const [showRatingModal, setShowRatingModal] = useState(false);
@@ -227,8 +303,12 @@ export default function PassengerHomeScreen() {
         if (status !== 'granted') {
           logWarning('PassengerHomeScreen', 'Location permission denied');
           Alert.alert(
-            'Permiso Denegado',
-            'Se necesita acceso a la ubicación para usar esta función.'
+            'Permiso de ubicación requerido',
+            'Esta app necesita acceso a tu ubicación para funcionar. Por favor activa el permiso en Configuración.',
+            [
+              { text: 'Abrir Configuración', onPress: () => Linking.openSettings() },
+              { text: 'Cancelar', style: 'cancel' },
+            ]
           );
           setIsLoadingLocation(false);
           return;
@@ -236,67 +316,156 @@ export default function PassengerHomeScreen() {
 
         logInfo('PassengerHomeScreen', 'Getting current location...');
 
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
-
-        logInfo('PassengerHomeScreen', 'Location obtained', {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
-
-        const coords = {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        };
-
-        setCurrentLocation(coords);
-        setPickupLocation(coords);
-
-        // Get address for current location using our backend (Nominatim via backend)
-        try {
-          const locationData = await mapsService.reverseGeocode(coords.latitude, coords.longitude);
-          if (locationData.address) {
-            setPickupAddress(locationData.address);
-            logInfo('PassengerHomeScreen', 'Address resolved via backend', {
-              address: locationData.address,
-            });
-          } else {
-            // Fallback to coordinates if no address returned
+        // Helper: apply coords and resolve address
+        const applyLocation = async (coords: LocationCoords) => {
+          setCurrentLocation(coords);
+          setPickupLocation(coords);
+          setIsLoadingLocation(false);
+          logInfo('PassengerHomeScreen', 'Location applied', coords);
+          try {
+            const locationData = await mapsService.reverseGeocode(coords.latitude, coords.longitude);
+            setPickupAddress(
+              locationData.address ||
+              `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`
+            );
+          } catch {
             setPickupAddress(`${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`);
           }
-        } catch (geocodeError) {
-          // Fallback to coordinates if geocoding fails
-          setPickupAddress(`${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`);
-          logInfo('PassengerHomeScreen', 'Using coordinates as address (geocoding failed)');
+        };
+
+        // Step 1: Last known position (instant — avoids GPS cold-start delay)
+        let lastKnownApplied = false;
+        try {
+          const lastKnown = await Location.getLastKnownPositionAsync({
+            maxAge: 3 * 60 * 1000,  // prefer positions up to 3 min old
+            requiredAccuracy: 150,   // within 150 meters
+          });
+          if (lastKnown) {
+            logInfo('PassengerHomeScreen', 'Last known position available', {
+              lat: lastKnown.coords.latitude,
+              lng: lastKnown.coords.longitude,
+              ageMs: Date.now() - lastKnown.timestamp,
+            });
+            await applyLocation({
+              latitude: lastKnown.coords.latitude,
+              longitude: lastKnown.coords.longitude,
+            });
+            lastKnownApplied = true;
+          }
+        } catch {
+          // No last known — proceed to fresh fetch
         }
 
-        setIsLoadingLocation(false);
+        // Step 2: Fresh GPS position (updates map even if last known was applied)
+        try {
+          const fresh = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          logInfo('PassengerHomeScreen', 'Fresh GPS position obtained', {
+            lat: fresh.coords.latitude,
+            lng: fresh.coords.longitude,
+            accuracy: fresh.coords.accuracy,
+          });
+          await applyLocation({
+            latitude: fresh.coords.latitude,
+            longitude: fresh.coords.longitude,
+          });
+        } catch (freshError: any) {
+          if (lastKnownApplied) {
+            // Last known already shown — fresh GPS failed but user has a position
+            logWarning('PassengerHomeScreen', 'Fresh GPS failed, keeping last known position');
+          } else {
+            // Step 3: No recent last known — try any last known regardless of age/accuracy
+            let anyLastKnown = false;
+            try {
+              const staleKnown = await Location.getLastKnownPositionAsync();
+              if (staleKnown) {
+                logWarning('PassengerHomeScreen', 'Using stale last known position as fallback', {
+                  lat: staleKnown.coords.latitude,
+                  lng: staleKnown.coords.longitude,
+                  ageMs: Date.now() - staleKnown.timestamp,
+                });
+                await applyLocation({
+                  latitude: staleKnown.coords.latitude,
+                  longitude: staleKnown.coords.longitude,
+                });
+                anyLastKnown = true;
+                // Inform user the position may not be current
+                Alert.alert(
+                  'Usando última ubicación conocida',
+                  'No se pudo obtener tu ubicación actual (sin conexión o GPS sin señal). Se está usando tu última posición registrada. La precisión puede ser menor.',
+                  [{ text: 'Entendido' }]
+                );
+              }
+            } catch {
+              // No last known at all
+            }
+
+            if (!anyLastKnown) {
+              // Absolutely no position available — classify the error
+              const msg: string = freshError?.message ?? String(freshError);
+              const isNetwork =
+                msg.includes('Network') ||
+                msg.includes('network') ||
+                msg.includes('ECONNREFUSED') ||
+                msg.includes('ETIMEDOUT') ||
+                msg.includes('internet');
+              const isGpsOff =
+                msg.includes('location is unavailable') ||
+                msg.includes('location services') ||
+                msg.includes('Location provider') ||
+                msg.includes('GPS');
+
+              let title = 'No se pudo obtener tu ubicación';
+              let message: string;
+
+              if (isNetwork) {
+                message =
+                  'No tienes conexión a internet y no hay una ubicación previa guardada. Verifica tu conexión e intenta de nuevo.';
+              } else if (isGpsOff) {
+                message =
+                  'El GPS está desactivado o sin señal. Activa la ubicación en Configuración e intenta de nuevo.';
+              } else {
+                message =
+                  `Error interno al obtener la ubicación.\n\nDetalle: ${msg}\n\nSi el problema persiste, reinicia la app.`;
+              }
+
+              logError('PassengerHomeScreen', freshError, { context: 'Getting location', isNetwork, isGpsOff });
+
+              Alert.alert(title, message, [
+                { text: 'Abrir Configuración', onPress: () => Linking.openSettings() },
+                {
+                  text: 'Reintentar',
+                  onPress: () => {
+                    setIsLoadingLocation(true);
+                    Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+                      .then(loc =>
+                        applyLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude })
+                      )
+                      .catch(() => setIsLoadingLocation(false));
+                  },
+                },
+                { text: 'Cerrar', style: 'cancel' },
+              ]);
+
+              setIsLoadingLocation(false);
+            }
+          }
+        }
+
         logInfo('PassengerHomeScreen', 'Location setup complete');
-      } catch (error) {
-        logError('PassengerHomeScreen', error, { context: 'Getting location' });
-        console.error('Location error:', error);
-        
-        // Use fallback location for development/testing
-        const fallbackCoords = {
-          latitude: 9.899159, // San Juan de Los Morros, Venezuela
-          longitude: -67.3496342,
-        };
-        
-        setCurrentLocation(fallbackCoords);
-        setPickupLocation(fallbackCoords);
-        setPickupAddress('Ubicación de prueba - San Juan de Los Morros');
+      } catch (error: any) {
+        // Outer catch: unexpected errors (e.g. permissions API crash)
+        logError('PassengerHomeScreen', error, { context: 'Location init' });
+        Alert.alert(
+          'Error inesperado',
+          'Ocurrió un error al inicializar la ubicación. Reinicia la app e intenta de nuevo.',
+          [{ text: 'OK' }]
+        );
         setIsLoadingLocation(false);
-        
-        logWarning('PassengerHomeScreen', 'Using fallback location due to error');
       }
     })();
   }, [user]);
-
-  // Load primary fare config when vehicle type changes
-  useEffect(() => {
-    loadPrimaryFareConfig();
-  }, [vehicleType]);
 
   // Setup WebSocket connection and listeners
   useEffect(() => {
@@ -384,12 +553,12 @@ export default function PassengerHomeScreen() {
       Alert.alert(
         '🚗 ¡Tu Conductor Viene en Camino!',
         `${data.driver?.name || 'Tu conductor'} ha aceptado tu viaje y se dirige hacia ti.\n\n` +
-        `🚙 Vehículo: ${vehicleText}\n` +
-        `${ratingText ? `${ratingText}\n` : ''}` +
-        `\nPuedes ver su ubicación en el mapa.`,
+          `🚙 Vehículo: ${vehicleText}\n` +
+          `${ratingText ? `${ratingText}\n` : ''}` +
+          `\nPuedes ver su ubicación en el mapa.`,
         [
-          { 
-            text: 'Ver en Mapa', 
+          {
+            text: 'Ver en Mapa',
             onPress: () => {
               // Focus map on driver location if available
               if (data.driver?.currentLocation && mapRef.current) {
@@ -403,9 +572,9 @@ export default function PassengerHomeScreen() {
                   1000
                 );
               }
-            }
+            },
           },
-          { text: 'Entendido', style: 'cancel' }
+          { text: 'Entendido', style: 'cancel' },
         ]
       );
     };
@@ -443,7 +612,7 @@ export default function PassengerHomeScreen() {
                 }
               },
             },
-            { text: 'OK', style: 'cancel' }
+            { text: 'OK', style: 'cancel' },
           ]
         );
       } else if (data.status === 'in_progress') {
@@ -465,11 +634,17 @@ export default function PassengerHomeScreen() {
         latitude: data.latitude,
         longitude: data.longitude,
       });
-      
-      // Update driver heading if available
       if (data.heading !== undefined && data.heading !== null) {
         setDriverHeading(data.heading);
+      } else {
+        const prev = prevDriverLocationRef.current;
+        const curr: LocationCoords = { latitude: data.latitude, longitude: data.longitude };
+        if (prev && (prev.latitude !== curr.latitude || prev.longitude !== curr.longitude)) {
+          const brng = computeBearing(prev, curr);
+          setDriverHeading(brng);
+        }
       }
+      prevDriverLocationRef.current = { latitude: data.latitude, longitude: data.longitude };
     };
 
     // Listen for ETA updates
@@ -496,11 +671,11 @@ export default function PassengerHomeScreen() {
       ) {
         setHasShownNearbyNotification(true);
         playNotificationSound();
-        
+
         Alert.alert(
           '🚗 ¡Tu Conductor Está Cerca!',
           `Tu conductor llegará en aproximadamente ${Math.ceil(estimatedMinutes)} minuto${estimatedMinutes > 1 ? 's' : ''}.\n\n` +
-          `Prepárate para abordar el vehículo.`,
+            `Prepárate para abordar el vehículo.`,
           [{ text: 'Entendido' }]
         );
       }
@@ -523,7 +698,7 @@ export default function PassengerHomeScreen() {
       Alert.alert(
         '📍 ¡Tu Conductor Está Aquí!',
         `${data.driverName} te está esperando en el punto de recogida.\n\n` +
-        `Por favor dirígete al vehículo. Si no lo ves, puedes llamarlo desde el panel.`,
+          `Por favor dirígete al vehículo. Si no lo ves, puedes llamarlo desde el panel.`,
         [
           {
             text: 'Ver en Mapa',
@@ -560,7 +735,7 @@ export default function PassengerHomeScreen() {
           '😔 No Hay Conductores Disponibles',
           data.cancellationReason ||
             'Lo sentimos, no encontramos conductores disponibles en este momento.\n\n' +
-            'Por favor intenta nuevamente en unos minutos.',
+              'Por favor intenta nuevamente en unos minutos.',
           [{ text: 'Entendido' }]
         );
 
@@ -572,8 +747,8 @@ export default function PassengerHomeScreen() {
         Alert.alert(
           '⚠️ Conductor Canceló el Viaje',
           `El conductor ha cancelado tu viaje.\n\n` +
-          `Motivo: ${data.cancellationReason || 'No especificado'}\n\n` +
-          `Estamos buscando otro conductor disponible para ti.`,
+            `Motivo: ${data.cancellationReason || 'No especificado'}\n\n` +
+            `Estamos buscando otro conductor disponible para ti.`,
           [{ text: 'Buscar Otro Conductor' }]
         );
       } else if (data.cancelledBy === 'passenger') {
@@ -583,11 +758,9 @@ export default function PassengerHomeScreen() {
             ? `\n\n💰 Tarifa de cancelación aplicada: ${formatCurrency(data.cancellationFee, fareCurrency)}`
             : '';
 
-        Alert.alert(
-          '✓ Viaje Cancelado',
-          `Tu viaje ha sido cancelado exitosamente.${feeMessage}`,
-          [{ text: 'Entendido' }]
-        );
+        Alert.alert('✓ Viaje Cancelado', `Tu viaje ha sido cancelado exitosamente.${feeMessage}`, [
+          { text: 'Entendido' },
+        ]);
 
         // Reset ride state
         setActiveRide(null);
@@ -678,6 +851,8 @@ export default function PassengerHomeScreen() {
         duration: routeData.duration,
       });
 
+      setIsApproximateRoute(false);
+
       // Fit map to show the route
       if (mapRef.current && convertedRoute.length > 0) {
         mapRef.current.fitToCoordinates(convertedRoute, {
@@ -692,6 +867,7 @@ export default function PassengerHomeScreen() {
       logWarning('PassengerHomeScreen', 'Falling back to straight line route');
       const fallbackRoute = [pickupLocation, destinationLocation];
       setRouteCoordinates(fallbackRoute);
+      setIsApproximateRoute(true);
 
       if (mapRef.current) {
         mapRef.current.fitToCoordinates(fallbackRoute, {
@@ -702,66 +878,15 @@ export default function PassengerHomeScreen() {
     }
   }, [pickupLocation, destinationLocation]);
 
-  const loadPrimaryFareConfig = async () => {
-    try {
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/api/rides/fare/primary/${vehicleType}`
-      );
+  const calculateFareWithZone = useCallback(async () => {
+    if (!pickupLocation || !destinationLocation) return;
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        
-        // If no primary fare is configured (404), use fallback silently
-        if (response.status === 404 || errorData.error?.message?.includes('No hay tarifa principal')) {
-          logInfo('PassengerHomeScreen', `No primary fare configured for ${vehicleType}, using fallback values`);
-          setPrimaryFareConfig({
-            baseFare: vehicleType === 'taxi' ? 5 : 3,
-            perKmRate: vehicleType === 'taxi' ? 2 : 1.5,
-            perMinuteRate: vehicleType === 'taxi' ? 0.5 : 0.3,
-            surgeMultiplier: 1.0,
-          });
-          setFareCurrency('VES'); // Default to VES for fallback
-          return;
-        }
-        
-        throw new Error(`Failed to load fare config: ${response.status}`);
-      }
-
-      const result = await response.json();
-      if (result.success && result.data) {
-        logInfo('PassengerHomeScreen', `Primary fare loaded successfully for ${vehicleType}`);
-        setPrimaryFareConfig({
-          baseFare: result.data.baseFare,
-          perKmRate: result.data.perKmRate,
-          perMinuteRate: result.data.perMinuteRate,
-          surgeMultiplier: result.data.surgeMultiplier || 1.0,
-        });
-        // Set currency from fare config
-        setFareCurrency(result.data.currency || 'VES');
-      }
-    } catch (error) {
-      logError('PassengerHomeScreen', 'Error loading primary fare config', error);
-      // Use fallback values if API fails
-      setPrimaryFareConfig({
-        baseFare: vehicleType === 'taxi' ? 5 : 3,
-        perKmRate: vehicleType === 'taxi' ? 2 : 1.5,
-        perMinuteRate: vehicleType === 'taxi' ? 0.5 : 0.3,
-        surgeMultiplier: 1.0,
-      });
-      setFareCurrency('VES'); // Default to VES for fallback
-    }
-  };
-
-  const calculateFare = useCallback(() => {
-    if (!pickupLocation || !destinationLocation || !primaryFareConfig) return;
-
-    // Calculate distance (Haversine formula)
-    const R = 6371; // Earth's radius in km
+    // Calculate distance locally (Haversine) for the API call
+    const R = 6371;
     const dLat = toRad(destinationLocation.latitude - pickupLocation.latitude);
     const dLon = toRad(destinationLocation.longitude - pickupLocation.longitude);
     const lat1 = toRad(pickupLocation.latitude);
     const lat2 = toRad(destinationLocation.latitude);
-
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
@@ -771,32 +896,99 @@ export default function PassengerHomeScreen() {
     // Estimate duration (rough estimate: 3 min per km)
     const estimatedDuration = distance * 3;
 
-    // Use primary fare config from backend
-    const { baseFare, perKmRate, perMinuteRate, surgeMultiplier } = primaryFareConfig;
+    setIsCalculatingFare(true);
 
-    // Calculate fare using backend configuration
-    const subtotal = baseFare + (distance * perKmRate) + (estimatedDuration * perMinuteRate);
-    const fare = subtotal * surgeMultiplier;
-    
-    setEstimatedFare(Math.round(fare * 100) / 100);
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+      // Use the full fare estimation engine (zone matrix + time surcharge)
+      const response = await fetch(
+        `${apiUrl}/api/fares/estimate`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            pickupLat: pickupLocation.latitude,
+            pickupLng: pickupLocation.longitude,
+            destinationLat: destinationLocation.latitude,
+            destinationLng: destinationLocation.longitude,
+            distanceKm: distance,
+            durationHours: estimatedDuration / 60,
+          }),
+        }
+      );
 
-    // Store breakdown for display
-    setFareBreakdown({
-      baseFare,
-      perKmRate,
-      perMinuteRate,
-      distance: Math.round(distance * 100) / 100,
-      duration: Math.round(estimatedDuration * 100) / 100,
-    });
-  }, [pickupLocation, destinationLocation, primaryFareConfig]);
+      if (!response.ok) {
+        throw new Error(`Fare estimate API returned ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        const data = result.data;
+        setEstimatedFare(data.totalPrice);
+        setFareCurrency(data.currency as Currency);
+        setZoneInfo({
+          zoneId: data.originZone?.id ?? null,
+          zoneName: data.originZone?.name ?? null,
+          usedFallback: data.usedFallback,
+        });
+
+        // Fetch exchange rate for dual-currency display
+        let dualPrice: { usd: number; ves: number } | undefined;
+        let exchangeRate: number | undefined;
+        try {
+          const rateResp = await fetch(`${apiUrl}/api/fares/exchange-rate`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (rateResp.ok) {
+            const rateResult = await rateResp.json();
+            const bcv: number | null = rateResult.data?.bcv ?? null;
+            if (bcv && bcv > 0) {
+              exchangeRate = bcv;
+              if (data.currency === 'USD') {
+                dualPrice = { usd: data.totalPrice, ves: Math.round(data.totalPrice * bcv * 100) / 100 };
+              } else {
+                dualPrice = { ves: data.totalPrice, usd: Math.round((data.totalPrice / bcv) * 100) / 100 };
+              }
+            }
+          }
+        } catch {
+          // Exchange rate unavailable — show single currency only
+        }
+
+        setFareBreakdown({
+          baseFare: data.priceBreakdown?.baseRate ?? data.priceBreakdown?.fixedPrice ?? 0,
+          distanceCost: 0,
+          durationCost: 0,
+          distance: distance, // Guardar distancia en km
+          duration: estimatedDuration, // Guardar duración en minutos
+          dualPrice,
+          exchangeRate,
+          timeSurcharge: data.timeSurcharge, // Capturar información del recargo por horario
+        });
+      } else {
+        throw new Error('Invalid response from fare estimate API');
+      }
+    } catch (error) {
+      logWarning('PassengerHomeScreen', 'Fare estimate API failed — no fare available');
+      setEstimatedFare(null);
+      setFareBreakdown(null);
+      setZoneInfo(null);
+    } finally {
+      setIsCalculatingFare(false);
+    }
+  }, [pickupLocation, destinationLocation, vehicleType, token]);
 
   // Calculate route and fare when destination changes
   useEffect(() => {
     if (pickupLocation && destinationLocation) {
       calculateRoute();
-      calculateFare();
+      calculateFareWithZone();
     }
-  }, [pickupLocation, destinationLocation, calculateRoute, calculateFare]);
+  }, [pickupLocation, destinationLocation, calculateRoute, calculateFareWithZone]);
 
   const toRad = (value: number) => (value * Math.PI) / 180;
 
@@ -819,9 +1011,9 @@ export default function PassengerHomeScreen() {
       Alert.alert('Error', 'Número de teléfono no disponible');
       return;
     }
-    
+
     setShowContactModal(false);
-    
+
     // Remove any non-numeric characters except +
     const cleanPhone = activeRide.driver.phone.replace(/[^\d+]/g, '');
     Linking.openURL(`tel:${cleanPhone}`);
@@ -835,34 +1027,30 @@ export default function PassengerHomeScreen() {
       Alert.alert('Error', 'Número de teléfono no disponible');
       return;
     }
-    
+
     setShowContactModal(false);
-    
+
     // Remove any non-numeric characters and format for WhatsApp
     let cleanPhone = activeRide.driver.phone.replace(/[^\d]/g, '');
-    
+
     // If phone starts with 0, replace with country code (assuming Venezuela +58)
     if (cleanPhone.startsWith('0')) {
       cleanPhone = '58' + cleanPhone.substring(1);
     }
-    
+
     // If phone doesn't start with country code, add it
     if (!cleanPhone.startsWith('58')) {
       cleanPhone = '58' + cleanPhone;
     }
-    
+
     // Use universal WhatsApp URL (works with all WhatsApp versions)
     const whatsappUrl = `https://wa.me/${cleanPhone}`;
-    
+
     // Try to open WhatsApp
-    Linking.openURL(whatsappUrl)
-      .catch((err) => {
-        console.error('Error opening WhatsApp:', err);
-        Alert.alert(
-          'Error', 
-          'No se pudo abrir WhatsApp. Asegúrate de tener WhatsApp instalado.'
-        );
-      });
+    Linking.openURL(whatsappUrl).catch(err => {
+      console.error('Error opening WhatsApp:', err);
+      Alert.alert('Error', 'No se pudo abrir WhatsApp. Asegúrate de tener WhatsApp instalado.');
+    });
   };
 
   /**
@@ -941,7 +1129,13 @@ export default function PassengerHomeScreen() {
       if (!location || !location.latitude || !location.longitude) {
         Alert.alert(
           'Dirección no encontrada',
-          'No se pudo encontrar la dirección. Intenta ser más específico (ej: incluye calle o sector).'
+          'Esta dirección aún no está registrada en nuestro mapa. Pronto será agregada.\n\nPor favor, selecciona manualmente la ubicación en el mapa.',
+          [
+            {
+              text: 'Seleccionar en mapa',
+              onPress: () => handleEnableMapSelection('destination'),
+            },
+          ]
         );
         return;
       }
@@ -958,20 +1152,24 @@ export default function PassengerHomeScreen() {
     } catch (error: any) {
       console.error('Geocoding error:', error);
 
-      // Check if it's a "not found" error
+      // Check if it's a "not found" error or server error (500)
       const isNotFound =
         error.response?.status === 404 ||
+        error.response?.status === 500 ||
         error.message?.includes('no encontr') ||
-        error.message?.includes('not found');
+        error.message?.includes('not found') ||
+        error.message?.includes('status code 500');
 
       if (isNotFound) {
         Alert.alert(
           'Dirección no encontrada',
-          'No se pudo encontrar esa dirección específica. Intenta:\n\n' +
-            '• Usar direcciones generales (ej: "Calle Principal", "Plaza Bolívar")\n' +
-            '• Usar sectores o zonas (ej: "Centro", "Las Delicias")\n' +
-            '• Evitar nombres de negocios específicos\n' +
-            '• Usar puntos de referencia conocidos'
+          'Esta dirección aún no está registrada en nuestro mapa. Pronto será agregada.\n\nPor favor, selecciona manualmente la ubicación en el mapa.',
+          [
+            {
+              text: 'Seleccionar en mapa',
+              onPress: () => handleEnableMapSelection('destination'),
+            },
+          ]
         );
       } else {
         logError('PassengerHomeScreen', error, { context: 'Geocoding destination' });
@@ -1017,7 +1215,16 @@ export default function PassengerHomeScreen() {
       const location = await mapsService.geocodeAddress(searchQuery);
 
       if (!location || !location.latitude || !location.longitude) {
-        Alert.alert('Error', 'No se encontró la dirección. Intenta con otra.');
+        Alert.alert(
+          'Dirección no encontrada',
+          'Esta dirección aún no está registrada en nuestro mapa. Pronto será agregada.\n\nPor favor, selecciona manualmente la ubicación en el mapa.',
+          [
+            {
+              text: 'Seleccionar en mapa',
+              onPress: () => handleEnableMapSelection('pickup'),
+            },
+          ]
+        );
         return;
       }
 
@@ -1030,10 +1237,32 @@ export default function PassengerHomeScreen() {
 
       // Keep the original user input in the text field (don't update with full address)
       // The full address is only used internally for accuracy
-    } catch (error) {
+    } catch (error: any) {
       console.error('Pickup geocoding error:', error);
-      logError('PassengerHomeScreen', error, { context: 'Geocoding pickup' });
-      Alert.alert('Error', 'No se pudo buscar la dirección. Verifica tu conexión.');
+
+      // Check if it's a "not found" error or server error (500)
+      const isNotFound =
+        error.response?.status === 404 ||
+        error.response?.status === 500 ||
+        error.message?.includes('no encontr') ||
+        error.message?.includes('not found') ||
+        error.message?.includes('status code 500');
+
+      if (isNotFound) {
+        Alert.alert(
+          'Dirección no encontrada',
+          'Esta dirección aún no está registrada en nuestro mapa. Pronto será agregada.\n\nPor favor, selecciona manualmente la ubicación en el mapa.',
+          [
+            {
+              text: 'Seleccionar en mapa',
+              onPress: () => handleEnableMapSelection('pickup'),
+            },
+          ]
+        );
+      } else {
+        logError('PassengerHomeScreen', error, { context: 'Geocoding pickup' });
+        Alert.alert('Error', 'No se pudo buscar la dirección. Verifica tu conexión.');
+      }
     }
   };
 
@@ -1228,11 +1457,30 @@ export default function PassengerHomeScreen() {
       // Recalculate route if destination is set
       if (destinationLocation) {
         await calculateRoute();
-        calculateFare();
+        calculateFareWithZone();
       }
     } catch (error) {
       console.error('Error using current location:', error);
       setPickupAddress('Ubicación actual');
+    }
+  };
+
+  const handleCenterOnUserLocation = () => {
+    if (!currentLocation) {
+      Alert.alert('Error', 'No se pudo obtener tu ubicación actual');
+      return;
+    }
+
+    if (mapRef.current) {
+      mapRef.current.animateToRegion(
+        {
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        },
+        1000
+      );
     }
   };
 
@@ -1254,10 +1502,10 @@ export default function PassengerHomeScreen() {
       const response = await rideAPI.requestRide({
         pickupLatitude: pickupLocation.latitude,
         pickupLongitude: pickupLocation.longitude,
-        pickupAddress: pickupAddress || 'Ubicación actual',
+        pickupAddress: pickupFullAddress || pickupAddress || 'Ubicación actual', // Use full address for precision
         destinationLatitude: destinationLocation.latitude,
         destinationLongitude: destinationLocation.longitude,
-        destinationAddress: destinationAddress,
+        destinationAddress: destinationFullAddress || destinationAddress, // Use full address for precision
         vehicleType: vehicleType,
         paymentMethodId: 'cash', // Default to cash
       });
@@ -1270,6 +1518,16 @@ export default function PassengerHomeScreen() {
         throw new Error('No se recibió el ID del viaje');
       }
 
+      // Sync estimated fare with backend's calculated value (uses full zone matrix engine)
+      const backendFare = response.data.data?.estimatedFare ?? response.data.estimatedFare;
+      const backendCurrency = response.data.data?.currency ?? response.data.currency;
+      if (backendFare != null && Number(backendFare) > 0) {
+        setEstimatedFare(Number(backendFare));
+      }
+      if (backendCurrency) {
+        setFareCurrency(backendCurrency as any);
+      }
+
       setActiveRide({
         id: rideId,
         status: 'pending',
@@ -1280,17 +1538,13 @@ export default function PassengerHomeScreen() {
       setIsSearchingDriver(true);
 
       // Show native alert for searching driver
-      Alert.alert(
-        'Buscando conductor...',
-        'Estamos notificando a conductores cercanos',
-        [
-          {
-            text: 'Cancelar Búsqueda',
-            onPress: handleCancelSearching,
-            style: 'cancel',
-          },
-        ]
-      );
+      Alert.alert('Buscando conductor...', 'Estamos notificando a conductores cercanos', [
+        {
+          text: 'Cancelar Búsqueda',
+          onPress: handleCancelSearching,
+          style: 'cancel',
+        },
+      ]);
 
       console.log('✅ Ride requested:', rideId);
     } catch (error: any) {
@@ -1333,11 +1587,7 @@ export default function PassengerHomeScreen() {
       setDriverLocation(null);
 
       // Show cancellation alert
-      Alert.alert(
-        'Búsqueda Cancelada',
-        'Has cancelado la búsqueda de conductor',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Búsqueda Cancelada', 'Has cancelado la búsqueda de conductor', [{ text: 'OK' }]);
       return;
     }
 
@@ -1350,11 +1600,7 @@ export default function PassengerHomeScreen() {
       setIsSearchingDriver(false);
 
       // Show cancellation confirmation
-      Alert.alert(
-        'Búsqueda Cancelada',
-        'Has cancelado la búsqueda de conductor',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Búsqueda Cancelada', 'Has cancelado la búsqueda de conductor', [{ text: 'OK' }]);
       setDriverLocation(null);
 
       console.log('✅ Ride search cancelled');
@@ -1384,15 +1630,12 @@ export default function PassengerHomeScreen() {
     }
 
     if (!cancellationPolicy.canCancel) {
-      Alert.alert(
-        'No se puede cancelar',
-        'No es posible cancelar el viaje en este momento'
-      );
+      Alert.alert('No se puede cancelar', 'No es posible cancelar el viaje en este momento');
       return;
     }
 
     setShowCancelModal(true);
-    
+
     // Trigger animations with staggered timing for smooth entrance
     modalOpacity.value = withTiming(1, {
       duration: 250,
@@ -1407,7 +1650,6 @@ export default function PassengerHomeScreen() {
       stiffness: 100,
     });
   };
-
 
   const handleConfirmCancellation = async () => {
     if (!activeRide) return;
@@ -1452,7 +1694,7 @@ export default function PassengerHomeScreen() {
       duration: 200,
       easing: Easing.in(Easing.ease),
     });
-    
+
     // Close modal after animation
     setTimeout(() => {
       setShowCancelModal(false);
@@ -1524,6 +1766,14 @@ export default function PassengerHomeScreen() {
     phoneNumber?: string;
     accountNumber?: string;
     bankName?: string;
+    // P2C specific fields
+    referencia?: string;
+    fecha?: string;
+    banco?: string;
+    telefono?: string;
+    cedula?: string;
+    nombrePagador?: string;
+    monto?: number;
   }) => {
     if (!activeRide) {
       Alert.alert('Error', 'No hay un viaje activo');
@@ -1535,56 +1785,67 @@ export default function PassengerHomeScreen() {
       setShowMobilePaymentModal(false);
       setIsRequestingRide(true); // Usar el estado de loading existente
 
-      // Llamar al backend para procesar el pago
-      const response = await paymentAPI.completePayment(activeRide.id, {
-        method: paymentData.method,
-        amount: finalFare || estimatedFare || 0,
-        referenceNumber: paymentData.referenceNumber,
-        phoneNumber: paymentData.phoneNumber,
-        accountNumber: paymentData.accountNumber,
-        bankName: paymentData.bankName,
-      });
+      if (paymentData.method === 'mobile_payment' && paymentData.referencia) {
+        // P2C payment - already verified by the modal, just show success
+        console.log('✅ P2C Payment already verified:', paymentData);
+        
+        // Ocultar loading
+        setIsRequestingRide(false);
 
-      console.log('✅ Payment processed successfully:', response);
+        // Mostrar confirmación de éxito
+        Alert.alert(
+          'Pago Confirmado',
+          'Tu Pago Móvil ha sido verificado exitosamente. El conductor ha sido notificado.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        // Legacy payment methods (transfer, cash)
+        const response = await paymentAPI.completePayment(activeRide.id, {
+          method: paymentData.method,
+          amount: finalFare || estimatedFare || 0,
+          referenceNumber: paymentData.referenceNumber,
+          phoneNumber: paymentData.phoneNumber,
+          accountNumber: paymentData.accountNumber,
+          bankName: paymentData.bankName,
+        });
 
-      // Ocultar loading
-      setIsRequestingRide(false);
+        console.log('✅ Payment processed successfully:', response);
 
-      // Mostrar confirmación de éxito
-      Alert.alert(
-        'Pago Confirmado',
-        'Tu pago ha sido procesado exitosamente. El conductor ha sido notificado.',
-        [{ text: 'OK' }]
-      );
+        // Ocultar loading
+        setIsRequestingRide(false);
+
+        // Mostrar confirmación de éxito
+        Alert.alert(
+          'Pago Confirmado',
+          'Tu pago ha sido procesado exitosamente. El conductor ha sido notificado.',
+          [{ text: 'OK' }]
+        );
+      }
     } catch (error: any) {
       console.error('❌ Payment processing failed:', error);
-      
+
       // Ocultar loading
       setIsRequestingRide(false);
 
       // Extraer mensaje de error más específico
       let errorMessage = 'No se pudo procesar el pago. Por favor intenta nuevamente.';
-      
+
       if (error?.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error?.message) {
         errorMessage = error.message;
       }
-      
-      Alert.alert(
-        'Error al Procesar Pago',
-        errorMessage,
-        [
-          {
-            text: 'Reintentar',
-            onPress: () => setShowMobilePaymentModal(true),
-          },
-          {
-            text: 'Cancelar',
-            style: 'cancel',
-          },
-        ]
-      );
+
+      Alert.alert('Error al Procesar Pago', errorMessage, [
+        {
+          text: 'Reintentar',
+          onPress: () => setShowMobilePaymentModal(true),
+        },
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+      ]);
     }
   };
 
@@ -1595,6 +1856,60 @@ export default function PassengerHomeScreen() {
       'Debes completar el pago para que el conductor inicie el viaje.',
       [{ text: 'OK' }]
     );
+  };
+
+  /**
+   * Handle payment method change from cash to pago_movil during an active ride.
+   * Called when the passenger completes the mobile payment in the change-payment modal.
+   * Requirements: 3.3, 3.5
+   */
+  const handleChangePaymentComplete = async (paymentData: {
+    method: 'mobile_payment' | 'cash';
+    referencia?: string;
+    fecha?: string;
+    banco?: string;
+    telefonoP?: string;
+    identificacion?: string;
+    pagador?: string;
+  }) => {
+    if (!activeRide) return;
+
+    if (paymentData.method !== 'mobile_payment' || !paymentData.referencia) {
+      setShowChangePaymentModal(false);
+      return;
+    }
+
+    setIsChangingPayment(true);
+    setShowChangePaymentModal(false);
+
+    try {
+      await rideAPI.changePaymentMethod(activeRide.id, {
+        mode: 'pago_movil',
+        pagoMovilReference: paymentData.referencia,
+        pagoMovilAmount: estimatedFare || 0,
+      });
+
+      // Update local ride state (Req. 3.3)
+      setActiveRide(prev => prev ? { ...prev, paymentMode: 'pago_movil' } : prev);
+
+      Alert.alert(
+        'Método de Pago Actualizado',
+        'Tu método de pago ha sido cambiado a Pago Móvil. El conductor ha sido notificado.',
+        [{ text: 'OK' }]
+      );
+    } catch (error: any) {
+      // On failure, keep original method (Req. 3.5)
+      const msg =
+        error?.response?.data?.message ||
+        'No se pudo cambiar el método de pago. Se mantiene el pago en efectivo.';
+      Alert.alert('Error', msg);
+    } finally {
+      setIsChangingPayment(false);
+    }
+  };
+
+  const handleChangePaymentCancel = () => {
+    setShowChangePaymentModal(false);
   };
 
   const handleSubmitRating = async () => {
@@ -1615,11 +1930,7 @@ export default function PassengerHomeScreen() {
       setIsSubmittingRating(false);
 
       // Show thank you alert
-      Alert.alert(
-        '¡Gracias!',
-        'Tu valoración ha sido enviada exitosamente.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('¡Gracias!', 'Tu valoración ha sido enviada exitosamente.', [{ text: 'OK' }]);
 
       handleCloseRatingModal();
     } catch (error: any) {
@@ -1665,13 +1976,19 @@ export default function PassengerHomeScreen() {
     setDriverLocation(null);
     setPickupLocation(null);
     setPickupAddress('');
+    setPickupFullAddress(''); // Clear full address
+    setPickupLocationSource(null); // Clear custom place source
     setDestinationLocation(null);
     setDestinationAddress('');
+    setDestinationFullAddress(''); // Clear full address
+    setDestinationLocationSource(null); // Clear custom place source
     setEstimatedFare(null);
     setFareBreakdown(null);
     setRouteCoordinates([]);
     setIsSearchingDriver(false);
     setHasShownNearbyNotification(false);
+    setZoneInfo(null);
+    setIsCalculatingFare(false);
 
     // Center map on user's current location
     if (currentLocation && mapRef.current) {
@@ -1726,8 +2043,8 @@ export default function PassengerHomeScreen() {
               latitudeDelta: 0.01,
               longitudeDelta: 0.01,
             }}
-            showsUserLocation
-            showsMyLocationButton
+            showsUserLocation={false}
+            showsMyLocationButton={false}
             onPress={handleMapPress}
             onLongPress={handleMapLongPress}
             scrollEnabled={true}
@@ -1746,24 +2063,61 @@ export default function PassengerHomeScreen() {
               console.log('[MAP] ========================================');
             }}
           >
+            {/* Passenger current location marker — only show when differs from pickup */}
+            {/* Current Location Marker - only show if significantly different from pickup */}
+            {currentLocation && pickupLocation && !activeRide && (
+              Math.abs(currentLocation.latitude - pickupLocation.latitude) > 0.0001 ||
+              Math.abs(currentLocation.longitude - pickupLocation.longitude) > 0.0001
+            ) && (
+              <Marker
+                coordinate={currentLocation}
+                title="Tú"
+                description="Tu ubicación actual"
+                anchor={{ x: 0.5, y: 0.5 }}
+              >
+                <PassengerIcon />
+              </Marker>
+            )}
             {/* Pickup Marker */}
             {pickupLocation && !activeRide && (
-              <Marker
-                coordinate={pickupLocation}
-                title="Punto de recogida"
-                description={pickupAddress}
-                pinColor="#FF8C00"
-              />
+              pickupLocationSource === 'custom' ? (
+                <Marker
+                  coordinate={pickupLocation}
+                  title="Punto de recogida"
+                  description={pickupFullAddress || pickupAddress}
+                  pinColor="#E74C3C"
+                />
+              ) : (
+                <Marker
+                  coordinate={pickupLocation}
+                  title="Punto de recogida"
+                  description={pickupFullAddress || pickupAddress}
+                  anchor={{ x: 0.5, y: 1 }}
+                >
+                  <PickupIcon />
+                </Marker>
+              )
             )}
 
             {/* Destination Marker */}
             {destinationLocation && (
-              <Marker
-                coordinate={destinationLocation}
-                title="Destino"
-                description={destinationAddress}
-                pinColor="#22c55e"
-              />
+              destinationLocationSource === 'custom' ? (
+                <Marker
+                  coordinate={destinationLocation}
+                  title="Destino"
+                  description={destinationFullAddress || destinationAddress}
+                  pinColor="#E74C3C"
+                />
+              ) : (
+                <Marker
+                  coordinate={destinationLocation}
+                  title="Destino"
+                  description={destinationFullAddress || destinationAddress}
+                  anchor={{ x: 0.5, y: 1 }}
+                >
+                  <DropoffIcon />
+                </Marker>
+              )
             )}
 
             {/* Temporary Marker during map selection */}
@@ -1776,8 +2130,8 @@ export default function PassengerHomeScreen() {
               />
             )}
 
-            {/* Driver Marker - 3D Gray Car (changes to Orange when transporting passenger) */}
-            {driverLocation && activeRide && (
+            {/* Driver Marker - Small gray taxi oriented by heading */}
+            {driverLocation && activeRide && activeRide.status !== 'completed' && activeRide.status !== 'cancelled' && (
               <Marker
                 coordinate={driverLocation}
                 title={activeRide.driver?.name || 'Conductor'}
@@ -1786,44 +2140,7 @@ export default function PassengerHomeScreen() {
                 flat={true}
                 rotation={driverHeading || 0}
               >
-                <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                  {/* 3D Car Icon - Gray when going to pickup, Orange when transporting */}
-                  <View
-                    style={{
-                      width: 50,
-                      height: 50,
-                      backgroundColor: activeRide.status === 'in_progress' ? '#FF8C00' : '#6B7280',
-                      borderRadius: 25,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      borderWidth: 3,
-                      borderColor: '#fff',
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 3 },
-                      shadowOpacity: 0.4,
-                      shadowRadius: 5,
-                      elevation: 8,
-                    }}
-                  >
-                    <Ionicons name="car" size={28} color="#fff" />
-                  </View>
-                  {/* Pulse effect - color matches car */}
-                  <View
-                    style={{
-                      position: 'absolute',
-                      width: 70,
-                      height: 70,
-                      borderRadius: 35,
-                      backgroundColor: activeRide.status === 'in_progress' 
-                        ? 'rgba(255, 140, 0, 0.2)' 
-                        : 'rgba(107, 114, 128, 0.2)',
-                      borderWidth: 2,
-                      borderColor: activeRide.status === 'in_progress'
-                        ? 'rgba(255, 140, 0, 0.3)'
-                        : 'rgba(107, 114, 128, 0.3)',
-                    }}
-                  />
-                </View>
+                <DriverTaxiIcon />
               </Marker>
             )}
 
@@ -1833,6 +2150,15 @@ export default function PassengerHomeScreen() {
             )}
           </MapView>
         </ErrorBoundary>
+
+        {/* Center Location Button */}
+        <CenterLocationButton
+          onPress={handleCenterOnUserLocation}
+          disabled={!currentLocation}
+          style={[styles.centerLocationButton, { top: insets.top + 4 }]}
+        />
+
+        {/* Approximate Route Banner - intentionally hidden; straight-line fallback is transparent to the user */}
 
         {/* Map Selection Mode Banner */}
         {mapSelectionMode !== 'none' && (
@@ -1875,11 +2201,13 @@ export default function PassengerHomeScreen() {
               enableOnAndroid={true}
               enableAutomaticScroll={true}
               extraScrollHeight={100}
-              keyboardShouldPersistTaps="handled"
+              keyboardShouldPersistTaps="always"
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.panelContent}
               style={styles.panelScrollView}
               keyboardOpeningTime={0}
+              resetScrollToCoords={{ x: 0, y: 0 }}
+              scrollEnabled={true}
             >
               {/* Active Ride - Driver Info Full Screen */}
               {activeRide && activeRide.driver && (
@@ -1902,27 +2230,32 @@ export default function PassengerHomeScreen() {
                         )}
                       </View>
                     </View>
-                    
+
                     <View style={styles.driverInfoContent}>
                       <View style={styles.driverNameRow}>
                         <Text style={styles.driverName}>{activeRide.driver.name}</Text>
-                        <View style={[
-                          styles.statusBadge,
-                          activeRide.status === 'accepted' && styles.statusBadgeAccepted,
-                          activeRide.status === 'arrived' && styles.statusBadgeArrived,
-                          activeRide.status === 'in_progress' && styles.statusBadgeInProgress,
-                        ]}>
-                          <Text style={[
-                            styles.statusBadgeText,
-                            activeRide.status === 'accepted' && styles.statusBadgeTextAccepted,
-                            activeRide.status === 'arrived' && styles.statusBadgeTextArrived,
-                            activeRide.status === 'in_progress' && styles.statusBadgeTextInProgress,
-                          ]}>
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            activeRide.status === 'accepted' && styles.statusBadgeAccepted,
+                            activeRide.status === 'arrived' && styles.statusBadgeArrived,
+                            activeRide.status === 'in_progress' && styles.statusBadgeInProgress,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.statusBadgeText,
+                              activeRide.status === 'accepted' && styles.statusBadgeTextAccepted,
+                              activeRide.status === 'arrived' && styles.statusBadgeTextArrived,
+                              activeRide.status === 'in_progress' &&
+                                styles.statusBadgeTextInProgress,
+                            ]}
+                          >
                             {getRideStatusText(activeRide.status)}
                           </Text>
                         </View>
                       </View>
-                      
+
                       <View style={styles.driverRatingContainer}>
                         <Ionicons name="star" size={16} color="#FFD700" />
                         <Text style={styles.driverRatingText}>
@@ -1941,9 +2274,9 @@ export default function PassengerHomeScreen() {
                       <View style={styles.vehicleDetailContent}>
                         <Text style={styles.vehicleDetailLabel}>Vehículo</Text>
                         <Text style={styles.vehicleDetailValue}>
-                          {activeRide.driver.vehicleInfo?.model || 
-                           activeRide.driver.vehicleModel || 
-                           'No disponible'}
+                          {activeRide.driver.vehicleInfo?.model ||
+                            activeRide.driver.vehicleModel ||
+                            'No disponible'}
                         </Text>
                       </View>
                     </View>
@@ -1955,9 +2288,9 @@ export default function PassengerHomeScreen() {
                       <View style={styles.vehicleDetailContent}>
                         <Text style={styles.vehicleDetailLabel}>Color</Text>
                         <Text style={styles.vehicleDetailValue}>
-                          {activeRide.driver.vehicleInfo?.color || 
-                           activeRide.driver.vehicleColor || 
-                           'No especificado'}
+                          {activeRide.driver.vehicleInfo?.color ||
+                            activeRide.driver.vehicleColor ||
+                            'No especificado'}
                         </Text>
                       </View>
                     </View>
@@ -1969,9 +2302,9 @@ export default function PassengerHomeScreen() {
                       <View style={styles.vehicleDetailContent}>
                         <Text style={styles.vehicleDetailLabel}>Placa</Text>
                         <Text style={styles.vehiclePlateText}>
-                          {activeRide.driver.vehicleInfo?.licensePlate || 
-                           activeRide.driver.licensePlate || 
-                           'N/A'}
+                          {activeRide.driver.vehicleInfo?.licensePlate ||
+                            activeRide.driver.licensePlate ||
+                            'N/A'}
                         </Text>
                       </View>
                     </View>
@@ -1988,11 +2321,12 @@ export default function PassengerHomeScreen() {
                           {activeRide.status === 'accepted'
                             ? 'Llegada estimada'
                             : activeRide.status === 'in_progress'
-                            ? 'Tiempo al destino'
-                            : 'Tiempo estimado'}
+                              ? 'Tiempo al destino'
+                              : 'Tiempo estimado'}
                         </Text>
                         <Text style={styles.etaValueText}>
-                          {Math.round(activeRide.eta.estimatedMinutes)} min · {activeRide.eta.distanceKm.toFixed(1)} km
+                          {Math.round(activeRide.eta.estimatedMinutes)} min ·{' '}
+                          {activeRide.eta.distanceKm.toFixed(1)} km
                         </Text>
                       </View>
                     </View>
@@ -2004,20 +2338,22 @@ export default function PassengerHomeScreen() {
                     <TouchableOpacity
                       style={[
                         styles.callButton,
-                        activeRide.status === 'in_progress' && styles.callButtonDisabled
+                        activeRide.status === 'in_progress' && styles.callButtonDisabled,
                       ]}
                       onPress={handleContactDriver}
                       disabled={activeRide.status === 'in_progress'}
                     >
-                      <Ionicons 
-                        name="call-outline" 
-                        size={20} 
-                        color={activeRide.status === 'in_progress' ? '#9CA3AF' : '#fff'} 
+                      <Ionicons
+                        name="call-outline"
+                        size={20}
+                        color={activeRide.status === 'in_progress' ? '#9CA3AF' : '#fff'}
                       />
-                      <Text style={[
-                        styles.callButtonText,
-                        activeRide.status === 'in_progress' && styles.callButtonTextDisabled
-                      ]}>
+                      <Text
+                        style={[
+                          styles.callButtonText,
+                          activeRide.status === 'in_progress' && styles.callButtonTextDisabled,
+                        ]}
+                      >
                         {activeRide.status === 'in_progress' ? 'En el taxi' : 'Llamar'}
                       </Text>
                     </TouchableOpacity>
@@ -2025,14 +2361,25 @@ export default function PassengerHomeScreen() {
                     {(activeRide.status === 'pending' ||
                       activeRide.status === 'accepted' ||
                       activeRide.status === 'arrived') && (
-                      <TouchableOpacity
-                        style={styles.cancelButton}
-                        onPress={handleCancelRidePress}
-                      >
+                      <TouchableOpacity style={styles.cancelButton} onPress={handleCancelRidePress}>
                         <Ionicons name="close-circle-outline" size={20} color="#EF4444" />
                         <Text style={styles.cancelButtonText}>Cancelar</Text>
                       </TouchableOpacity>
                     )}
+
+                    {/* Change to Pago Móvil — only when in_progress and payment is cash (Req. 3.1) */}
+                    {activeRide.status === 'in_progress' &&
+                      (!activeRide.paymentMode || activeRide.paymentMode === 'cash') && (
+                        <TouchableOpacity
+                          style={styles.changePaymentButton}
+                          onPress={() => setShowChangePaymentModal(true)}
+                          disabled={isChangingPayment}
+                          accessibilityLabel="Cambiar a Pago Móvil"
+                        >
+                          <Ionicons name="phone-portrait-outline" size={18} color="#fff" />
+                          <Text style={styles.changePaymentButtonText}>Cambiar a Pago Móvil</Text>
+                        </TouchableOpacity>
+                      )}
                   </View>
                 </View>
               )}
@@ -2043,54 +2390,59 @@ export default function PassengerHomeScreen() {
                   {/* Section Title */}
                   <Text style={styles.sectionTitle}>Selecciona tu tipo de vehículo</Text>
 
-                  {/* Vehicle Type Selector - Compact Design */}
-                  <View style={styles.vehicleSelector}>
-                    <TouchableOpacity
-                      style={[
-                        styles.vehicleButton,
-                        vehicleType === 'taxi' && styles.vehicleButtonActive,
-                      ]}
-                      onPress={() => setVehicleType('taxi')}
-                    >
-                      <Ionicons
-                        name="car"
-                        size={24}
-                        color={vehicleType === 'taxi' ? '#fff' : '#6B7280'}
-                      />
-                      <Text
+                  {/* Vehicle Type Selector */}
+                  <CopilotStep
+                    text="Elige si necesitas un Carro o una Moto para tu viaje."
+                    order={1}
+                    name="vehicle_type"
+                  >
+                    <WalkthroughView style={styles.vehicleSelector}>
+                      <TouchableOpacity
                         style={[
-                          styles.vehicleButtonText,
-                          vehicleType === 'taxi' && styles.vehicleButtonTextActive,
+                          styles.vehicleButton,
+                          vehicleType === 'taxi' && styles.vehicleButtonActive,
                         ]}
+                        onPress={() => setVehicleType('taxi')}
+                        activeOpacity={0.8}
                       >
-                        Carro
-                      </Text>
-                    </TouchableOpacity>
+                        <Ionicons
+                          name="car"
+                          size={22}
+                          color={vehicleType === 'taxi' ? '#fff' : '#6B7280'}
+                        />
+                        <Text
+                          style={[
+                            styles.vehicleButtonText,
+                            vehicleType === 'taxi' && styles.vehicleButtonTextActive,
+                          ]}
+                        >
+                          Carro
+                        </Text>
+                      </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={[
-                        styles.vehicleButton,
-                        vehicleType === 'moto_taxi' && styles.vehicleButtonActive,
-                      ]}
-                      onPress={() => setVehicleType('moto_taxi')}
-                    >
-                      <Ionicons
-                        name="bicycle"
-                        size={24}
-                        color={vehicleType === 'moto_taxi' ? '#fff' : '#6B7280'}
-                      />
-                      <Text
+                      <TouchableOpacity
                         style={[
-                          styles.vehicleButtonText,
-                          vehicleType === 'moto_taxi' && styles.vehicleButtonTextActive,
+                          styles.vehicleButton,
+                          vehicleType === 'moto_taxi' && styles.vehicleButtonActive,
                         ]}
+                        onPress={() => setVehicleType('moto_taxi')}
+                        activeOpacity={0.8}
                       >
-                        Moto
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+                        {/* Moto SVG icon */}
+                        <MotoIcon color={vehicleType === 'moto_taxi' ? '#fff' : '#6B7280'} size={22} />
+                        <Text
+                          style={[
+                            styles.vehicleButtonText,
+                            vehicleType === 'moto_taxi' && styles.vehicleButtonTextActive,
+                          ]}
+                        >
+                          Moto
+                        </Text>
+                      </TouchableOpacity>
+                    </WalkthroughView>
+                  </CopilotStep>
 
-                  {/* Moto Quantity Selector - Only show when moto_taxi is selected */}
+                  {/* Moto Quantity Selector */}
                   {vehicleType === 'moto_taxi' && (
                     <>
                       <Text style={styles.sectionTitle}>¿Cuántas motos necesitas?</Text>
@@ -2101,12 +2453,9 @@ export default function PassengerHomeScreen() {
                             motoQuantity === 1 && styles.motoQuantityButtonActive,
                           ]}
                           onPress={() => setMotoQuantity(1)}
+                          activeOpacity={0.8}
                         >
-                          <Ionicons
-                            name="bicycle"
-                            size={20}
-                            color={motoQuantity === 1 ? '#fff' : '#6B7280'}
-                          />
+                          <MotoIcon color={motoQuantity === 1 ? '#fff' : '#6B7280'} size={18} />
                           <Text
                             style={[
                               styles.motoQuantityText,
@@ -2123,19 +2472,11 @@ export default function PassengerHomeScreen() {
                             motoQuantity === 2 && styles.motoQuantityButtonActive,
                           ]}
                           onPress={() => setMotoQuantity(2)}
+                          activeOpacity={0.8}
                         >
                           <View style={styles.motoQuantityIconRow}>
-                            <Ionicons
-                              name="bicycle"
-                              size={18}
-                              color={motoQuantity === 2 ? '#fff' : '#6B7280'}
-                            />
-                            <Ionicons
-                              name="bicycle"
-                              size={18}
-                              color={motoQuantity === 2 ? '#fff' : '#6B7280'}
-                              style={{ marginLeft: -4 }}
-                            />
+                            <MotoIcon color={motoQuantity === 2 ? '#fff' : '#6B7280'} size={16} />
+                            <MotoIcon color={motoQuantity === 2 ? '#fff' : '#6B7280'} size={16} />
                           </View>
                           <Text
                             style={[
@@ -2150,144 +2491,248 @@ export default function PassengerHomeScreen() {
                     </>
                   )}
 
-                  {/* Pickup Location - Now editable */}
-                  <Text style={styles.sectionTitle}>Punto de recogida</Text>
-                  <View style={styles.locationInputContainer}>
-                    <TouchableOpacity onPress={handleUseCurrentLocation}>
-                      <Ionicons name="location" size={20} color="#22c55e" />
-                    </TouchableOpacity>
-                    {isEditingPickup ? (
-                      <TextInput
-                        style={styles.locationInput}
-                        value={pickupAddress}
-                        onChangeText={setPickupAddress}
-                        onSubmitEditing={handleSearchPickup}
-                        onBlur={() => {
-                          if (!pickupAddress.trim()) {
-                            setIsEditingPickup(false);
-                          }
-                        }}
-                        placeholder="Escribe la dirección de recogida"
-                        placeholderTextColor="#A9A9A9"
-                        autoFocus
-                        returnKeyType="search"
-                      />
-                    ) : (
-                      <TouchableOpacity
-                        style={styles.locationTextContainer}
-                        onPress={() => setIsEditingPickup(true)}
-                      >
-                        <Text style={styles.locationText} numberOfLines={1}>
-                          {pickupAddress || 'Ubicación actual'}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                    {isEditingPickup ? (
-                      <TouchableOpacity
-                        style={styles.locationIconButton}
-                        onPress={handleSearchPickup}
-                      >
-                        <Ionicons name="search" size={18} color="#22c55e" />
-                      </TouchableOpacity>
-                    ) : (
-                      <TouchableOpacity
-                        style={styles.locationIconButton}
-                        onPress={() => setIsEditingPickup(true)}
-                      >
-                        <Ionicons name="pencil" size={16} color="#22c55e" />
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      style={styles.mapSelectionButton}
-                      onPress={() => handleEnableMapSelection('pickup')}
+                  {/* Route Card — pickup + destination unified */}
+                  <View style={styles.routeCard}>
+                    {/* Pickup row */}
+                    <CopilotStep
+                      text="Confirma o edita tu ubicación de recogida actual."
+                      order={2}
+                      name="pickup_location"
                     >
-                      <Ionicons name="map" size={18} color="#22c55e" />
-                    </TouchableOpacity>
-                  </View>
+                      <WalkthroughView style={styles.routeRow}>
+                        <TouchableOpacity onPress={handleUseCurrentLocation} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <Ionicons name="location" size={20} color="#22c55e" />
+                        </TouchableOpacity>
+                        <View style={styles.routeRowContent}>
+                          {isEditingPickup ? (
+                            <AddressAutocomplete
+                              value={pickupAddress}
+                              onChangeText={setPickupAddress}
+                              onSelectPlace={(place) => {
+                                setPickupLocation({ latitude: place.latitude, longitude: place.longitude });
+                                setPickupAddress(place.name); // Show short name in input
+                                setPickupFullAddress(place.description || place.name); // Save full address internally
+                                setPickupLocationSource(place.source ?? null);
+                                setIsEditingPickup(false);
+                              }}
+                              placeholder="Punto de recogida"
+                              currentLocation={currentLocation ?? undefined}
+                              bare
+                              style={styles.routeAutocomplete}
+                              suggestionsStyle={styles.routeSuggestionsDropdown}
+                            />
+                          ) : (
+                            <TouchableOpacity
+                              style={styles.routeTextButton}
+                              onPress={() => setIsEditingPickup(true)}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={styles.routeLabel}>Punto de recogida</Text>
+                              <Text style={styles.routeValue} numberOfLines={1}>
+                                {pickupAddress || 'Ubicación actual'}
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                        <View style={styles.routeActions}>
+                          <TouchableOpacity
+                            style={styles.routeActionBtn}
+                            onPress={isEditingPickup ? handleSearchPickup : () => setIsEditingPickup(true)}
+                          >
+                            <Ionicons name={isEditingPickup ? 'search' : 'pencil'} size={15} color="#22c55e" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.routeActionBtn}
+                            onPress={() => handleEnableMapSelection('pickup')}
+                          >
+                            <Ionicons name="map-outline" size={15} color="#22c55e" />
+                          </TouchableOpacity>
+                        </View>
+                      </WalkthroughView>
+                    </CopilotStep>
 
-                  {/* Destination Search */}
-                  <Text style={styles.sectionTitle}>¿A dónde vas?</Text>
-                  <View style={styles.destinationInputContainer}>
-                    <Ionicons name="location-outline" size={20} color="#22c55e" />
-                    <TextInput
-                      style={styles.destinationInput}
-                      placeholder="¿A dónde vas?"
-                      placeholderTextColor="#A9A9A9"
-                      value={destinationAddress}
-                      onChangeText={setDestinationAddress}
-                      onSubmitEditing={handleSearchDestination}
-                      returnKeyType="search"
-                    />
-                    <TouchableOpacity
-                      style={styles.searchIconButton}
-                      onPress={handleSearchDestination}
+                    {/* Divider with connector line */}
+                    <View style={styles.routeDivider}>
+                      <View style={styles.routeConnectorLine} />
+                    </View>
+
+                    {/* Destination row */}
+                    <CopilotStep
+                      text="Ingresa aquí tu destino. Luego te mostraremos el precio estimado."
+                      order={3}
+                      name="destination"
                     >
-                      <Ionicons name="search" size={18} color="#22c55e" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.mapSelectionButton}
-                      onPress={() => handleEnableMapSelection('destination')}
-                    >
-                      <Ionicons name="map" size={18} color="#22c55e" />
-                    </TouchableOpacity>
+                      <WalkthroughView style={styles.routeRow}>
+                        <Ionicons name="location" size={20} color="#22c55e" />
+                        <View style={styles.routeRowContent}>
+                          <AddressAutocomplete
+                            value={destinationAddress}
+                            onChangeText={setDestinationAddress}
+                            onSelectPlace={(place) => {
+                              setDestinationLocation({ latitude: place.latitude, longitude: place.longitude });
+                              setDestinationAddress(place.name); // Show short name in input
+                              setDestinationFullAddress(place.description || place.name); // Save full address internally
+                              setDestinationLocationSource(place.source ?? null);
+                            }}
+                            placeholder="¿A dónde vas?"
+                            currentLocation={currentLocation ?? undefined}
+                            bare
+                            style={styles.routeAutocomplete}
+                            suggestionsStyle={styles.routeSuggestionsDropdown}
+                          />
+                        </View>
+                        <View style={styles.routeActions}>
+                          <TouchableOpacity
+                            style={styles.routeActionBtn}
+                            onPress={handleSearchDestination}
+                          >
+                            <Ionicons name="search" size={15} color="#22c55e" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.routeActionBtn}
+                            onPress={() => handleEnableMapSelection('destination')}
+                          >
+                            <Ionicons name="map-outline" size={15} color="#22c55e" />
+                          </TouchableOpacity>
+                        </View>
+                      </WalkthroughView>
+                    </CopilotStep>
                   </View>
 
                   {/* Fare Estimate */}
-                  {estimatedFare !== null && fareBreakdown && (
+                  {isCalculatingFare && (
+                    <View style={styles.fareLoadingContainer}>
+                      <ActivityIndicator size="small" color="#22c55e" />
+                      <Text style={styles.fareLoadingText}>Calculando tarifa...</Text>
+                    </View>
+                  )}
+
+                  {estimatedFare !== null && fareBreakdown && !isCalculatingFare && (
                     <View style={styles.fareContainer}>
+                      {/* Zone Badge - shows zone name when available, otherwise fare type */}
+                      <View style={styles.zoneBadge}>
+                        <Ionicons 
+                          name={zoneInfo?.zoneName && zoneInfo.zoneName !== 'Desconocida' ? "location" : "pricetag"} 
+                          size={14} 
+                          color="#22c55e" 
+                        />
+                        <Text style={styles.zoneBadgeText}>
+                          {zoneInfo?.zoneName && zoneInfo.zoneName !== 'Desconocida' 
+                            ? zoneInfo.zoneName 
+                            : (fareBreakdown.timeSurcharge?.applied 
+                                ? 'Tarifa base + Recargo de horario'
+                                : 'Tarifa base'
+                              )
+                          }
+                        </Text>
+                      </View>
+                      
+                      {/* Time Surcharge Indicator - only when zone name is shown and surcharge applies */}
+                      {zoneInfo?.zoneName && zoneInfo.zoneName !== 'Desconocida' && fareBreakdown.timeSurcharge?.applied && (
+                        <View style={styles.surchargeIndicator}>
+                          <Ionicons name="time" size={12} color="#f59e0b" />
+                          <Text style={styles.surchargeText}>
+                            + Recargo de horario ({fareBreakdown.timeSurcharge.type === 'percentage' 
+                              ? `${fareBreakdown.timeSurcharge.value}%` 
+                              : formatCurrency(fareBreakdown.timeSurcharge.value, fareCurrency)})
+                          </Text>
+                        </View>
+                      )}
+                      
+                      {/* Trip Info: Distance and Duration */}
+                      {(fareBreakdown.distance || fareBreakdown.duration) && (
+                        <View style={styles.tripInfoContainer}>
+                          {fareBreakdown.distance && (
+                            <View style={styles.tripInfoItem}>
+                              <Ionicons name="navigate-outline" size={16} color="#6b7280" />
+                              <Text style={styles.tripInfoText}>
+                                {fareBreakdown.distance.toFixed(1)} km
+                              </Text>
+                            </View>
+                          )}
+                          {fareBreakdown.duration && (
+                            <View style={styles.tripInfoItem}>
+                              <Ionicons name="time-outline" size={16} color="#6b7280" />
+                              <Text style={styles.tripInfoText}>
+                                {Math.round(fareBreakdown.duration)} min
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
+
                       <View style={styles.fareHeader}>
                         <Text style={styles.fareLabel}>Tarifa estimada:</Text>
-                        <Text style={styles.fareAmount}>{formatCurrency(estimatedFare, fareCurrency)}</Text>
+                        <Text style={styles.fareAmount}>
+                          {formatCurrency(estimatedFare, fareCurrency)}
+                        </Text>
                       </View>
 
-                      {/* Fare Breakdown */}
+                      {/* Fare Breakdown — zone-based flat rate */}
                       <View style={styles.fareBreakdown}>
                         <View style={styles.fareBreakdownRow}>
-                          <Text style={styles.fareBreakdownLabel}>Tarifa base:</Text>
+                          <Text style={styles.fareBreakdownLabel}>Tarifa de zona:</Text>
                           <Text style={styles.fareBreakdownValue}>
                             {formatCurrency(fareBreakdown.baseFare, fareCurrency)}
                           </Text>
                         </View>
-                        <View style={styles.fareBreakdownRow}>
-                          <Text style={styles.fareBreakdownLabel}>
-                            Por km ({formatCurrency(fareBreakdown.perKmRate, fareCurrency, false)}/km × {fareBreakdown.distance.toFixed(2)} km):
+                        {/* Time Surcharge Breakdown */}
+                        {fareBreakdown.timeSurcharge?.applied && (
+                          <View style={styles.fareBreakdownRow}>
+                            <Text style={styles.fareBreakdownLabel}>
+                              Recargo de horario ({fareBreakdown.timeSurcharge.type === 'percentage' 
+                                ? `${fareBreakdown.timeSurcharge.value}%` 
+                                : 'fijo'}):
+                            </Text>
+                            <Text style={styles.fareBreakdownValue}>
+                              {formatCurrency(fareBreakdown.timeSurcharge.amount, fareCurrency)}
+                            </Text>
+                          </View>
+                        )}
+                        {fareBreakdown.dualPrice && (
+                          <View style={styles.fareBreakdownRow}>
+                            <Text style={styles.fareBreakdownValue}>
+                              {fareCurrency === 'USD'
+                                ? `Bs. ${fareBreakdown.dualPrice.ves.toFixed(2)}`
+                                : `$ ${fareBreakdown.dualPrice.usd.toFixed(2)}`}
+                            </Text>
+                          </View>
+                        )}
+                        {fareBreakdown.exchangeRate && (
+                          <Text style={styles.fareExchangeRate}>
+                            Tasa BCV: Bs. {fareBreakdown.exchangeRate.toFixed(2)} / USD
                           </Text>
-                          <Text style={styles.fareBreakdownValue}>
-                            {formatCurrency(fareBreakdown.perKmRate * fareBreakdown.distance, fareCurrency)}
-                          </Text>
-                        </View>
-                        <View style={styles.fareBreakdownRow}>
-                          <Text style={styles.fareBreakdownLabel}>
-                            Por minuto ({formatCurrency(fareBreakdown.perMinuteRate, fareCurrency, false)}/min × {fareBreakdown.duration.toFixed(0)} min):
-                          </Text>
-                          <Text style={styles.fareBreakdownValue}>
-                            {formatCurrency(fareBreakdown.perMinuteRate * fareBreakdown.duration, fareCurrency)}
-                          </Text>
-                        </View>
+                        )}
                       </View>
                     </View>
                   )}
 
                   {/* Request Ride Button */}
-                  <TouchableOpacity
-                    style={[
-                      styles.requestButton,
-                      destinationLocation &&
-                        !isRequestingRide &&
-                        !isSearchingDriver &&
-                        styles.requestButtonEnabled,
-                      (!destinationLocation || isRequestingRide || isSearchingDriver) &&
-                        styles.requestButtonDisabled,
-                    ]}
-                    onPress={handleRequestRide}
-                    disabled={!destinationLocation || isRequestingRide || isSearchingDriver}
+                  <CopilotStep
+                    text="¡Todo listo! Toca aquí para buscar tu conductor."
+                    order={4}
+                    name="request_ride"
                   >
-                    {isRequestingRide ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.requestButtonText}>Solicitar Viaje</Text>
-                    )}
-                  </TouchableOpacity>
+                    <WalkthroughTouchableOpacity
+                      style={[
+                        styles.requestButton,
+                        destinationLocation &&
+                          !isRequestingRide &&
+                          !isSearchingDriver &&
+                          styles.requestButtonEnabled,
+                        (!destinationLocation || isRequestingRide || isSearchingDriver) &&
+                          styles.requestButtonDisabled,
+                      ]}
+                      onPress={handleRequestRide}
+                      disabled={!destinationLocation || isRequestingRide || isSearchingDriver}
+                    >
+                      {isRequestingRide ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text style={styles.requestButtonText}>Solicitar Viaje</Text>
+                      )}
+                    </WalkthroughTouchableOpacity>
+                  </CopilotStep>
                 </>
               )}
             </KeyboardAwareScrollView>
@@ -2301,25 +2746,22 @@ export default function PassengerHomeScreen() {
           animationType="none"
           onRequestClose={handleCloseCancelModal}
         >
-          <Animated.View 
+          <Animated.View
             style={[
               styles.modalOverlay,
               {
                 opacity: modalOpacity,
                 paddingTop: Math.max(insets.top, 20),
                 paddingBottom: Math.max(insets.bottom, 20),
-              }
+              },
             ]}
           >
-            <Animated.View 
+            <Animated.View
               style={[
                 styles.cancelModalContent,
                 {
-                  transform: [
-                    { scale: modalScale },
-                    { translateY: modalTranslateY }
-                  ],
-                }
+                  transform: [{ scale: modalScale }, { translateY: modalTranslateY }],
+                },
               ]}
             >
               {/* Header with Icon */}
@@ -2392,7 +2834,9 @@ export default function PassengerHomeScreen() {
               </View>
 
               {/* Action Buttons */}
-              <View style={[styles.cancelModalButtons, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+              <View
+                style={[styles.cancelModalButtons, { paddingBottom: Math.max(insets.bottom, 16) }]}
+              >
                 <TouchableOpacity
                   style={styles.cancelKeepButton}
                   onPress={handleCloseCancelModal}
@@ -2460,27 +2904,25 @@ export default function PassengerHomeScreen() {
                     <View style={styles.paymentBreakdown}>
                       <Text style={styles.breakdownTitle}>Desglose de Tarifa</Text>
                       <View style={styles.breakdownRow}>
-                        <Text style={styles.breakdownLabel}>Tarifa base:</Text>
+                        <Text style={styles.breakdownLabel}>Tarifa de zona:</Text>
                         <Text style={styles.breakdownValue}>
                           {formatCurrency(fareBreakdown.baseFare, fareCurrency)}
                         </Text>
                       </View>
-                      <View style={styles.breakdownRow}>
-                        <Text style={styles.breakdownLabel}>
-                          Por km ({fareBreakdown.distance.toFixed(2)} km):
+                      {fareBreakdown.dualPrice && (
+                        <View style={styles.breakdownRow}>
+                          <Text style={[styles.breakdownValue, styles.fareBreakdownDual]}>
+                            {fareCurrency === 'USD'
+                              ? `Bs. ${fareBreakdown.dualPrice.ves.toFixed(2)}`
+                              : `$ ${fareBreakdown.dualPrice.usd.toFixed(2)}`}
+                          </Text>
+                        </View>
+                      )}
+                      {fareBreakdown.exchangeRate && (
+                        <Text style={styles.fareExchangeRate}>
+                          Tasa BCV: Bs. {fareBreakdown.exchangeRate.toFixed(2)} / USD
                         </Text>
-                        <Text style={styles.breakdownValue}>
-                          {formatCurrency(fareBreakdown.perKmRate * fareBreakdown.distance, fareCurrency)}
-                        </Text>
-                      </View>
-                      <View style={styles.breakdownRow}>
-                        <Text style={styles.breakdownLabel}>
-                          Por minuto ({fareBreakdown.duration.toFixed(0)} min):
-                        </Text>
-                        <Text style={styles.breakdownValue}>
-                          {formatCurrency(fareBreakdown.perMinuteRate * fareBreakdown.duration, fareCurrency)}
-                        </Text>
-                      </View>
+                      )}
                     </View>
                   )}
 
@@ -2785,6 +3227,15 @@ export default function PassengerHomeScreen() {
           onCancel={handleMobilePaymentCancel}
         />
 
+        {/* Change Payment Method Modal — for switching from cash to pago_movil during ride (Req. 3.2) */}
+        <MobilePaymentModal
+          visible={showChangePaymentModal}
+          amount={estimatedFare || 0}
+          rideId={activeRide?.id || ''}
+          onPaymentComplete={handleChangePaymentComplete}
+          onCancel={handleChangePaymentCancel}
+        />
+
         {/* Contact Driver Modal */}
         <Modal
           visible={showContactModal}
@@ -2800,30 +3251,20 @@ export default function PassengerHomeScreen() {
               </Text>
 
               <View style={styles.contactOptionsContainer}>
-                <TouchableOpacity
-                  style={styles.contactOptionButton}
-                  onPress={handlePhoneCall}
-                >
+                <TouchableOpacity style={styles.contactOptionButton} onPress={handlePhoneCall}>
                   <View style={styles.contactOptionIconContainer}>
                     <Ionicons name="call" size={28} color="#22c55e" />
                   </View>
                   <Text style={styles.contactOptionTitle}>Llamada telefónica</Text>
-                  <Text style={styles.contactOptionDescription}>
-                    Llamar directamente al número
-                  </Text>
+                  <Text style={styles.contactOptionDescription}>Llamar directamente al número</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.contactOptionButton}
-                  onPress={handleWhatsAppCall}
-                >
+                <TouchableOpacity style={styles.contactOptionButton} onPress={handleWhatsAppCall}>
                   <View style={styles.contactOptionIconContainer}>
                     <Ionicons name="logo-whatsapp" size={28} color="#25D366" />
                   </View>
                   <Text style={styles.contactOptionTitle}>WhatsApp</Text>
-                  <Text style={styles.contactOptionDescription}>
-                    Abrir chat de WhatsApp
-                  </Text>
+                  <Text style={styles.contactOptionDescription}>Abrir chat de WhatsApp</Text>
                 </TouchableOpacity>
               </View>
 
@@ -3103,6 +3544,105 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 8,
   },
+  // ── Route Card (unified pickup + destination) ──────────────────────────────
+  routeCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    marginBottom: 14,
+    overflow: 'visible',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  routeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 56,
+  },
+  routeRowContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  routeTextButton: {
+    flex: 1,
+  },
+  routeLabel: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontWeight: '500',
+    marginBottom: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  routeValue: {
+    fontSize: 14,
+    color: '#1F2937',
+    fontWeight: '600',
+  },
+  routeAutocomplete: {
+    flex: 1,
+  },
+  routeSuggestionsDropdown: {
+    // Expandir el dropdown para cubrir el ancho completo del routeCard
+    // compensando: ícono izquierdo (20px) + padding izquierdo (14px) = 34px
+    // y botones derecha (60px) + gap (6px) + padding derecho (14px) = 80px
+    left: -34,
+    right: -80,
+  },
+  routeActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: 8,
+  },
+  routeActionBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#F0FDF4',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  routeDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 14,
+    paddingRight: 14,
+  },
+  routeConnectorLine: {
+    width: 2,
+    height: 14,
+    backgroundColor: '#D1D5DB',
+    borderRadius: 1,
+    marginLeft: 9,
+  },
+  approximateRouteBanner: {
+    position: 'absolute',
+    top: 10,
+    left: 16,
+    right: 16,
+    backgroundColor: '#fef3c7',
+    borderRadius: 8,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    zIndex: 100,
+  },
+  approximateRouteBannerText: {
+    fontSize: 13,
+    color: '#92400e',
+    marginLeft: 8,
+    fontWeight: '500',
+    flex: 1,
+  },
   mapSelectionBanner: {
     position: 'absolute',
     top: 60,
@@ -3175,6 +3715,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginLeft: 10,
   },
+  autocompleteDestination: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  autocompletePickup: {
+    flex: 1,
+    marginLeft: 10,
+  },
   searchIconButton: {
     width: 28,
     height: 28,
@@ -3188,6 +3736,68 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
+  },
+  fareLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+  },
+  fareLoadingText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  zoneBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+    gap: 4,
+  },
+  zoneBadgeText: {
+    fontSize: 13,
+    color: '#22c55e',
+    fontWeight: '600',
+  },
+  surchargeIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+    gap: 4,
+  },
+  surchargeText: {
+    fontSize: 12,
+    color: '#f59e0b',
+    fontWeight: '600',
+  },
+  tripInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  tripInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tripInfoText: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '600',
   },
   fareHeader: {
     flexDirection: 'row',
@@ -3227,10 +3837,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
+  fareBreakdownDual: {
+    color: '#1d4ed8',
+    fontWeight: '700',
+  },
+  fareExchangeRate: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginTop: 4,
+    textAlign: 'right',
+  },
   requestButton: {
-    height: 50,
+    height: 52,
     backgroundColor: '#9CA3AF',
-    borderRadius: 25,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 4,
@@ -3243,7 +3863,7 @@ const styles = StyleSheet.create({
   requestButtonEnabled: {
     backgroundColor: '#22c55e',
     shadowColor: '#22c55e',
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.35,
   },
   requestButtonDisabled: {
     backgroundColor: '#D1D5DB',
@@ -3253,8 +3873,8 @@ const styles = StyleSheet.create({
   requestButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
-    letterSpacing: 0.3,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   searchingContainer: {
     marginTop: 16,
@@ -3539,6 +4159,22 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: '#EF4444',
     fontSize: 15,
+    fontWeight: '600',
+  },
+  changePaymentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3b82f6',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    gap: 8,
+    marginTop: 8,
+  },
+  changePaymentButtonText: {
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '600',
   },
   modalOverlay: {
@@ -4254,5 +4890,9 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontSize: 16,
     fontWeight: '600',
+  },
+  centerLocationButton: {
+    right: 16,
+    left: undefined, // Anular la posición izquierda del componente base
   },
 });

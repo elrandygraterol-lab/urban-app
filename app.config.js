@@ -78,6 +78,7 @@ module.exports = ({ config }) => {
         },
       ],
       '@react-native-firebase/app',
+      'expo-audio',
     ],
     experiments: {
       typedRoutes: true,
@@ -96,6 +97,12 @@ module.exports = ({ config }) => {
       eas: {
         projectId: '18144406-d79f-4baa-8918-1f31ecedd9a5',
       },
+      // Store Management System Configuration
+      storeImageMaxSizeMB: 5,
+      storeMaxLogoImages: 1,
+      storeMaxPhotoImages: 10,
+      storeDefaultSearchRadiusKm: 50,
+      storeMaxSearchRadiusKm: 100,
     },
   };
 };

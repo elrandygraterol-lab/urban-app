@@ -101,6 +101,14 @@ export default function ForgotPasswordScreen() {
 
           <TouchableOpacity
             style={styles.backButton}
+            onPress={() => router.push('/(auth)/reset-password' as any)}
+            disabled={isLoading}
+          >
+            <Text style={styles.backButtonText}>Ya tengo un código de recuperación</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.backButton}
             onPress={() => router.push('/(auth)/login' as any)}
             disabled={isLoading}
           >

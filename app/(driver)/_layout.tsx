@@ -28,10 +28,16 @@ export default function DriverLayout() {
           }}
         />
         <Tabs.Screen
-          name="earnings"
+          name="wallet"
           options={{
             title: 'Ganancias',
             tabBarIcon: ({ color, size }) => <Ionicons name="wallet" size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="earnings"
+          options={{
+            href: null, // Hide from tab bar - replaced by wallet screen
           }}
         />
         <Tabs.Screen

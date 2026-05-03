@@ -43,6 +43,34 @@ jest.mock('@expo/vector-icons', () => {
   };
 });
 
+// Mock Expo Image
+jest.mock('expo-image', () => {
+  const React = require('react');
+  return {
+    Image: props => React.createElement('Image', props),
+  };
+});
+
+// Mock react-native-svg
+jest.mock('react-native-svg', () => {
+  const React = require('react');
+  return {
+    __esModule: true,
+    default: ({ children, ...props }) => React.createElement('Svg', props, children),
+    Svg: ({ children, ...props }) => React.createElement('Svg', props, children),
+    Line: props => React.createElement('Line', props),
+    Circle: props => React.createElement('Circle', props),
+    Polyline: props => React.createElement('Polyline', props),
+    Text: ({ children, ...props }) => React.createElement('SvgText', props, children),
+    G: ({ children, ...props }) => React.createElement('G', props, children),
+    Path: props => React.createElement('Path', props),
+    Rect: props => React.createElement('Rect', props),
+    Defs: ({ children, ...props }) => React.createElement('Defs', props, children),
+    LinearGradient: ({ children, ...props }) => React.createElement('LinearGradient', props, children),
+    Stop: props => React.createElement('Stop', props),
+  };
+});
+
 // Mock AsyncStorage
 jest.mock('@react-native-async-storage/async-storage', () => ({
   setItem: jest.fn(),

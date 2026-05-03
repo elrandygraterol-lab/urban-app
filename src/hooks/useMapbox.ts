@@ -34,6 +34,9 @@ interface Place {
   latitude: number;
   longitude: number;
   type: string;
+  description?: string;
+  fullAddress?: string;
+  source?: 'custom' | 'nominatim';
 }
 
 export const useMapbox = () => {
@@ -100,7 +103,9 @@ export const useMapbox = () => {
   );
 
   /**
-   * Buscar lugares
+   * Buscar lugares usando el endpoint híbrido del backend.
+   * Combina custom places con resultados de Nominatim.
+   * Hace fallback al endpoint legacy si el híbrido no está disponible.
    */
   const searchPlaces = useCallback(
     async (query: string, latitude?: number, longitude?: number): Promise<Place[]> => {
@@ -108,6 +113,31 @@ export const useMapbox = () => {
         setLoading(true);
         setError(null);
 
+        // Intentar primero el endpoint híbrido /api/search/places
+        try {
+          const params = new URLSearchParams({ q: query });
+          const hybridResponse = await axios.get(`${API_BASE_URL}/search/places?${params}`, {
+            timeout: 10000,
+          });
+
+          if (hybridResponse.data && Array.isArray(hybridResponse.data.results)) {
+            return hybridResponse.data.results.map((r: any) => ({
+              id: r.id,
+              name: r.name,
+              latitude: r.latitude,
+              longitude: r.longitude,
+              type: r.category || r.source,
+              description: r.displayName !== r.name ? r.displayName : undefined,
+              fullAddress: r.displayName,
+              source: r.source,
+            }));
+          }
+        } catch (hybridErr) {
+          // Fallback al endpoint legacy
+          logger.warn('Hybrid search unavailable, falling back to legacy endpoint', { error: hybridErr });
+        }
+
+        // Fallback: endpoint legacy /maps/search-places
         const params = new URLSearchParams({
           query,
           ...(latitude && { latitude: latitude.toString() }),

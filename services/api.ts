@@ -94,8 +94,8 @@ export const authAPI = {
 
   forgotPassword: (email: string) => api.post('/api/auth/forgot-password', { email }),
 
-  resetPassword: (token: string, password: string) =>
-    api.post('/api/auth/reset-password', { token, password }),
+  resetPassword: (token: string, newPassword: string) =>
+    api.post('/api/auth/reset-password', { token, newPassword }),
 
   refreshToken: () => api.post('/api/auth/refresh'),
 
@@ -213,8 +213,14 @@ export const rideAPI = {
   getRideHistory: (params?: { startDate?: string; endDate?: string }) =>
     api.get('/api/rides/history', { params }),
 
-  updateLocation: (rideId: string, latitude: number, longitude: number) =>
-    api.post(`/api/rides/${rideId}/location`, { latitude, longitude }),
+  updateLocation: (rideId: string, latitude: number, longitude: number, accuracy?: number) =>
+    api.post(`/api/rides/${rideId}/location`, { latitude, longitude, accuracy }),
+
+  changePaymentMethod: (rideId: string, data: {
+    mode: 'pago_movil';
+    pagoMovilReference: string;
+    pagoMovilAmount: number;
+  }) => api.patch(`/api/rides/${rideId}/payment-method`, data),
 };
 
 export const paymentAPI = {
@@ -230,6 +236,20 @@ export const paymentAPI = {
 
   processPayment: (rideId: string, paymentMethodId: string) =>
     api.post('/api/payments/process', { rideId, paymentMethodId }),
+
+  // P2C Payment verification endpoint
+  verifyP2CPayment: (rideId: string, paymentData: {
+    referencia: string;
+    fecha: string;
+    banco: string;
+    telefonoP: string;  // Usar telefonoP según documentación VOB
+    monto: number;
+    identificacion: string;  // Usar identificacion según documentación VOB
+    pagador: string;  // Usar pagador según documentación VOB
+  }) => api.post('/api/payments/verify-p2c', {
+    rideId,
+    ...paymentData,
+  }),
 
   completePayment: (rideId: string, data: {
     method: 'mobile_payment' | 'transfer' | 'cash';
@@ -305,6 +325,18 @@ export const notificationAPI = {
     payments?: boolean;
     promotions?: boolean;
   }) => api.put('/api/notifications/preferences', data),
+
+  getNotifications: (params?: { page?: number; limit?: number }) =>
+    api.get('/api/notifications', { params }),
+
+  markAsRead: (notificationId: string) =>
+    api.put(`/api/notifications/${notificationId}/read`),
+
+  getUnreadCount: (): Promise<{ data: { count: number } }> =>
+    api.get('/api/notifications/unread-count'),
+
+  markAllRead: (): Promise<{ data: { updated: number } }> =>
+    api.post('/api/notifications/mark-read'),
 };
 
 export default api;

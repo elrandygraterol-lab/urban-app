@@ -11,13 +11,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 
-type UserRole = 'passenger' | 'driver';
+type UserRole = 'passenger' | 'driver' | 'owner';
 type VehicleType = 'taxi' | 'moto_taxi';
 
 interface DocumentFile {
@@ -374,6 +376,22 @@ export default function RegisterScreen() {
         formattedPhone = `+58${formattedPhone}`;
       }
 
+      // Request location permission for passengers before registering
+      if (role === 'passenger') {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert(
+            'Permiso de ubicación requerido',
+            'La app necesita acceso a tu ubicación para mostrarte conductores cercanos y calcular tarifas. Por favor activa el permiso.',
+            [
+              { text: 'Abrir Configuración', onPress: () => Linking.openSettings() },
+              { text: 'Continuar de todas formas', style: 'cancel' },
+            ]
+          );
+          // Don't block registration — user can grant later, but warn them
+        }
+      }
+
       await register({
         name: name.trim(),
         email: email.trim(),
@@ -404,24 +422,48 @@ export default function RegisterScreen() {
     } catch (error: any) {
       console.error('[REGISTER_SCREEN] Registration error:', error);
 
-      // Parse error message
-      let errorMessage =
-        error?.message || 'No se pudo completar el registro. Por favor intenta de nuevo.';
+      const rawMessage: string = error?.message ?? '';
 
-      // Make the error more user-friendly
+      // Phone already registered
       if (
-        errorMessage.includes('Validation failed') &&
-        !errorMessage.includes('Errores de validación:')
+        rawMessage.includes('phone') ||
+        rawMessage.includes('teléfono') ||
+        rawMessage.includes('telefono') ||
+        rawMessage.includes('already') ||
+        rawMessage.includes('duplicate') ||
+        rawMessage.includes('unique') ||
+        rawMessage.toLowerCase().includes('phone number')
       ) {
-        errorMessage = 'Error de validación:\n\n';
-        errorMessage += '• Verifica que todos los campos estén completos\n';
-        errorMessage += '• El email debe ser válido y único\n';
-        errorMessage += '• El teléfono debe ser válido\n';
-        errorMessage += '• La contraseña debe tener al menos 8 caracteres';
+        Alert.alert(
+          'Número ya registrado',
+          'Este número de teléfono ya está asociado a una cuenta. Intenta con otro número o inicia sesión.'
+        );
+        return;
       }
 
-      // Show user-friendly error
-      Alert.alert('Error de Registro', errorMessage);
+      // Email already registered
+      if (rawMessage.includes('email') && (rawMessage.includes('already') || rawMessage.includes('unique') || rawMessage.includes('duplicate'))) {
+        Alert.alert(
+          'Correo ya registrado',
+          'Este correo electrónico ya está asociado a una cuenta. Intenta con otro correo o inicia sesión.'
+        );
+        return;
+      }
+
+      // Validation errors
+      if (rawMessage.includes('Validation failed') && !rawMessage.includes('Errores de validación:')) {
+        Alert.alert(
+          'Datos inválidos',
+          '• Verifica que todos los campos estén completos\n• El correo debe ser válido y único\n• El teléfono debe ser válido\n• La contraseña debe tener al menos 8 caracteres'
+        );
+        return;
+      }
+
+      // Generic user-friendly fallback — never show raw technical errors
+      Alert.alert(
+        'No se pudo completar el registro',
+        'Ocurrió un problema al crear tu cuenta. Verifica tu conexión a internet e intenta de nuevo.'
+      );
     }
   };
 
@@ -472,6 +514,7 @@ export default function RegisterScreen() {
         {/* Form Container */}
         <View style={styles.formContainer}>
           {/* Role Selector */}
+          <Text style={styles.sectionTitle}>Selecciona tu rol</Text>
           <View style={styles.roleSelector}>
             <TouchableOpacity
               style={[styles.roleButton, role === 'passenger' && styles.roleButtonActive]}
@@ -496,6 +539,19 @@ export default function RegisterScreen() {
                 style={[styles.roleButtonText, role === 'driver' && styles.roleButtonTextActive]}
               >
                 Conductor
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.roleButton, role === 'owner' && styles.roleButtonActive]}
+              onPress={() => setRole('owner')}
+              disabled={isLoading}
+            >
+              <Ionicons name="storefront" size={20} color={role === 'owner' ? '#fff' : '#22c55e'} />
+              <Text
+                style={[styles.roleButtonText, role === 'owner' && styles.roleButtonTextActive]}
+              >
+                Propietario
               </Text>
             </TouchableOpacity>
           </View>
@@ -964,11 +1020,13 @@ const styles = StyleSheet.create({
   },
   roleSelector: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginBottom: 20,
   },
   roleButton: {
     flex: 1,
+    minWidth: '30%',
     height: 50,
     backgroundColor: '#fff',
     borderWidth: 2,

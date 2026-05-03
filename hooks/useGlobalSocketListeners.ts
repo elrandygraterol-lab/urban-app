@@ -5,10 +5,9 @@
  */
 
 import { useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'expo-router';
-import { Alert } from 'react-native';
 import { getSocket, connectSocket } from '@/services/socket';
 import { useSound } from './useSound';
+import { useNotificationManager } from '@/hooks/useNotificationManager';
 import type { User } from '@/store/authStore';
 
 interface UseGlobalSocketListenersProps {
@@ -20,14 +19,11 @@ export const useGlobalSocketListeners = ({
   user,
   isAuthenticated,
 }: UseGlobalSocketListenersProps) => {
-  const router = useRouter();
   const { playNotificationSound } = useSound();
+  const { showRideRequest, showToast } = useNotificationManager();
   
   // Ref to track if listeners are already registered
   const listenersRegisteredRef = useRef(false);
-  
-  // Ref to store active ride request alert (to prevent duplicates)
-  const activeRideRequestRef = useRef<string | null>(null);
 
   // Handler for ride:request_created event (GLOBAL - works on any screen)
   const handleRideRequest = useCallback(
@@ -57,57 +53,13 @@ export const useGlobalSocketListeners = ({
         return;
       }
 
-      // Prevent duplicate alerts for the same ride
-      if (activeRideRequestRef.current === data.id) {
-        console.log('[GLOBAL_SOCKET] ⚠️ Alert already showing for this ride, skipping duplicate');
-        return;
-      }
-
-      // Mark this ride as having an active alert
-      activeRideRequestRef.current = data.id;
-
       // Play notification sound
       playNotificationSound();
 
-      // Show native Alert with ride details
-      Alert.alert(
-        '🚗 Nueva Solicitud de Viaje',
-        `Pasajero: ${data.passengerName}\n\nRecogida: ${data.pickupAddress}\n\nDestino: ${data.destinationAddress}\n\nTarifa: Bs. ${data.estimatedFare.toFixed(2)}\nDistancia: ${data.distance.toFixed(1)} km`,
-        [
-          {
-            text: 'Rechazar',
-            style: 'cancel',
-            onPress: () => {
-              activeRideRequestRef.current = null;
-              console.log('[GLOBAL_SOCKET] Ride request rejected by driver');
-            },
-          },
-          {
-            text: 'Ver Detalles',
-            onPress: () => {
-              activeRideRequestRef.current = null;
-              // Navigate to driver home screen where they can accept
-              router.push('/(driver)');
-            },
-          },
-        ],
-        {
-          cancelable: false,
-          onDismiss: () => {
-            activeRideRequestRef.current = null;
-          },
-        }
-      );
-
-      // Auto-clear the active request after 30 seconds (when it expires)
-      setTimeout(() => {
-        if (activeRideRequestRef.current === data.id) {
-          activeRideRequestRef.current = null;
-          console.log('[GLOBAL_SOCKET] ⏰ Ride request expired, cleared active alert');
-        }
-      }, 30000);
+      // Show ride request modal via notification manager (deduplication handled by context)
+      showRideRequest(data);
     },
-    [user?.role, playNotificationSound, router]
+    [user?.role, playNotificationSound, showRideRequest]
   );
 
   // Handler for ride:payment_completed event
@@ -124,27 +76,10 @@ export const useGlobalSocketListeners = ({
       // Play notification sound
       playNotificationSound();
 
-      // Use native Alert for critical payment notification
-      // This ensures the driver ALWAYS sees it, regardless of screen
-      Alert.alert(
-        '¡Pago Recibido!',
-        `El pasajero completó el pago.\n\nTus ganancias: Bs. ${data.driverEarnings.toFixed(2)}\nComisión plataforma: Bs. ${data.platformCommission.toFixed(2)}\nTotal pagado: Bs. ${data.amount.toFixed(2)}`,
-        [
-          {
-            text: 'Ver Ganancias',
-            onPress: () => {
-              router.push('/(driver)/earnings');
-            },
-          },
-          {
-            text: 'OK',
-            style: 'default',
-          },
-        ],
-        { cancelable: false }
-      );
+      // Show toast notification for payment
+      showToast(`Pago recibido: Bs. ${data.driverEarnings.toFixed(2)}`, 'success', 5000);
     },
-    [playNotificationSound, router]
+    [playNotificationSound, showToast]
   );
 
   // Handler for ride:cancelled event
@@ -195,10 +130,10 @@ export const useGlobalSocketListeners = ({
         message += `\n\nCargo por cancelación: Bs. ${data.cancellationFee.toFixed(2)}`;
       }
 
-      // Use native Alert for cancellation notification
-      Alert.alert('Viaje Cancelado', message, [{ text: 'OK' }]);
+      // Show toast notification for cancellation
+      showToast(message, 'warning', 5000);
     },
-    [user]
+    [user, showToast]
   );
 
   // Register global socket listeners
@@ -354,8 +289,6 @@ export const useGlobalSocketListeners = ({
       
       // Reset flag on cleanup
       listenersRegisteredRef.current = false;
-      // Clear active ride request ref
-      activeRideRequestRef.current = null;
     };
   }, [isAuthenticated, user?.id, user?.role, handlePaymentCompleted, handleRideCancelled, handleRideRequest]);
 

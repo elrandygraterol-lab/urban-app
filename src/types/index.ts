@@ -1,5 +1,5 @@
 // User types
-export type UserRole = 'passenger' | 'driver' | 'admin';
+export type UserRole = 'passenger' | 'driver' | 'owner' | 'admin';
 export type VehicleType = 'taxi' | 'moto_taxi';
 
 export interface User {

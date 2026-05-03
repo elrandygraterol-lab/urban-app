@@ -1,14 +1,14 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 
-export type UserRole = 'passenger' | 'driver' | null;
+export type UserRole = 'passenger' | 'driver' | 'owner' | null;
 
 export interface User {
   id: string;
   email: string;
   name: string;
   phone: string;
-  role: 'passenger' | 'driver';
+  role: 'passenger' | 'driver' | 'owner';
   profilePhotoUrl?: string;
   driverId?: string;
 }
@@ -22,11 +22,11 @@ interface AuthState {
   // Actions
   setUser: (user: User | null) => void;
   setToken: (token: string | null) => Promise<void>;
-  login: (email: string, password: string, role?: 'passenger' | 'driver') => Promise<void>;
+  login: (email: string, password: string, role?: 'passenger' | 'driver' | 'owner') => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   loadStoredAuth: () => Promise<void>;
-  switchRole: (role: 'passenger' | 'driver') => void;
+  switchRole: (role: 'passenger' | 'driver' | 'owner') => void;
 }
 
 interface RegisterData {
@@ -34,7 +34,7 @@ interface RegisterData {
   password: string;
   name: string;
   phone: string;
-  role: 'passenger' | 'driver';
+  role: 'passenger' | 'driver' | 'owner';
   // Profile photo (optional for both roles)
   profilePhoto?: {
     uri: string;
@@ -184,8 +184,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   register: async data => {
     set({ isLoading: true });
     try {
-      const endpoint =
-        data.role === 'driver' ? '/api/auth/register/driver' : '/api/auth/register/passenger';
+      // Determine the endpoint based on role
+      let endpoint = '/api/auth/register/passenger';
+      if (data.role === 'driver') {
+        endpoint = '/api/auth/register/driver';
+      } else if (data.role === 'owner') {
+        endpoint = '/api/auth/register/owner';
+      }
 
       const url = `${process.env.EXPO_PUBLIC_API_URL}${endpoint}`;
       console.log('[REGISTER] Starting registration...');
@@ -202,7 +207,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       formData.append('phone', data.phone);
       formData.append('role', data.role);
 
-      // Add profile photo if provided (optional for both roles)
+      // Add profile photo if provided (optional for all roles)
       if (data.profilePhoto) {
         const photoFile = {
           uri: data.profilePhoto.uri,

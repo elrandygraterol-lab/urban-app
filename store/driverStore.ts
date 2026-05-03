@@ -1,16 +1,39 @@
 import { create } from 'zustand';
+import { Currency } from '@/utils/currency';
+
+interface Transaction {
+  id: string;
+  amount: number;
+  currency: Currency;
+  type: 'credit' | 'debit';
+  description: string;
+  date: string;
+  rideId?: string;
+}
 
 interface DriverState {
   isAvailable: boolean;
   isUpdatingAvailability: boolean;
+  // Wallet State
+  balanceVES: number;
+  balanceUSD: number;
+  transactions: Transaction[];
+  // Actions
   setIsAvailable: (isAvailable: boolean) => void;
   setIsUpdatingAvailability: (isUpdating: boolean) => void;
   toggleAvailability: () => Promise<void>;
+  // Wallet Actions
+  addEarning: (amount: number, currency: Currency, rideId?: string, description?: string) => void;
+  fetchWalletData: () => Promise<void>;
 }
 
 export const useDriverStore = create<DriverState>((set, get) => ({
   isAvailable: false,
   isUpdatingAvailability: false,
+  // Initial Wallet State
+  balanceVES: 0,
+  balanceUSD: 0,
+  transactions: [],
   
   setIsAvailable: (isAvailable: boolean) => {
     console.log('[DRIVER STORE] Setting availability:', isAvailable);
@@ -19,6 +42,38 @@ export const useDriverStore = create<DriverState>((set, get) => ({
   
   setIsUpdatingAvailability: (isUpdating: boolean) => {
     set({ isUpdatingAvailability: isUpdating });
+  },
+
+  addEarning: (amount: number, currency: Currency, rideId?: string, description?: string) => {
+    const { balanceVES, balanceUSD, transactions } = get();
+    
+    const newTransaction: Transaction = {
+      id: Math.random().toString(36).substr(2, 9),
+      amount,
+      currency,
+      type: 'credit',
+      description: description || `Viaje completado ${rideId ? `#${rideId.slice(-4)}` : ''}`,
+      date: new Date().toISOString(),
+      rideId,
+    };
+
+    if (currency === 'VES') {
+      set({ 
+        balanceVES: balanceVES + amount,
+        transactions: [newTransaction, ...transactions]
+      });
+    } else {
+      set({ 
+        balanceUSD: balanceUSD + amount,
+        transactions: [newTransaction, ...transactions]
+      });
+    }
+  },
+
+  fetchWalletData: async () => {
+    // In a real app, this would fetch from the API
+    // For now, we'll simulate it or just keep the local state
+    console.log('[DRIVER STORE] Fetching wallet data...');
   },
   
   toggleAvailability: async () => {

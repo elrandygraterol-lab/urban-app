@@ -30,6 +30,9 @@
       },
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "NODE_ENV": "staging"
       }
     },
     "production": {
@@ -38,6 +41,9 @@
       },
       "ios": {
         "buildConfiguration": "Release"
+      },
+      "env": {
+        "NODE_ENV": "production"
       }
     }
   },

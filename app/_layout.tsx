@@ -4,16 +4,21 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { InteractionManager } from 'react-native';
 import 'react-native-reanimated';
+import { CopilotProvider } from 'react-native-copilot';
 //React Native Best Practices expo-dev-client
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuthStore } from '@/store/authStore';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useGlobalSocketListeners } from '@/hooks/useGlobalSocketListeners';
+import { useBadgeSync } from '@/hooks/useBadgeSync';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { logInfo, logError } from '@/utils/errorLogger';
+import { NotificationProvider } from '@/context/NotificationContext';
+import { GlobalNotificationOverlay } from '@/components/GlobalNotificationOverlay';
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+function AppContent() {
+  useBadgeSync();
+
   const { user, isAuthenticated, loadStoredAuth } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
@@ -44,12 +49,18 @@ export default function RootLayout() {
       const isFirebaseError = errorMsg.includes('FirebaseApp');
       const isNetworkError = errorMsg.includes('Network request failed');
       const isTokenError = errorMsg.includes('device token') || errorMsg.includes('push token');
+      const isFcmUnavailable =
+        errorMsg.includes('SERVICE_NOT_AVAILABLE') ||
+        errorMsg.includes('SERVICE_UNAVAILABLE') ||
+        errorMsg.includes('java.io.IOException') ||
+        errorMsg.includes('ExecutionException') ||
+        errorMsg.includes('Fetching the token failed');
 
       // Solo loguear errores críticos, no errores esperados en desarrollo
-      if (!isFirebaseError && !isNetworkError && !isTokenError) {
+      if (!isFirebaseError && !isNetworkError && !isTokenError && !isFcmUnavailable) {
         logError('Notifications', notificationError);
       }
-      // En desarrollo, estos errores son esperados y no críticos
+      // SERVICE_NOT_AVAILABLE = FCM no disponible en emulador o Google Play Services ausente
     }
   }, [expoPushToken, notificationError]);
 
@@ -126,14 +137,29 @@ export default function RootLayout() {
   }, [isAuthenticated, user, segments, isNavigationReady]);
 
   return (
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(passenger)" />
+        <Stack.Screen name="(driver)" />
+      </Stack>
+      <GlobalNotificationOverlay />
+      <StatusBar style="auto" />
+    </>
+  );
+}
+
+export default function RootLayout() {
+  const colorScheme = useColorScheme();
+
+  return (
     <ErrorBoundary>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(passenger)" />
-          <Stack.Screen name="(driver)" />
-        </Stack>
-        <StatusBar style="auto" />
+        <NotificationProvider>
+          <CopilotProvider stopOnOutsideClick androidStatusBarVisible>
+            <AppContent />
+          </CopilotProvider>
+        </NotificationProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

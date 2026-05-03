@@ -13,6 +13,10 @@ export type NotificationType =
   | 'driver_arrived'
   | 'ride_started'
   | 'ride_completed'
+  | 'store_approved'
+  | 'store_rejected'
+  | 'new_review'
+  | 'review_reply'
   | 'info'
   | 'success'
   | 'warning'
@@ -33,6 +37,7 @@ export interface Notification {
 interface NotificationStore {
   notifications: Notification[];
   currentNotification: Notification | null;
+  unreadCount: number;
 
   // Actions
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void;
@@ -41,11 +46,15 @@ interface NotificationStore {
   markAsRead: (id: string) => void;
   clearNotification: (id: string) => void;
   clearAllNotifications: () => void;
+  setUnreadCount: (count: number) => void;
+  incrementUnreadCount: () => void;
+  decrementUnreadCount: () => void;
 }
 
 export const useNotificationStore = create<NotificationStore>((set, get) => ({
   notifications: [],
   currentNotification: null,
+  unreadCount: 0,
 
   addNotification: notification => {
     const newNotification: Notification = {
@@ -58,6 +67,7 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
     set(state => ({
       notifications: [newNotification, ...state.notifications],
       currentNotification: newNotification, // Show immediately
+      unreadCount: state.unreadCount + 1,
     }));
 
     // Auto-dismiss after 5 seconds if no action
@@ -92,5 +102,17 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
 
   clearAllNotifications: () => {
     set({ notifications: [], currentNotification: null });
+  },
+
+  setUnreadCount: count => {
+    set({ unreadCount: Math.max(0, count) });
+  },
+
+  incrementUnreadCount: () => {
+    set(state => ({ unreadCount: state.unreadCount + 1 }));
+  },
+
+  decrementUnreadCount: () => {
+    set(state => ({ unreadCount: Math.max(0, state.unreadCount - 1) }));
   },
 }));
