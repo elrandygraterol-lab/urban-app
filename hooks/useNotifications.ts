@@ -405,6 +405,12 @@ export const useNotifications = () => {
           router.push('/(passenger)/index' as any);
           break;
 
+        case 'shared_ride_invitation':
+          // Navigate to passenger home screen where invitation modal will be shown
+          console.log('[NOTIFICATIONS] Navigating to passenger home screen for shared ride invitation');
+          router.push('/(passenger)/index' as any);
+          break;
+
         // Legacy notification types - preserve existing behavior
         case 'driver_arrived':
         case 'ride_started':

@@ -36,6 +36,7 @@ interface Ride {
   passengerName: string;
   passengerPhone: string;
   passengerProfilePicture?: string;
+  isDelegated?: boolean;
   pickupAddress: string;
   destinationAddress: string;
   pickupLocation: { latitude: number; longitude: number };
@@ -44,6 +45,17 @@ interface Ride {
   actualDistance?: number;
   actualDuration?: number;
   currency?: Currency;
+  routePoints?: RoutePoint[];
+}
+
+interface RoutePoint {
+  id: string;
+  sequence: number;
+  pointType: 'pickup' | 'destination';
+  latitude: number;
+  longitude: number;
+  address: string;
+  completedAt: string | null;
 }
 
 interface RouteCoordinate {
@@ -84,6 +96,10 @@ export default function ActiveRideScreen() {
   const [isPaymentConfirmed, setIsPaymentConfirmed] = useState(false);
   // Track passenger's current payment method (updated via WebSocket, Req. 3.4)
   const [passengerPaymentMode, setPassengerPaymentMode] = useState<'cash' | 'pago_movil' | 'dual'>('cash');
+
+  // Route points state (Req. 6.8)
+  const [routePoints, setRoutePoints] = useState<RoutePoint[]>([]);
+  const [isCompletingRoutePoint, setIsCompletingRoutePoint] = useState(false);
 
   // Rating modal states
   const [showRatingModal, setShowRatingModal] = useState(false);
@@ -202,6 +218,10 @@ export default function ActiveRideScreen() {
       // Backend returns { success: true, data: {...} }
       const rideData = response.data.data || response.data;
       setRide(rideData);
+      // Populate route points state if available
+      if (rideData.routePoints && rideData.routePoints.length > 0) {
+        setRoutePoints(rideData.routePoints);
+      }
     } catch (error) {
       console.error('Failed to load ride details:', error);
       // Don't show technical error to user, just log it
@@ -297,9 +317,16 @@ export default function ActiveRideScreen() {
         origin = location;
         destination = ride.pickupLocation;
       } else if (ride.status === 'in_progress') {
-        // Route from driver's current location to destination (navigation mode)
+        // If there are multiple route points, navigate to the current active one
+        const currentRoutePoints = routePoints.length > 0 ? routePoints : (ride.routePoints ?? []);
+        const activePoint = currentRoutePoints.find(rp => !rp.completedAt);
         origin = location;
-        destination = ride.destinationLocation;
+        if (activePoint) {
+          destination = { latitude: activePoint.latitude, longitude: activePoint.longitude };
+        } else {
+          // All route points completed or no route points — navigate to final destination
+          destination = ride.destinationLocation;
+        }
       } else {
         // No route needed for completed rides
         setLoadingRoute(false);
@@ -648,6 +675,65 @@ export default function ActiveRideScreen() {
       });
   };
 
+  // Complete the current active route point and advance to the next one (Req. 6.8)
+  const handleCompleteRoutePoint = async (sequence: number) => {
+    if (!ride || isCompletingRoutePoint) return;
+
+    setIsCompletingRoutePoint(true);
+    try {
+      const response = await api.patch(`/api/rides/${rideId}/route-points/${sequence}/complete`);
+      const data = response.data.data;
+
+      // Mark the point as completed in local state
+      setRoutePoints(prev =>
+        prev.map(rp =>
+          rp.sequence === sequence
+            ? { ...rp, completedAt: data.completedAt }
+            : rp
+        )
+      );
+
+      // If there's a next point, update the route destination
+      if (data.nextPoint) {
+        const nextPoint = data.nextPoint;
+        console.log('[ACTIVE_RIDE] ➡️ Advancing to next route point:', nextPoint);
+
+        // Trigger route recalculation to the next point
+        if (location) {
+          setLoadingRoute(true);
+          try {
+            const routeData = await mapsService.getRoute(location, {
+              latitude: nextPoint.latitude,
+              longitude: nextPoint.longitude,
+            });
+            if (routeData.coordinates && routeData.coordinates.length > 0) {
+              setRouteCoordinates(routeData.coordinates);
+              setRouteDistance(routeData.distance);
+              setRouteDuration(routeData.duration);
+              setRouteSteps(routeData.steps ?? []);
+              setNearestRouteIndex(0);
+              setNearestStepIndex(0);
+              announcedStepIndexRef.current = -1;
+            }
+          } catch (routeError) {
+            console.error('[ACTIVE_RIDE] Failed to fetch route to next point:', routeError);
+          } finally {
+            setLoadingRoute(false);
+          }
+        }
+      } else {
+        // All route points completed — no more intermediate stops
+        console.log('[ACTIVE_RIDE] ✅ All route points completed');
+      }
+    } catch (error: any) {
+      console.error('[ACTIVE_RIDE] Failed to complete route point:', error);
+      const message = error?.response?.data?.message || 'No se pudo confirmar la parada. Intenta de nuevo.';
+      Alert.alert('Error', message, [{ text: 'Aceptar' }]);
+    } finally {
+      setIsCompletingRoutePoint(false);
+    }
+  };
+
   const handleOpenExternalNav = () => {
     if (!ride) return;
 
@@ -894,8 +980,26 @@ export default function ActiveRideScreen() {
 
           {/* Destination location marker - Green with flag icon */}
           <Marker
-            coordinate={ride.destinationLocation}
-            title="Destino"
+            coordinate={
+              ride.status === 'in_progress' && routePoints.length > 1
+                ? (() => {
+                    const activePoint = routePoints.find(rp => !rp.completedAt);
+                    return activePoint
+                      ? { latitude: activePoint.latitude, longitude: activePoint.longitude }
+                      : ride.destinationLocation;
+                  })()
+                : ride.destinationLocation
+            }
+            title={
+              ride.status === 'in_progress' && routePoints.length > 1
+                ? (() => {
+                    const activePoint = routePoints.find(rp => !rp.completedAt);
+                    return activePoint
+                      ? (activePoint.pointType === 'pickup' ? 'Punto de Recogida' : 'Destino')
+                      : 'Destino';
+                  })()
+                : 'Destino'
+            }
             description={ride.destinationAddress}
             anchor={{ x: 0.5, y: 1 }}
           >
@@ -1271,7 +1375,17 @@ export default function ActiveRideScreen() {
                 >
                   {ride.status === 'accepted' || ride.status === 'arrived'
                     ? 'Navegando al Punto de Recogida'
-                    : 'Navegando al Destino'}
+                    : (() => {
+                        if (routePoints.length > 1) {
+                          const activePoint = routePoints.find(rp => !rp.completedAt);
+                          if (activePoint) {
+                            return activePoint.pointType === 'pickup'
+                              ? 'Navegando al Punto de Recogida'
+                              : 'Navegando al Destino';
+                          }
+                        }
+                        return 'Navegando al Destino';
+                      })()}
                 </Text>
                 {routeDistance != null && routeDuration != null && (
                   <Text style={{ fontSize: 14, color: colors.lightGray }}>
@@ -1290,6 +1404,35 @@ export default function ActiveRideScreen() {
                 marginBottom: 20,
               }}
             >
+              {/* Delegated Ride Badge (Req. 9.6) */}
+              {ride.isDelegated && (
+                <View
+                  style={{
+                    backgroundColor: '#EEF2FF',
+                    borderRadius: 8,
+                    padding: 10,
+                    marginBottom: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    borderWidth: 1,
+                    borderColor: '#C7D2FE',
+                  }}
+                >
+                  <Ionicons name="gift-outline" size={18} color="#6366F1" />
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: '600',
+                      color: '#6366F1',
+                      flex: 1,
+                    }}
+                  >
+                    Viaje Delegado - Contacta al beneficiario
+                  </Text>
+                </View>
+              )}
+
               <View
                 style={{
                   flexDirection: 'row',
@@ -1309,7 +1452,7 @@ export default function ActiveRideScreen() {
                     overflow: 'hidden',
                   }}
                 >
-                  {ride.passengerProfilePicture ? (
+                  {ride.passengerProfilePicture && !ride.isDelegated ? (
                     <Image
                       source={{ uri: ride.passengerProfilePicture }}
                       style={{ width: 56, height: 56 }}
@@ -1332,6 +1475,18 @@ export default function ActiveRideScreen() {
                   >
                     {ride.passengerName}
                   </Text>
+                  {ride.isDelegated && (
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: '#6366F1',
+                        fontWeight: '600',
+                        marginBottom: 4,
+                      }}
+                    >
+                      Beneficiario (no registrado)
+                    </Text>
+                  )}
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Ionicons name="call-outline" size={16} color={colors.lightGray} />
                     <Text style={{ fontSize: 14, color: colors.lightGray }}>
@@ -1358,10 +1513,180 @@ export default function ActiveRideScreen() {
               >
                 <Ionicons name="call" size={20} color="#fff" />
                 <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
-                  {ride.status === 'in_progress' ? 'Pasajero en el Vehículo' : 'Llamar al Pasajero'}
+                  {ride.status === 'in_progress' 
+                    ? (ride.isDelegated ? 'Beneficiario en el Vehículo' : 'Pasajero en el Vehículo')
+                    : (ride.isDelegated ? 'Llamar al Beneficiario' : 'Llamar al Pasajero')}
                 </Text>
               </TouchableOpacity>
             </View>
+
+            {/* Route Points Sequence — shown during in_progress when multiple stops exist (Req. 6.8) */}
+            {ride.status === 'in_progress' && routePoints.length > 1 && (() => {
+              const activePoint = routePoints.find(rp => !rp.completedAt) ?? null;
+              const completedCount = routePoints.filter(rp => rp.completedAt).length;
+              return (
+                <View
+                  style={{
+                    backgroundColor: '#fff',
+                    borderWidth: 1,
+                    borderColor: '#E5E7EB',
+                    borderRadius: 16,
+                    padding: 16,
+                    marginBottom: 20,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                    <Text style={{ fontSize: 15, fontWeight: 'bold', color: colors.darkGray }}>
+                      Puntos de Ruta
+                    </Text>
+                    <Text style={{ fontSize: 13, color: colors.lightGray }}>
+                      {completedCount}/{routePoints.length} completados
+                    </Text>
+                  </View>
+
+                  {routePoints.map((rp, index) => {
+                    const isCompleted = !!rp.completedAt;
+                    const isActive = !isCompleted && rp === activePoint;
+                    const isPending = !isCompleted && !isActive;
+
+                    return (
+                      <View key={rp.id} style={{ flexDirection: 'row', marginBottom: index < routePoints.length - 1 ? 12 : 0 }}>
+                        {/* Sequence indicator */}
+                        <View style={{ alignItems: 'center', marginRight: 12, width: 32 }}>
+                          <View
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 16,
+                              backgroundColor: isCompleted
+                                ? '#22c55e'
+                                : isActive
+                                  ? (rp.pointType === 'pickup' ? '#FF8C00' : colors.primary)
+                                  : '#E5E7EB',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                            }}
+                          >
+                            {isCompleted ? (
+                              <Ionicons name="checkmark" size={18} color="#fff" />
+                            ) : (
+                              <Ionicons
+                                name={rp.pointType === 'pickup' ? 'person' : 'flag'}
+                                size={16}
+                                color={isActive ? '#fff' : '#9CA3AF'}
+                              />
+                            )}
+                          </View>
+                          {/* Connector line */}
+                          {index < routePoints.length - 1 && (
+                            <View
+                              style={{
+                                width: 2,
+                                flex: 1,
+                                minHeight: 12,
+                                backgroundColor: isCompleted ? '#22c55e' : '#E5E7EB',
+                                marginTop: 4,
+                              }}
+                            />
+                          )}
+                        </View>
+
+                        {/* Point info */}
+                        <View style={{ flex: 1, paddingTop: 4 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                fontWeight: '600',
+                                color: isCompleted
+                                  ? '#22c55e'
+                                  : isActive
+                                    ? (rp.pointType === 'pickup' ? '#FF8C00' : colors.primary)
+                                    : '#9CA3AF',
+                                textTransform: 'uppercase',
+                                letterSpacing: 0.5,
+                              }}
+                            >
+                              {rp.pointType === 'pickup' ? 'Recogida' : 'Destino'} {rp.sequence + 1}
+                            </Text>
+                            {isActive && (
+                              <View
+                                style={{
+                                  backgroundColor: rp.pointType === 'pickup' ? '#FFF4E6' : '#EEF2FF',
+                                  paddingHorizontal: 6,
+                                  paddingVertical: 2,
+                                  borderRadius: 6,
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 10,
+                                    fontWeight: '700',
+                                    color: rp.pointType === 'pickup' ? '#FF8C00' : colors.primary,
+                                  }}
+                                >
+                                  ACTIVO
+                                </Text>
+                              </View>
+                            )}
+                            {isCompleted && (
+                              <Text style={{ fontSize: 11, color: '#22c55e' }}>✓ Completado</Text>
+                            )}
+                          </View>
+                          <Text
+                            style={{
+                              fontSize: 14,
+                              color: isCompleted ? '#9CA3AF' : colors.darkGray,
+                              lineHeight: 18,
+                              textDecorationLine: isCompleted ? 'line-through' : 'none',
+                            }}
+                            numberOfLines={2}
+                          >
+                            {rp.address}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+
+                  {/* Confirm current stop button */}
+                  {activePoint && (
+                    <TouchableOpacity
+                      onPress={() => handleCompleteRoutePoint(activePoint.sequence)}
+                      disabled={isCompletingRoutePoint}
+                      style={{
+                        backgroundColor: isCompletingRoutePoint
+                          ? '#D1D5DB'
+                          : activePoint.pointType === 'pickup'
+                            ? '#FF8C00'
+                            : colors.primary,
+                        paddingVertical: 12,
+                        borderRadius: 12,
+                        flexDirection: 'row',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        gap: 8,
+                        marginTop: 14,
+                        opacity: isCompletingRoutePoint ? 0.7 : 1,
+                      }}
+                    >
+                      {isCompletingRoutePoint ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                      )}
+                      <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>
+                        {isCompletingRoutePoint
+                          ? 'Confirmando...'
+                          : activePoint.pointType === 'pickup'
+                            ? 'Confirmar Recogida'
+                            : 'Confirmar Entrega'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })()}
 
             {/* Trip Details */}
             <View

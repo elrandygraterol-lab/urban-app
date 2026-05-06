@@ -32,6 +32,7 @@ import {
   PickupIcon,
   DropoffIcon,
   SecondPickupIcon,
+  SecondDropoffIcon,
 } from '@/src/components/map/markers';
 import { computeBearing } from '@/src/utils/mapNav';
 import { useAuthStore } from '@/store/authStore';
@@ -40,6 +41,7 @@ import mapsService from '@/services/mapsService';
 import {
   connectSocket,
   disconnectSocket,
+  getSocket,
   joinRide,
   leaveRide,
   onRideAccepted,
@@ -49,6 +51,11 @@ import {
   onDriverArrived,
   onRideCancelled,
   onRideCompleted,
+  onSharedRideInvitationReceived,
+  onSharedRideInvitationAccepted,
+  onSharedRideInvitationRejected,
+  onSharedRideInvitationExpired,
+  onPassengerLocationUpdate,
   removeAllListeners,
 } from '@/services/socket';
 import { logInfo, logError, logWarning } from '@/utils/errorLogger';
@@ -62,6 +69,9 @@ import { useTourState } from '@/hooks/useTourState';
 import { useCopilot, walkthroughable, CopilotStep } from 'react-native-copilot';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
 import CenterLocationButton from '@/components/CenterLocationButton';
+import SharedRideInvitationModal, {
+  SharedRideInvitation,
+} from '@/components/SharedRideInvitationModal';
 
 const WalkthroughView = walkthroughable(View);
 const WalkthroughTouchableOpacity = walkthroughable(TouchableOpacity);
@@ -125,6 +135,8 @@ interface ActiveRide {
   id: string;
   status: 'pending' | 'accepted' | 'arrived' | 'in_progress' | 'completed' | 'cancelled';
   paymentMode?: 'cash' | 'pago_movil' | 'dual';
+  isShared?: boolean;
+  sharedPassengerId?: string;
   driver?: DriverInfo;
   eta?: {
     estimatedMinutes: number;
@@ -164,8 +176,24 @@ export default function PassengerHomeScreen() {
   const [pickupLocationSource, setPickupLocationSource] = useState<'custom' | 'nominatim' | null>(null);
   const [destinationLocationSource, setDestinationLocationSource] = useState<'custom' | 'nominatim' | null>(null);
 
+  // Second pickup point states (Req. 6.1, 6.3)
+  const [showSecondPickup, setShowSecondPickup] = useState(false);
+  const [secondPickupLocation, setSecondPickupLocation] = useState<LocationCoords | null>(null);
+  const [secondPickupAddress, setSecondPickupAddress] = useState('');
+  const [secondPickupFullAddress, setSecondPickupFullAddress] = useState('');
+  const [secondPickupLocationSource, setSecondPickupLocationSource] = useState<'custom' | 'nominatim' | null>(null);
+  const [isEditingSecondPickup, setIsEditingSecondPickup] = useState(false);
+
+  // Second destination point states (Req. 6.2, 6.4, 6.6)
+  const [showSecondDestination, setShowSecondDestination] = useState(false);
+  const [secondDestinationLocation, setSecondDestinationLocation] = useState<LocationCoords | null>(null);
+  const [secondDestinationAddress, setSecondDestinationAddress] = useState('');
+  const [secondDestinationFullAddress, setSecondDestinationFullAddress] = useState('');
+  const [secondDestinationLocationSource, setSecondDestinationLocationSource] = useState<'custom' | 'nominatim' | null>(null);
+  const [isEditingSecondDestination, setIsEditingSecondDestination] = useState(false);
+
   // Map selection mode states
-  const [mapSelectionMode, setMapSelectionMode] = useState<'none' | 'pickup' | 'destination'>(
+  const [mapSelectionMode, setMapSelectionMode] = useState<'none' | 'pickup' | 'destination' | 'second_pickup' | 'second_destination'>(
     'none'
   );
   const [tempMarkerLocation, setTempMarkerLocation] = useState<LocationCoords | null>(null);
@@ -210,6 +238,10 @@ export default function PassengerHomeScreen() {
   const [driverHeading, setDriverHeading] = useState<number>(0); // Driver's heading/direction
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const prevDriverLocationRef = useRef<LocationCoords | null>(null);
+
+  // Shared ride passenger location tracking (Req. 4.10)
+  const [passenger1Location, setPassenger1Location] = useState<LocationCoords | null>(null);
+  const [passenger2Location, setPassenger2Location] = useState<LocationCoords | null>(null);
 
   // Cancellation modal states
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -267,8 +299,31 @@ export default function PassengerHomeScreen() {
   // Contact modal states
   const [showContactModal, setShowContactModal] = useState(false);
 
+  // Shared ride invitation states (Req. 7.3, 7.4)
+  const [showInvitationModal, setShowInvitationModal] = useState(false);
+  const [currentInvitation, setCurrentInvitation] = useState<SharedRideInvitation | null>(null);
+
   // Notification tracking - to avoid showing "driver nearby" notification multiple times
   const [hasShownNearbyNotification, setHasShownNearbyNotification] = useState(false);
+
+  // ========== MEJORAS DE NAVEGACIÓN ==========
+  // Mejora 1: Actualización dinámica de ruta
+  const [isDynamicRouteEnabled, setIsDynamicRouteEnabled] = useState(true);
+  const [lastRouteUpdate, setLastRouteUpdate] = useState<number>(Date.now());
+  const [totalRouteDistance, setTotalRouteDistance] = useState<number>(0);
+  
+  // Mejora 2: Indicador de progreso visual
+  const [rideProgress, setRideProgress] = useState<number>(0); // 0-100%
+  const [initialDistanceToDestination, setInitialDistanceToDestination] = useState<number>(0);
+  
+  // Mejora 3: Puntos de interés en la ruta
+  const [nearbyLandmarks, setNearbyLandmarks] = useState<Array<{
+    id: string;
+    name: string;
+    latitude: number;
+    longitude: number;
+    type: 'landmark' | 'poi';
+  }>>([]);
 
   // Request location permissions and get current location
   useEffect(() => {
@@ -630,21 +685,63 @@ export default function PassengerHomeScreen() {
     const handleDriverLocationUpdate = (data: any) => {
       console.log('📍 Driver location update:', data);
 
-      setDriverLocation({
+      const newDriverLocation = {
         latitude: data.latitude,
         longitude: data.longitude,
-      });
+      };
+
+      setDriverLocation(newDriverLocation);
+      
       if (data.heading !== undefined && data.heading !== null) {
         setDriverHeading(data.heading);
       } else {
         const prev = prevDriverLocationRef.current;
-        const curr: LocationCoords = { latitude: data.latitude, longitude: data.longitude };
+        const curr: LocationCoords = newDriverLocation;
         if (prev && (prev.latitude !== curr.latitude || prev.longitude !== curr.longitude)) {
           const brng = computeBearing(prev, curr);
           setDriverHeading(brng);
         }
       }
-      prevDriverLocationRef.current = { latitude: data.latitude, longitude: data.longitude };
+      prevDriverLocationRef.current = newDriverLocation;
+
+      // ========== MEJORA 1: Actualización Dinámica de Ruta ==========
+      // Recalcular ruta si el conductor se desvía significativamente y el viaje está en progreso
+      if (
+        isDynamicRouteEnabled &&
+        activeRide?.status === 'in_progress' &&
+        destinationLocation &&
+        Date.now() - lastRouteUpdate > 30000 // Actualizar cada 30 segundos como máximo
+      ) {
+        updateDynamicRoute(newDriverLocation, destinationLocation);
+      }
+
+      // ========== MEJORA 2: Calcular Progreso del Viaje ==========
+      if (activeRide?.status === 'in_progress' && destinationLocation && initialDistanceToDestination > 0) {
+        calculateRideProgress(newDriverLocation, destinationLocation);
+      }
+    };
+
+    // Listen for passenger location updates in shared rides (Req. 4.10)
+    const handlePassengerLocationUpdate = (data: any) => {
+      console.log('📍 Passenger location update:', data);
+
+      // Only process if this is a shared ride
+      if (!activeRide?.isShared) {
+        return;
+      }
+
+      // Update the appropriate passenger location based on passengerNumber
+      if (data.passengerNumber === 1) {
+        setPassenger1Location({
+          latitude: data.latitude,
+          longitude: data.longitude,
+        });
+      } else if (data.passengerNumber === 2) {
+        setPassenger2Location({
+          latitude: data.latitude,
+          longitude: data.longitude,
+        });
+      }
     };
 
     // Listen for ETA updates
@@ -806,6 +903,7 @@ export default function PassengerHomeScreen() {
     onRideAccepted(handleRideAccepted);
     onRideStatusChanged(handleRideStatusChanged);
     onDriverLocationUpdate(handleDriverLocationUpdate);
+    onPassengerLocationUpdate(handlePassengerLocationUpdate);
     onETAUpdate(handleETAUpdate);
     onDriverArrived(handleDriverArrived);
     onRideCancelled(handleRideCancelled);
@@ -823,6 +921,218 @@ export default function PassengerHomeScreen() {
     };
   }, [activeRide?.id]); // Only re-run when ride ID changes (new ride created)
 
+  // Shared ride invitation listeners (Req. 7.3, 7.4)
+  // These run independently of active rides
+  useEffect(() => {
+    if (!isSocketConnected) {
+      return;
+    }
+
+    console.log('[PASSENGER] Registering shared ride invitation listeners...');
+
+    // Handle incoming invitation
+    const cleanupInvitationReceived = onSharedRideInvitationReceived((data) => {
+      console.log('[PASSENGER] Shared ride invitation received:', data);
+
+      // Play notification sound
+      playNotificationSound();
+
+      // Set invitation data and show modal
+      setCurrentInvitation({
+        id: data.invitationId,
+        inviterId: data.inviterId,
+        inviterName: data.inviterName,
+        inviterCode: data.inviterCode,
+        pickupPoints: data.pickupPoints,
+        destinationPoints: data.destinationPoints,
+        estimatedFare: data.estimatedFare,
+        currency: (data.currency as Currency) || 'VES',
+        expiresAt: data.expiresAt,
+      });
+      setShowInvitationModal(true);
+    });
+
+    // Handle invitation accepted (for the inviter)
+    const cleanupInvitationAccepted = onSharedRideInvitationAccepted((data) => {
+      console.log('[PASSENGER] Shared ride invitation accepted:', data);
+      // This would be handled by the inviter's screen
+      // For now, just log it
+    });
+
+    // Handle invitation rejected (for the inviter)
+    const cleanupInvitationRejected = onSharedRideInvitationRejected((data) => {
+      console.log('[PASSENGER] Shared ride invitation rejected:', data);
+      // This would be handled by the inviter's screen
+      // For now, just log it
+    });
+
+    // Handle invitation expired
+    const cleanupInvitationExpired = onSharedRideInvitationExpired((data) => {
+      console.log('[PASSENGER] Shared ride invitation expired:', data);
+      
+      // Close modal if it's still open for this invitation
+      if (currentInvitation?.id === data.invitationId) {
+        setShowInvitationModal(false);
+        setCurrentInvitation(null);
+        Alert.alert(
+          'Invitación Expirada',
+          'La invitación de viaje compartido ha expirado.',
+          [{ text: 'OK' }]
+        );
+      }
+    });
+
+    console.log('[PASSENGER] ✅ Shared ride invitation listeners registered');
+
+    return () => {
+      console.log('[PASSENGER] Cleaning up shared ride invitation listeners');
+      cleanupInvitationReceived();
+      cleanupInvitationAccepted();
+      cleanupInvitationRejected();
+      cleanupInvitationExpired();
+    };
+  }, [isSocketConnected, currentInvitation?.id, playNotificationSound]);
+
+  // Track and send passenger location during active shared ride (Req. 4.10)
+  useEffect(() => {
+    if (!activeRide?.isShared || !activeRide.id) {
+      return;
+    }
+
+    // Only track location during active ride states
+    if (!['accepted', 'arrived', 'in_progress'].includes(activeRide.status)) {
+      return;
+    }
+
+    let locationSubscription: Location.LocationSubscription | null = null;
+
+    const startLocationTracking = async () => {
+      try {
+        // Request location permissions
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.warn('[PASSENGER] Location permission not granted for tracking');
+          return;
+        }
+
+        // Start watching location
+        locationSubscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: 10000, // Update every 10 seconds
+            distanceInterval: 50, // Or when moved 50 meters
+          },
+          (location) => {
+            const { latitude, longitude } = location.coords;
+
+            // Send location update via socket
+            const socket = getSocket();
+            if (socket && socket.connected) {
+              socket.emit('passenger:location_update', {
+                rideId: activeRide.id,
+                latitude,
+                longitude,
+              });
+
+              console.log('[PASSENGER] Location update sent:', { latitude, longitude });
+            }
+          }
+        );
+
+        console.log('[PASSENGER] Started location tracking for shared ride');
+      } catch (error) {
+        console.error('[PASSENGER] Error starting location tracking:', error);
+      }
+    };
+
+    startLocationTracking();
+
+    // Cleanup
+    return () => {
+      if (locationSubscription) {
+        locationSubscription.remove();
+        console.log('[PASSENGER] Stopped location tracking');
+      }
+    };
+  }, [activeRide?.id, activeRide?.isShared, activeRide?.status]);
+
+  // ========== MEJORAS: Inicializar cuando el viaje comienza (in_progress) ==========
+  useEffect(() => {
+    if (!activeRide || !driverLocation || !destinationLocation) {
+      return;
+    }
+
+    // Cuando el viaje cambia a in_progress, inicializar distancia y buscar landmarks
+    if (activeRide.status === 'in_progress') {
+      console.log('[RIDE_IMPROVEMENTS] Ride started, initializing improvements...');
+
+      // Mejora 2: Calcular distancia inicial para el indicador de progreso
+      const R = 6371;
+      const dLat = toRad(destinationLocation.latitude - driverLocation.latitude);
+      const dLon = toRad(destinationLocation.longitude - driverLocation.longitude);
+      const lat1 = toRad(driverLocation.latitude);
+      const lat2 = toRad(destinationLocation.latitude);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const initialDistance = R * c;
+
+      setInitialDistanceToDestination(initialDistance);
+      setRideProgress(0); // Iniciar en 0%
+
+      console.log('[RIDE_IMPROVEMENTS] Initial distance to destination:', initialDistance.toFixed(2), 'km');
+
+      // Mejora 3: Buscar puntos de interés cercanos
+      fetchNearbyLandmarks(driverLocation);
+    }
+
+    // Resetear cuando el viaje termina
+    if (activeRide.status === 'completed' || activeRide.status === 'cancelled') {
+      setInitialDistanceToDestination(0);
+      setRideProgress(0);
+      setNearbyLandmarks([]);
+    }
+  }, [activeRide?.status, driverLocation, destinationLocation, fetchNearbyLandmarks]);
+
+  // Handlers for invitation modal
+  const handleInvitationAccept = useCallback(
+    (invitationId: string, pickupLocation: RoutePoint) => {
+      console.log('[PASSENGER] Invitation accepted:', invitationId, pickupLocation);
+      
+      // Close modal
+      setShowInvitationModal(false);
+      setCurrentInvitation(null);
+
+      // Show success message
+      Alert.alert(
+        'Invitación Aceptada',
+        'Has aceptado la invitación. El solicitante confirmará el viaje y se buscará un conductor.',
+        [{ text: 'OK' }]
+      );
+    },
+    []
+  );
+
+  const handleInvitationReject = useCallback((invitationId: string) => {
+    console.log('[PASSENGER] Invitation rejected:', invitationId);
+    
+    // Close modal
+    setShowInvitationModal(false);
+    setCurrentInvitation(null);
+
+    // Show confirmation message
+    Alert.alert('Invitación Rechazada', 'Has rechazado la invitación de viaje compartido.', [
+      { text: 'OK' },
+    ]);
+  }, []);
+
+  const handleInvitationClose = useCallback(() => {
+    console.log('[PASSENGER] Invitation modal closed');
+    setShowInvitationModal(false);
+    // Don't clear currentInvitation here - let it expire naturally or be handled by other events
+  }, []);
+
   const calculateRoute = useCallback(async () => {
     if (!pickupLocation || !destinationLocation) return;
 
@@ -830,32 +1140,61 @@ export default function PassengerHomeScreen() {
       logInfo('PassengerHomeScreen', 'Calculating route with OSRM...', {
         pickup: pickupLocation,
         destination: destinationLocation,
+        secondPickup: secondPickupLocation,
+        secondDestination: secondDestinationLocation,
       });
 
-      // Get route from OSRM via backend
-      const routeData = await mapsService.getRoute(pickupLocation, destinationLocation);
+      // Build ordered waypoints: Pickup_1 → Pickup_2 (if exists) → Destination_1 → Destination_2 (if exists)
+      const waypoints: LocationCoords[] = [pickupLocation];
+      if (secondPickupLocation) waypoints.push(secondPickupLocation);
+      waypoints.push(destinationLocation);
+      if (secondDestinationLocation) waypoints.push(secondDestinationLocation);
 
-      // Convert OSRM polyline format [longitude, latitude] to React Native Maps format {latitude, longitude}
-      const convertedRoute: RouteCoordinates[] = routeData.polyline.map(
-        (coord: [number, number]) => ({
+      let allRouteCoords: RouteCoordinates[] = [];
+
+      if (waypoints.length === 2) {
+        // Simple single-segment route
+        const routeData = await mapsService.getRoute(waypoints[0], waypoints[1]);
+        allRouteCoords = routeData.polyline.map((coord: [number, number]) => ({
           latitude: coord[1],
           longitude: coord[0],
-        })
-      );
+        }));
+      } else {
+        // Multi-segment route: fetch each consecutive segment and concatenate
+        for (let i = 0; i < waypoints.length - 1; i++) {
+          try {
+            const segmentData = await mapsService.getRoute(waypoints[i], waypoints[i + 1]);
+            const segmentCoords: RouteCoordinates[] = segmentData.polyline.map(
+              (coord: [number, number]) => ({
+                latitude: coord[1],
+                longitude: coord[0],
+              })
+            );
+            // Avoid duplicate junction point between segments
+            if (allRouteCoords.length > 0 && segmentCoords.length > 0) {
+              allRouteCoords = [...allRouteCoords, ...segmentCoords.slice(1)];
+            } else {
+              allRouteCoords = [...allRouteCoords, ...segmentCoords];
+            }
+          } catch {
+            // Fallback: straight line for this segment
+            allRouteCoords = [...allRouteCoords, waypoints[i], waypoints[i + 1]];
+          }
+        }
+      }
 
-      setRouteCoordinates(convertedRoute);
+      setRouteCoordinates(allRouteCoords);
 
       logInfo('PassengerHomeScreen', 'Route calculated successfully', {
-        pointsCount: convertedRoute.length,
-        distance: routeData.distance,
-        duration: routeData.duration,
+        pointsCount: allRouteCoords.length,
+        segments: waypoints.length - 1,
       });
 
       setIsApproximateRoute(false);
 
-      // Fit map to show the route
-      if (mapRef.current && convertedRoute.length > 0) {
-        mapRef.current.fitToCoordinates(convertedRoute, {
+      // Fit map to show the full route including all waypoints
+      if (mapRef.current && allRouteCoords.length > 0) {
+        mapRef.current.fitToCoordinates(allRouteCoords, {
           edgePadding: { top: 100, right: 50, bottom: 300, left: 50 },
           animated: true,
         });
@@ -876,7 +1215,126 @@ export default function PassengerHomeScreen() {
         });
       }
     }
-  }, [pickupLocation, destinationLocation]);
+  }, [pickupLocation, destinationLocation, secondPickupLocation, secondDestinationLocation]);
+
+  // ========== MEJORA 1: Actualización Dinámica de Ruta ==========
+  const updateDynamicRoute = useCallback(async (
+    driverLoc: LocationCoords,
+    destination: LocationCoords
+  ) => {
+    try {
+      console.log('[DYNAMIC_ROUTE] Updating route from driver to destination');
+      
+      const routeData = await mapsService.getRoute(driverLoc, destination);
+      const newRouteCoords: RouteCoordinates[] = routeData.polyline.map((coord: [number, number]) => ({
+        latitude: coord[1],
+        longitude: coord[0],
+      }));
+
+      setRouteCoordinates(newRouteCoords);
+      setLastRouteUpdate(Date.now());
+      
+      console.log('[DYNAMIC_ROUTE] Route updated successfully', {
+        pointsCount: newRouteCoords.length,
+      });
+    } catch (error) {
+      console.error('[DYNAMIC_ROUTE] Failed to update route:', error);
+      // Keep existing route on error
+    }
+  }, []);
+
+  // ========== MEJORA 2: Calcular Progreso del Viaje ==========
+  const calculateRideProgress = useCallback((
+    driverLoc: LocationCoords,
+    destination: LocationCoords
+  ) => {
+    // Calcular distancia actual del conductor al destino usando Haversine
+    const R = 6371; // Radio de la Tierra en km
+    const dLat = toRad(destination.latitude - driverLoc.latitude);
+    const dLon = toRad(destination.longitude - driverLoc.longitude);
+    const lat1 = toRad(driverLoc.latitude);
+    const lat2 = toRad(destination.latitude);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const currentDistance = R * c;
+
+    // Calcular progreso: (distancia inicial - distancia actual) / distancia inicial * 100
+    if (initialDistanceToDestination > 0) {
+      const progress = Math.min(
+        100,
+        Math.max(0, ((initialDistanceToDestination - currentDistance) / initialDistanceToDestination) * 100)
+      );
+      setRideProgress(Math.round(progress));
+      
+      console.log('[RIDE_PROGRESS]', {
+        initial: initialDistanceToDestination.toFixed(2),
+        current: currentDistance.toFixed(2),
+        progress: `${progress.toFixed(1)}%`,
+      });
+    }
+  }, [initialDistanceToDestination]);
+
+  // ========== MEJORA 3: Buscar Puntos de Interés Cercanos ==========
+  const fetchNearbyLandmarks = useCallback(async (location: LocationCoords) => {
+    try {
+      console.log('[LANDMARKS] Fetching nearby landmarks...');
+      
+      // Landmarks conocidos de San Juan de los Morros (hardcoded por ahora)
+      const knownLandmarks = [
+        {
+          id: 'morros',
+          name: 'Los Morros',
+          latitude: 9.9111,
+          longitude: -67.3536,
+          type: 'landmark' as const,
+        },
+        {
+          id: 'plaza-bolivar',
+          name: 'Plaza Bolívar',
+          latitude: 9.9075,
+          longitude: -67.3542,
+          type: 'landmark' as const,
+        },
+        {
+          id: 'catedral',
+          name: 'Catedral de San Juan',
+          latitude: 9.9078,
+          longitude: -67.3540,
+          type: 'landmark' as const,
+        },
+        {
+          id: 'terminal',
+          name: 'Terminal de Pasajeros',
+          latitude: 9.9050,
+          longitude: -67.3600,
+          type: 'poi' as const,
+        },
+      ];
+
+      // Filtrar landmarks que estén dentro de 2km de la ubicación actual
+      const nearby = knownLandmarks.filter(landmark => {
+        const R = 6371;
+        const dLat = toRad(landmark.latitude - location.latitude);
+        const dLon = toRad(landmark.longitude - location.longitude);
+        const lat1 = toRad(location.latitude);
+        const lat2 = toRad(landmark.latitude);
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const distance = R * c;
+        
+        return distance <= 2; // Dentro de 2km
+      });
+
+      setNearbyLandmarks(nearby);
+      console.log('[LANDMARKS] Found', nearby.length, 'nearby landmarks');
+    } catch (error) {
+      console.error('[LANDMARKS] Failed to fetch landmarks:', error);
+    }
+  }, []);
 
   const calculateFareWithZone = useCallback(async () => {
     if (!pickupLocation || !destinationLocation) return;
@@ -988,7 +1446,7 @@ export default function PassengerHomeScreen() {
       calculateRoute();
       calculateFareWithZone();
     }
-  }, [pickupLocation, destinationLocation, calculateRoute, calculateFareWithZone]);
+  }, [pickupLocation, destinationLocation, secondPickupLocation, secondDestinationLocation, calculateRoute, calculateFareWithZone]);
 
   const toRad = (value: number) => (value * Math.PI) / 180;
 
@@ -1375,6 +1833,14 @@ export default function PassengerHomeScreen() {
             } else if (mapSelectionMode === 'destination') {
               setDestinationLocation(coordinate);
               setDestinationAddress(shortAddress);
+            } else if (mapSelectionMode === 'second_pickup') {
+              setSecondPickupLocation(coordinate);
+              setSecondPickupAddress(shortAddress);
+              setSecondPickupLocationSource('custom');
+            } else if (mapSelectionMode === 'second_destination') {
+              setSecondDestinationLocation(coordinate);
+              setSecondDestinationAddress(shortAddress);
+              setSecondDestinationLocationSource('custom');
             }
 
             // Reset selection mode
@@ -1411,6 +1877,14 @@ export default function PassengerHomeScreen() {
               } else if (mapSelectionMode === 'destination') {
                 setDestinationLocation(coordinate);
                 setDestinationAddress(shortAddress);
+              } else if (mapSelectionMode === 'second_pickup') {
+                setSecondPickupLocation(coordinate);
+                setSecondPickupAddress(shortAddress);
+                setSecondPickupLocationSource('custom');
+              } else if (mapSelectionMode === 'second_destination') {
+                setSecondDestinationLocation(coordinate);
+                setSecondDestinationAddress(shortAddress);
+                setSecondDestinationLocationSource('custom');
               }
 
               // Reset selection mode
@@ -1498,6 +1972,38 @@ export default function PassengerHomeScreen() {
     setIsRequestingRide(true);
 
     try {
+      // Build ordered pickupPoints array: Pickup_1 → Pickup_2 (if exists) — Req. 6.5, 6.7
+      const pickupPoints: { latitude: number; longitude: number; address: string }[] = [
+        {
+          latitude: pickupLocation.latitude,
+          longitude: pickupLocation.longitude,
+          address: pickupFullAddress || pickupAddress || 'Ubicación actual',
+        },
+      ];
+      if (showSecondPickup && secondPickupLocation) {
+        pickupPoints.push({
+          latitude: secondPickupLocation.latitude,
+          longitude: secondPickupLocation.longitude,
+          address: secondPickupFullAddress || secondPickupAddress || 'Segundo punto de recogida',
+        });
+      }
+
+      // Build ordered destinationPoints array: Destination_1 → Destination_2 (if exists) — Req. 6.5, 6.7
+      const destinationPoints: { latitude: number; longitude: number; address: string }[] = [
+        {
+          latitude: destinationLocation.latitude,
+          longitude: destinationLocation.longitude,
+          address: destinationFullAddress || destinationAddress,
+        },
+      ];
+      if (showSecondDestination && secondDestinationLocation) {
+        destinationPoints.push({
+          latitude: secondDestinationLocation.latitude,
+          longitude: secondDestinationLocation.longitude,
+          address: secondDestinationFullAddress || secondDestinationAddress || 'Segundo destino',
+        });
+      }
+
       // For now, use cash as default payment method
       const response = await rideAPI.requestRide({
         pickupLatitude: pickupLocation.latitude,
@@ -1508,6 +2014,8 @@ export default function PassengerHomeScreen() {
         destinationAddress: destinationFullAddress || destinationAddress, // Use full address for precision
         vehicleType: vehicleType,
         paymentMethodId: 'cash', // Default to cash
+        pickupPoints,      // Req. 6.5, 6.7
+        destinationPoints, // Req. 6.5, 6.7
       });
 
       // Set active ride with pending status
@@ -1982,6 +2490,18 @@ export default function PassengerHomeScreen() {
     setDestinationAddress('');
     setDestinationFullAddress(''); // Clear full address
     setDestinationLocationSource(null); // Clear custom place source
+    // Reset second pickup point
+    setShowSecondPickup(false);
+    setSecondPickupLocation(null);
+    setSecondPickupAddress('');
+    setSecondPickupFullAddress('');
+    setSecondPickupLocationSource(null);
+    // Reset second destination point
+    setShowSecondDestination(false);
+    setSecondDestinationLocation(null);
+    setSecondDestinationAddress('');
+    setSecondDestinationFullAddress('');
+    setSecondDestinationLocationSource(null);
     setEstimatedFare(null);
     setFareBreakdown(null);
     setRouteCoordinates([]);
@@ -2099,6 +2619,18 @@ export default function PassengerHomeScreen() {
               )
             )}
 
+            {/* Second Pickup Marker — differentiated with SecondPickupIcon (indigo) (Req. 6.3) */}
+            {secondPickupLocation && !activeRide && (
+              <Marker
+                coordinate={secondPickupLocation}
+                title="2do punto de recogida"
+                description={secondPickupFullAddress || secondPickupAddress}
+                anchor={{ x: 0.5, y: 0.5 }}
+              >
+                <SecondPickupIcon />
+              </Marker>
+            )}
+
             {/* Destination Marker */}
             {destinationLocation && (
               destinationLocationSource === 'custom' ? (
@@ -2118,6 +2650,18 @@ export default function PassengerHomeScreen() {
                   <DropoffIcon />
                 </Marker>
               )
+            )}
+
+            {/* Second Destination Marker — differentiated with SecondDropoffIcon (rose) (Req. 6.4) */}
+            {secondDestinationLocation && !activeRide && (
+              <Marker
+                coordinate={secondDestinationLocation}
+                title="2do punto de destino"
+                description={secondDestinationFullAddress || secondDestinationAddress}
+                anchor={{ x: 0.5, y: 0.5 }}
+              >
+                <SecondDropoffIcon />
+              </Marker>
             )}
 
             {/* Temporary Marker during map selection */}
@@ -2144,10 +2688,55 @@ export default function PassengerHomeScreen() {
               </Marker>
             )}
 
+            {/* Passenger 1 Marker - Show during active shared ride (Req. 4.10) */}
+            {passenger1Location && activeRide?.isShared && activeRide.status !== 'completed' && activeRide.status !== 'cancelled' && (
+              <Marker
+                coordinate={passenger1Location}
+                title="Pasajero 1"
+                anchor={{ x: 0.5, y: 0.5 }}
+              >
+                <PassengerIcon />
+              </Marker>
+            )}
+
+            {/* Passenger 2 Marker - Show during active shared ride (Req. 4.10) */}
+            {passenger2Location && activeRide?.isShared && activeRide.status !== 'completed' && activeRide.status !== 'cancelled' && (
+              <Marker
+                coordinate={passenger2Location}
+                title="Pasajero 2"
+                anchor={{ x: 0.5, y: 0.5 }}
+              >
+                <PassengerIcon />
+              </Marker>
+            )}
+
             {/* Route Polyline */}
             {routeCoordinates.length > 0 && (
               <Polyline coordinates={routeCoordinates} strokeColor="#22c55e" strokeWidth={3} />
             )}
+
+            {/* ========== MEJORA 3: Marcadores de Puntos de Interés ========== */}
+            {nearbyLandmarks.map((landmark) => (
+              <Marker
+                key={landmark.id}
+                coordinate={{
+                  latitude: landmark.latitude,
+                  longitude: landmark.longitude,
+                }}
+                title={landmark.name}
+                description={landmark.type === 'landmark' ? 'Punto de referencia' : 'Punto de interés'}
+                anchor={{ x: 0.5, y: 0.5 }}
+                opacity={0.7}
+              >
+                <View style={styles.landmarkMarker}>
+                  <Ionicons
+                    name={landmark.type === 'landmark' ? 'location' : 'business'}
+                    size={20}
+                    color="#8B5CF6"
+                  />
+                </View>
+              </Marker>
+            ))}
           </MapView>
         </ErrorBoundary>
 
@@ -2157,6 +2746,20 @@ export default function PassengerHomeScreen() {
           disabled={!currentLocation}
           style={[styles.centerLocationButton, { top: insets.top + 4 }]}
         />
+
+        {/* ========== MEJORA 2: Indicador de Progreso Visual ========== */}
+        {activeRide && activeRide.status === 'in_progress' && rideProgress > 0 && (
+          <View style={[styles.progressContainer, { top: insets.top + 60 }]}>
+            <View style={styles.progressHeader}>
+              <Ionicons name="navigate-circle" size={20} color="#22c55e" />
+              <Text style={styles.progressTitle}>Progreso del viaje</Text>
+            </View>
+            <View style={styles.progressBarContainer}>
+              <View style={[styles.progressBarFill, { width: `${rideProgress}%` }]} />
+            </View>
+            <Text style={styles.progressText}>{rideProgress}% completado</Text>
+          </View>
+        )}
 
         {/* Approximate Route Banner - intentionally hidden; straight-line fallback is transparent to the user */}
 
@@ -2171,7 +2774,7 @@ export default function PassengerHomeScreen() {
                 <Text style={styles.mapSelectionBannerTitle}>Modo de Selección Activo</Text>
                 <Text style={styles.mapSelectionBannerText}>
                   Mantén presionado en el mapa para marcar{' '}
-                  {mapSelectionMode === 'pickup' ? 'recogida' : 'destino'}
+                  {mapSelectionMode === 'pickup' ? 'recogida' : mapSelectionMode === 'second_pickup' ? '2do punto de recogida' : mapSelectionMode === 'second_destination' ? '2do punto de destino' : 'destino'}
                 </Text>
               </View>
             </View>
@@ -2556,6 +3159,90 @@ export default function PassengerHomeScreen() {
                       <View style={styles.routeConnectorLine} />
                     </View>
 
+                    {/* Second Pickup Row — shown when enabled (Req. 6.1, 6.3) */}
+                    {showSecondPickup && (
+                      <>
+                        <View style={styles.routeRow}>
+                          <View style={styles.secondPickupIconContainer}>
+                            <SecondPickupIcon size={14} />
+                          </View>
+                          <View style={styles.routeRowContent}>
+                            {isEditingSecondPickup ? (
+                              <AddressAutocomplete
+                                value={secondPickupAddress}
+                                onChangeText={setSecondPickupAddress}
+                                onSelectPlace={(place) => {
+                                  setSecondPickupLocation({ latitude: place.latitude, longitude: place.longitude });
+                                  setSecondPickupAddress(place.name);
+                                  setSecondPickupFullAddress(place.description || place.name);
+                                  setSecondPickupLocationSource(place.source ?? null);
+                                  setIsEditingSecondPickup(false);
+                                }}
+                                placeholder="2do punto de recogida"
+                                currentLocation={currentLocation ?? undefined}
+                                bare
+                                style={styles.routeAutocomplete}
+                                suggestionsStyle={styles.routeSuggestionsDropdown}
+                              />
+                            ) : (
+                              <TouchableOpacity
+                                style={styles.routeTextButton}
+                                onPress={() => setIsEditingSecondPickup(true)}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.routeLabel}>2do punto de recogida</Text>
+                                <Text style={styles.routeValue} numberOfLines={1}>
+                                  {secondPickupAddress || 'Seleccionar ubicación'}
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                          <View style={styles.routeActions}>
+                            <TouchableOpacity
+                              style={styles.routeActionBtn}
+                              onPress={isEditingSecondPickup
+                                ? async () => {
+                                    if (!secondPickupAddress.trim()) return;
+                                    try {
+                                      const loc = await mapsService.geocodeAddress(secondPickupAddress + ', San Juan de los Morros, Guárico, Venezuela');
+                                      if (loc) {
+                                        setSecondPickupLocation({ latitude: loc.latitude, longitude: loc.longitude });
+                                        setIsEditingSecondPickup(false);
+                                      }
+                                    } catch { /* ignore */ }
+                                  }
+                                : () => setIsEditingSecondPickup(true)}
+                            >
+                              <Ionicons name={isEditingSecondPickup ? 'search' : 'pencil'} size={15} color="#6366f1" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.routeActionBtn}
+                              onPress={() => handleEnableMapSelection('second_pickup')}
+                            >
+                              <Ionicons name="map-outline" size={15} color="#6366f1" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.routeActionBtn}
+                              onPress={() => {
+                                setShowSecondPickup(false);
+                                setSecondPickupLocation(null);
+                                setSecondPickupAddress('');
+                                setSecondPickupFullAddress('');
+                                setSecondPickupLocationSource(null);
+                              }}
+                            >
+                              <Ionicons name="close" size={15} color="#EF4444" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        {/* Divider */}
+                        <View style={styles.routeDivider}>
+                          <View style={styles.routeConnectorLine} />
+                        </View>
+                      </>
+                    )}
+
                     {/* Destination row */}
                     <CopilotStep
                       text="Ingresa aquí tu destino. Luego te mostraremos el precio estimado."
@@ -2597,7 +3284,115 @@ export default function PassengerHomeScreen() {
                         </View>
                       </WalkthroughView>
                     </CopilotStep>
+
+                    {/* Second Destination Row — shown when enabled (Req. 6.2, 6.4) */}
+                    {showSecondDestination && (
+                      <>
+                        {/* Divider */}
+                        <View style={styles.routeDivider}>
+                          <View style={styles.routeConnectorLine} />
+                        </View>
+
+                        <View style={styles.routeRow}>
+                          <View style={styles.secondDestinationIconContainer}>
+                            <SecondDropoffIcon size={14} />
+                          </View>
+                          <View style={styles.routeRowContent}>
+                            {isEditingSecondDestination ? (
+                              <AddressAutocomplete
+                                value={secondDestinationAddress}
+                                onChangeText={setSecondDestinationAddress}
+                                onSelectPlace={(place) => {
+                                  setSecondDestinationLocation({ latitude: place.latitude, longitude: place.longitude });
+                                  setSecondDestinationAddress(place.name);
+                                  setSecondDestinationFullAddress(place.description || place.name);
+                                  setSecondDestinationLocationSource(place.source ?? null);
+                                  setIsEditingSecondDestination(false);
+                                }}
+                                placeholder="2do punto de destino"
+                                currentLocation={currentLocation ?? undefined}
+                                bare
+                                style={styles.routeAutocomplete}
+                                suggestionsStyle={styles.routeSuggestionsDropdown}
+                              />
+                            ) : (
+                              <TouchableOpacity
+                                style={styles.routeTextButton}
+                                onPress={() => setIsEditingSecondDestination(true)}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.routeLabel}>2do punto de destino</Text>
+                                <Text style={styles.routeValue} numberOfLines={1}>
+                                  {secondDestinationAddress || 'Seleccionar ubicación'}
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                          <View style={styles.routeActions}>
+                            <TouchableOpacity
+                              style={styles.routeActionBtn}
+                              onPress={isEditingSecondDestination
+                                ? async () => {
+                                    if (!secondDestinationAddress.trim()) return;
+                                    try {
+                                      const loc = await mapsService.geocodeAddress(secondDestinationAddress + ', San Juan de los Morros, Guárico, Venezuela');
+                                      if (loc) {
+                                        setSecondDestinationLocation({ latitude: loc.latitude, longitude: loc.longitude });
+                                        setIsEditingSecondDestination(false);
+                                      }
+                                    } catch { /* ignore */ }
+                                  }
+                                : () => setIsEditingSecondDestination(true)}
+                            >
+                              <Ionicons name={isEditingSecondDestination ? 'search' : 'pencil'} size={15} color="#e11d48" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.routeActionBtn}
+                              onPress={() => handleEnableMapSelection('second_destination')}
+                            >
+                              <Ionicons name="map-outline" size={15} color="#e11d48" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.routeActionBtn}
+                              onPress={() => {
+                                setShowSecondDestination(false);
+                                setSecondDestinationLocation(null);
+                                setSecondDestinationAddress('');
+                                setSecondDestinationFullAddress('');
+                                setSecondDestinationLocationSource(null);
+                              }}
+                            >
+                              <Ionicons name="close" size={15} color="#EF4444" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </>
+                    )}
                   </View>
+
+                  {/* "+ Punto de Recogida" button — Req. 6.1 */}
+                  {!showSecondPickup && (
+                    <TouchableOpacity
+                      style={styles.addPickupButton}
+                      onPress={() => setShowSecondPickup(true)}
+                      activeOpacity={0.7}
+                    >
+                      <SecondPickupIcon size={14} />
+                      <Text style={styles.addPickupButtonText}>+ Punto de Recogida</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* "+ Punto de Destino" button — Req. 6.2 */}
+                  {!showSecondDestination && (
+                    <TouchableOpacity
+                      style={styles.addDestinationButton}
+                      onPress={() => setShowSecondDestination(true)}
+                      activeOpacity={0.7}
+                    >
+                      <SecondDropoffIcon size={14} />
+                      <Text style={styles.addDestinationButtonText}>+ Punto de Destino</Text>
+                    </TouchableOpacity>
+                  )}
 
                   {/* Fare Estimate */}
                   {isCalculatingFare && (
@@ -3234,6 +4029,15 @@ export default function PassengerHomeScreen() {
           rideId={activeRide?.id || ''}
           onPaymentComplete={handleChangePaymentComplete}
           onCancel={handleChangePaymentCancel}
+        />
+
+        {/* Shared Ride Invitation Modal (Req. 7.3, 7.4) */}
+        <SharedRideInvitationModal
+          visible={showInvitationModal}
+          invitation={currentInvitation}
+          onAccept={handleInvitationAccept}
+          onReject={handleInvitationReject}
+          onClose={handleInvitationClose}
         />
 
         {/* Contact Driver Modal */}
@@ -4894,5 +5698,114 @@ const styles = StyleSheet.create({
   centerLocationButton: {
     right: 16,
     left: undefined, // Anular la posición izquierda del componente base
+  },
+  // Second pickup point styles (Req. 6.1, 6.3)
+  addPickupButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#eef2ff', // indigo-50
+    borderWidth: 1.5,
+    borderColor: '#6366f1', // indigo-500
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    gap: 8,
+  },
+  addPickupButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6366f1',
+  },
+  secondPickupIconContainer: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Second destination point styles (Req. 6.2, 6.4)
+  addDestinationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#fff1f2', // rose-50
+    borderWidth: 1.5,
+    borderColor: '#e11d48', // rose-600
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    gap: 8,
+  },
+  addDestinationButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#e11d48',
+  },
+  secondDestinationIconContainer: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // ========== MEJORAS DE NAVEGACIÓN: Estilos ==========
+  // Mejora 2: Indicador de progreso visual
+  progressContainer: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  progressTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  progressBarContainer: {
+    height: 8,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#22c55e',
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  // Mejora 3: Marcadores de landmarks
+  landmarkMarker: {
+    width: 32,
+    height: 32,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#8B5CF6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
 });

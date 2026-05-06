@@ -693,6 +693,202 @@ export const onPaymentConfirmed = (
 };
 
 /**
+ * Listen for shared ride invitation received event
+ * @returns Cleanup function to remove the listener
+ */
+export const onSharedRideInvitationReceived = (
+  callback: (data: {
+    invitationId: string;
+    inviterId: string;
+    inviterName: string;
+    inviterCode?: string;
+    pickupPoints: Array<{ latitude: number; longitude: number; address: string }>;
+    destinationPoints: Array<{ latitude: number; longitude: number; address: string }>;
+    estimatedFare: number;
+    currency: string;
+    expiresAt: string;
+  }) => void
+): (() => void) => {
+  if (!socket) {
+    console.warn('Cannot listen for shared ride invitation: Socket not initialized');
+    return () => {};
+  }
+
+  // Remove any existing listeners for this event to prevent duplicates
+  socket.off('shared_ride:invitation_received');
+  socket.on('shared_ride:invitation_received', callback);
+
+  // Return cleanup function
+  return () => {
+    if (socket) {
+      socket.off('shared_ride:invitation_received', callback);
+    }
+  };
+};
+
+/**
+ * Listen for shared ride invitation accepted event
+ * @returns Cleanup function to remove the listener
+ */
+export const onSharedRideInvitationAccepted = (
+  callback: (data: {
+    invitationId: string;
+    inviteeId: string;
+    inviteeName: string;
+    inviteePickupLocation: { latitude: number; longitude: number; address: string };
+    updatedFare: number;
+    timestamp: string;
+  }) => void
+): (() => void) => {
+  if (!socket) {
+    console.warn('Cannot listen for shared ride invitation accepted: Socket not initialized');
+    return () => {};
+  }
+
+  // Remove any existing listeners for this event to prevent duplicates
+  socket.off('shared_ride:invitation_accepted');
+  socket.on('shared_ride:invitation_accepted', callback);
+
+  // Return cleanup function
+  return () => {
+    if (socket) {
+      socket.off('shared_ride:invitation_accepted', callback);
+    }
+  };
+};
+
+/**
+ * Listen for shared ride invitation rejected event
+ * @returns Cleanup function to remove the listener
+ */
+export const onSharedRideInvitationRejected = (
+  callback: (data: {
+    invitationId: string;
+    inviteeId: string;
+    inviteeName: string;
+    timestamp: string;
+  }) => void
+): (() => void) => {
+  if (!socket) {
+    console.warn('Cannot listen for shared ride invitation rejected: Socket not initialized');
+    return () => {};
+  }
+
+  // Remove any existing listeners for this event to prevent duplicates
+  socket.off('shared_ride:invitation_rejected');
+  socket.on('shared_ride:invitation_rejected', callback);
+
+  // Return cleanup function
+  return () => {
+    if (socket) {
+      socket.off('shared_ride:invitation_rejected', callback);
+    }
+  };
+};
+
+/**
+ * Listen for shared ride invitation expired event
+ * @returns Cleanup function to remove the listener
+ */
+export const onSharedRideInvitationExpired = (
+  callback: (data: {
+    invitationId: string;
+    timestamp: string;
+  }) => void
+): (() => void) => {
+  if (!socket) {
+    console.warn('Cannot listen for shared ride invitation expired: Socket not initialized');
+    return () => {};
+  }
+
+  // Remove any existing listeners for this event to prevent duplicates
+  socket.off('shared_ride:invitation_expired');
+  socket.on('shared_ride:invitation_expired', callback);
+
+  // Return cleanup function
+  return () => {
+    if (socket) {
+      socket.off('shared_ride:invitation_expired', callback);
+    }
+  };
+};
+
+/**
+ * Listen for passenger location updates in shared rides
+ * @returns Cleanup function to remove the listener
+ */
+export const onPassengerLocationUpdate = (
+  callback: (data: {
+    rideId: string;
+    passengerId: string;
+    passengerNumber: 1 | 2; // 1 for primary passenger, 2 for shared passenger
+    latitude: number;
+    longitude: number;
+    timestamp: string;
+  }) => void
+): (() => void) => {
+  if (!socket) {
+    console.warn('Cannot listen for passenger location updates: Socket not initialized');
+    return () => {};
+  }
+
+  // Remove any existing listeners for this event to prevent duplicates
+  socket.off('passenger:location_update');
+  socket.on('passenger:location_update', callback);
+
+  // Return cleanup function
+  return () => {
+    if (socket) {
+      socket.off('passenger:location_update', callback);
+    }
+  };
+};
+
+/**
+ * Listen for delegated ride tracking updates
+ * Notifies the requester (registered passenger who paid) about ride status and driver location
+ * @returns Cleanup function to remove the listener
+ */
+export const onDelegatedRideTrackingUpdate = (
+  callback: (data: {
+    rideId: string;
+    status: 'pending' | 'accepted' | 'arrived' | 'in_progress' | 'completed' | 'cancelled';
+    beneficiaryName: string;
+    beneficiaryPhone: string;
+    driver?: {
+      id: string;
+      name: string;
+      phone: string;
+      location?: {
+        latitude: number;
+        longitude: number;
+      };
+    };
+    eta?: {
+      estimatedMinutes: number;
+      distanceKm: number;
+    };
+    timestamp: string;
+  }) => void
+): (() => void) => {
+  if (!socket) {
+    console.warn('Cannot listen for delegated ride tracking updates: Socket not initialized');
+    return () => {};
+  }
+
+  // Remove any existing listeners for this event to prevent duplicates
+  socket.off('delegated_ride:tracking_update');
+  socket.on('delegated_ride:tracking_update', callback);
+
+  // Return cleanup function
+  return () => {
+    if (socket) {
+      socket.off('delegated_ride:tracking_update', callback);
+    }
+  };
+};
+
+/**
  * Remove all event listeners
  */
 export const removeAllListeners = (): void => {
@@ -708,6 +904,12 @@ export const removeAllListeners = (): void => {
   socket.off('ride:cancelled');
   socket.off('ride:completed');
   socket.off('driver:availability_changed');
+  socket.off('shared_ride:invitation_received');
+  socket.off('shared_ride:invitation_accepted');
+  socket.off('shared_ride:invitation_rejected');
+  socket.off('shared_ride:invitation_expired');
+  socket.off('passenger:location_update');
+  socket.off('delegated_ride:tracking_update');
 };
 
 /**
@@ -741,6 +943,12 @@ export default {
   onETAUpdate,
   onDriverArrived,
   onRideCancelled,
+  onSharedRideInvitationReceived,
+  onSharedRideInvitationAccepted,
+  onSharedRideInvitationRejected,
+  onSharedRideInvitationExpired,
+  onPassengerLocationUpdate,
+  onDelegatedRideTrackingUpdate,
   removeAllListeners,
   removeListener,
 };

@@ -100,3 +100,27 @@ export const DropoffIcon: React.FC<{ size?: number }> = ({ size = 20 }) => {
     </View>
   );
 };
+
+/** Second destination point marker — uses a distinct red/rose color to differentiate from the primary orange destination */
+export const SecondDropoffIcon: React.FC<{ size?: number }> = ({ size = 20 }) => {
+  return (
+    <View
+      style={{
+        backgroundColor: '#e11d48', // rose-600 — visually distinct from primary orange destination
+        padding: 8,
+        borderRadius: 20,
+        borderWidth: 3,
+        borderColor: '#fff',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 5,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Ionicons name="flag" size={size} color="#fff" />
+    </View>
+  );
+};

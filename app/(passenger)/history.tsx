@@ -197,6 +197,16 @@ export default function PassengerHistoryScreen() {
         </View>
       </View>
 
+      {/* Delegated ride label */}
+      {ride.isDelegated && ride.beneficiaryName && (
+        <View style={styles.delegatedBadge}>
+          <Ionicons name="gift-outline" size={14} color={Colors.orange} />
+          <Text style={styles.delegatedBadgeText}>
+            Viaje para {ride.beneficiaryName}
+          </Text>
+        </View>
+      )}
+
       <View style={styles.rideLocations}>
         <View style={styles.locationRow}>
           <View style={styles.locationDot} />
@@ -246,6 +256,26 @@ export default function PassengerHistoryScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Delegated ride info */}
+              {selectedRide.isDelegated && selectedRide.beneficiaryName && (
+                <View style={styles.detailSection}>
+                  <View style={styles.delegatedInfoBox}>
+                    <View style={styles.delegatedInfoHeader}>
+                      <Ionicons name="gift" size={20} color={Colors.orange} />
+                      <Text style={styles.delegatedInfoTitle}>Viaje Delegado</Text>
+                    </View>
+                    <Text style={styles.delegatedInfoText}>
+                      Este viaje fue solicitado para {selectedRide.beneficiaryName}
+                    </Text>
+                    {selectedRide.beneficiaryPhone && (
+                      <Text style={styles.delegatedInfoPhone}>
+                        Teléfono: {selectedRide.beneficiaryPhone}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              )}
+
               {/* Fecha y hora */}
               <View style={styles.detailSection}>
                 <Text style={styles.detailLabel}>Fecha y Hora</Text>
@@ -637,6 +667,23 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     marginTop: 2,
   },
+  delegatedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff7ed',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+  },
+  delegatedBadgeText: {
+    fontSize: 13,
+    color: Colors.orange,
+    marginLeft: 6,
+    fontWeight: '600',
+  },
   rideLocations: {
     marginBottom: Spacing.md,
   },
@@ -827,5 +874,33 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#6b7280',
+  },
+  delegatedInfoBox: {
+    backgroundColor: '#fff7ed',
+    padding: Spacing.md,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+  },
+  delegatedInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  delegatedInfoTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.orange,
+    marginLeft: 8,
+  },
+  delegatedInfoText: {
+    fontSize: 14,
+    color: '#92400e',
+    marginBottom: 4,
+  },
+  delegatedInfoPhone: {
+    fontSize: 13,
+    color: '#92400e',
+    fontWeight: '500',
   },
 });

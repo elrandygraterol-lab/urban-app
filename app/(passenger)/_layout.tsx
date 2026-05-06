@@ -43,6 +43,14 @@ export default function PassengerLayout() {
             tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
           }}
         />
+        {/* Hide delegated-ride-tracking from tab bar - it's accessed via navigation */}
+        <Tabs.Screen
+          name="delegated-ride-tracking"
+          options={{
+            href: null, // Hide from tab bar
+            title: 'Seguimiento de Viaje',
+          }}
+        />
       </Tabs>
 
       {/* Global Notification Modal */}
@@ -50,3 +58,4 @@ export default function PassengerLayout() {
     </View>
   );
 }
+

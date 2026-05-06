@@ -104,6 +104,13 @@ export const authAPI = {
   getMe: () => api.get('/api/auth/me'),
 };
 
+// Route point shape used in pickupPoints / destinationPoints arrays
+export interface RoutePoint {
+  latitude: number;
+  longitude: number;
+  address: string;
+}
+
 export const rideAPI = {
   requestRide: (data: {
     pickupLatitude: number;
@@ -114,6 +121,10 @@ export const rideAPI = {
     destinationAddress: string;
     vehicleType: 'taxi' | 'moto_taxi';
     paymentMethodId: string;
+    /** Ordered pickup points: primary first, optional second (Req. 6.5, 6.7) */
+    pickupPoints?: RoutePoint[];
+    /** Ordered destination points: primary first, optional second (Req. 6.5, 6.7) */
+    destinationPoints?: RoutePoint[];
   }) => api.post('/api/rides/request', data),
 
   acceptRide: (rideId: string) => api.post(`/api/rides/${rideId}/accept`),
@@ -221,6 +232,15 @@ export const rideAPI = {
     pagoMovilReference: string;
     pagoMovilAmount: number;
   }) => api.patch(`/api/rides/${rideId}/payment-method`, data),
+
+  /**
+   * Track a delegated ride in real-time (for the requester).
+   * Returns the current ride status, driver location, and beneficiary info.
+   * 
+   * Requirements: 9.10
+   * Task: 14.5.3
+   */
+  trackDelegatedRide: (rideId: string) => api.get(`/api/rides/delegate/${rideId}/track`),
 };
 
 export const paymentAPI = {
@@ -311,6 +331,107 @@ export const userAPI = {
     api.put('/api/users/me', data),
 
   deleteAccount: () => api.delete('/api/users/me'),
+};
+
+export const passengersAPI = {
+  /**
+   * Search for a passenger by phone number or user code.
+   * Returns only { id, name, code } — no sensitive data.
+   * Rate limited to 10 requests/minute per authenticated user.
+   *
+   * Requisitos: 7.1, 7.2
+   */
+  search: (query: string) =>
+    api.get<{ passengers: Array<{ id: string; name: string; code: string }> }>(
+      '/api/passengers/search',
+      { params: { q: query } }
+    ),
+};
+
+export const sharedRidesAPI = {
+  /**
+   * Send a shared-ride invitation to another passenger.
+   * Creates a SharedRideInvitation with a 60-second expiry.
+   *
+   * Requisitos: 4.6, 7.2
+   */
+  invite: (data: {
+    inviteeId: string;
+    pickupPoints: RoutePoint[];
+    destinationPoints: RoutePoint[];
+    estimatedFare: number;
+  }) =>
+    api.post<{ invitationId: string }>('/api/shared-rides/invite', data),
+
+  /**
+   * Accept a shared-ride invitation (second passenger).
+   * Requisitos: 4.7, 7.4
+   */
+  accept: (invitationId: string, data: {
+    inviteePickupLat: number;
+    inviteePickupLng: number;
+    inviteePickupAddr: string;
+  }) => api.post(`/api/shared-rides/${invitationId}/accept`, data),
+
+  /**
+   * Reject a shared-ride invitation (second passenger).
+   * Requisitos: 4.8
+   */
+  reject: (invitationId: string) =>
+    api.post(`/api/shared-rides/${invitationId}/reject`),
+
+  /**
+   * Confirm the shared ride after the invitee has accepted (first passenger).
+   * Requisitos: 4.7
+   */
+  confirm: (invitationId: string) =>
+    api.post(`/api/shared-rides/${invitationId}/confirm`),
+};
+
+export const delegatedRidesAPI = {
+  /**
+   * Create a delegated ride (Pedir Viaje Para Otro).
+   * The requester (registered passenger) pays for the ride, and the driver sees
+   * the beneficiary's contact info (not the requester's).
+   *
+   * Requisitos: 9.1, 9.2, 9.3, 9.4, 9.5, 9.11
+   */
+  create: (data: {
+    beneficiaryName: string;
+    beneficiaryPhone: string;
+    pickupPoint: RoutePoint;
+    destinationPoint: RoutePoint;
+    paymentConfig: {
+      mode: 'cash' | 'pago_movil' | 'dual';
+      cashAmount?: number;
+      pagoMovilAmount?: number;
+      pagoMovilReference?: string;
+    };
+  }) =>
+    api.post<{ rideId: string; message: string }>('/api/rides/delegate', data),
+
+  /**
+   * Track a delegated ride in real-time (for the requester).
+   * Returns the current ride status and driver location.
+   *
+   * Requisitos: 9.10
+   */
+  track: (rideId: string) =>
+    api.get<{
+      ride: {
+        id: string;
+        status: string;
+        beneficiaryName: string;
+        beneficiaryPhone: string;
+        pickupPoint: RoutePoint;
+        destinationPoint: RoutePoint;
+        estimatedFare: number;
+        driverLocation?: {
+          latitude: number;
+          longitude: number;
+        };
+      };
+    }>(`/api/rides/delegate/${rideId}/track`),
 };
 
 export const notificationAPI = {

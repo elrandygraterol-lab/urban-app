@@ -79,6 +79,10 @@ export interface Ride {
   startedAt?: string;
   completedAt?: string;
   cancelledAt?: string;
+  // Delegated ride fields
+  isDelegated?: boolean;
+  beneficiaryName?: string;
+  beneficiaryPhone?: string;
 }
 
 // Payment types
