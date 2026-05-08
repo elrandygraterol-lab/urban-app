@@ -1,0 +1,11 @@
+
+function toggleDriverFields() {
+    const role = document.getElementById('userRole').value;
+    const driverFields = document.getElementById('driverFields');
+    if (role === 'driver') {
+        driverFields.classList.remove('hidden');
+        const userId = document.getElementById('userId').value;
+        if (!userId) {
+            document.getElementById('vehicleType').required = true;
+            document.getElementById('licensePlate').required = true;
+            document.getElementById('vehicleModel')

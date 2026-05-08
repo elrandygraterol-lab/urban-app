@@ -1,0 +1,87 @@
+<script>
+let currentPage = 1;
+let totalPages = 1;
+let users = [];
+
+async function loadUsers() {
+    try {
+        const response = await fetch('/api/admin/users?limit=100', {
+            credentials: 'include'
+        });
+        if (!response.ok) {
+            if (response.status === 401) {
+                window.location.href = '/admin/login';
+                return;
+            }
+            throw new Error('Error al cargar usuarios');
+        }
+        const result = await response.json();
+        users = result.data?.users || [];
+        renderUsers();
+    } catch (error) {
+        console.error('Error:', error);
+        CustomModal.error('Error', 'No se pudieron cargar los usuarios');
+    }
+}
+
+function renderUsers() {
+    const tbody = document.getElementById('usersTableBody');
+    const loadingRow = document.getElementById('loadingRow');
+    if (loadingRow) loadingRow.remove();
+    if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-gray-500">No se encontraron usuarios</td></tr>';
+        return;
+    }
+    tbody.innerHTML = users.map(user => `
+        <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-6 py-4">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-semibold">
+                        ${user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                    </div>
+                    <div class="ml-3">
+                        <div class="text-sm font-medium text-gray-900">${user.name || 'Sin nombre'}</div>
+                    </div>
+                </div>
+            </td>
+            <td class="px-6 py-4 text-sm text-gray-600">${user.email}</td>
+            <td class="px-6 py-4 text-sm text-gray-600">${user.phone || 'N/A'}</td>
+            <td class="px-6 py-4">
+                <span class="px-3 py-1 text-xs font-semibold rounded-full ${getRoleBadgeClass(user.role)}">
+                    ${getRoleLabel(user.role)}
+                </span>
+            </td>
+            <td class="px-6 py-4">
+                <span class="px-3 py-1 text-xs font-semibold rounded-full ${user.status === 'suspended' ? 'bg-red-100 text-red-700' : user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}">
+                    ${user.status === 'suspended' ? 'Suspendido' : user.status === 'active' ? 'Activo' : user.status}
+                </span>
+            </td>
+            <td class="px-6 py-4 text-sm text-gray-600">${new Date(user.createdAt).toLocaleDateString('es-ES')}</td>
+            <td class="px-6 py-4">
+                <div class="flex justify-center space-x-2">
+                    ${user.role === 'driver' ? '<button onclick="viewDocuments(\'' + user.id + '\')" class="text-green-600 hover:text-green-800 transition-colors" title="Ver Documentos"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></button>' : ''}
+                    <button onclick="editUser('${user.id}')" class="text-blue-600 hover:text-blue-800 transition-colors" title="Editar"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>
+                    <button onclick="toggleSuspendUser('${user.id}', ${user.status === 'suspended'})" class="text-yellow-600 hover:text-yellow-800 transition-colors" title="${user.status === 'suspended' ? 'Reactivar' : 'Suspender'}"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></button>
+                    <button onclick="deleteUser('${user.id}')" class="text-red-600 hover:text-red-800 transition-colors" title="Eliminar"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+    updatePagination();
+}
+
+function getRoleBadgeClass(role) {
+    const classes = {'passenger': 'bg-blue-100 text-blue-700', 'driver': 'bg-purple-100 text-purple-700', 'admin': 'bg-orange-100 text-orange-700'};
+    return classes[role] || 'bg-gray-100 text-gray-700';
+}
+
+function getRoleLabel(role) {
+    const labels = {'passenger': 'Pasajero', 'driver': 'Conductor', 'admin': 'Admin'};
+    return labels[role] || role;
+}
+
+function updatePagination() {
+    document.getElementById('showingFrom').textContent = users.length > 0 ? 1 : 0;
+    document.getElementById('showingTo').textContent = users.length;
+    document.getElementById('totalUsers').textContent = users.length;
+}

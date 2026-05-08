@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Zone Creation</title>
+</head>
+<body>
+    <h1>Test Zone Creation</h1>
+    <button onclick="testZoneCreation()">Test Zone Creation</button>
+    <button onclick="testZoneDeletion()">Test Zone Deletion</button>
+    <div id="result"></div>
+
+    <script>
+        function showResult(message, isError = false) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `<p style="color: ${isError ? 'red' : 'green'}">${message}</p>`;
+        }
+
+        function testZoneCreation() {
+            const payload = {
+                name: 'Test Zone ' + Date.now(),
+                color: '#10b981',
+                priority: 1,
+                description: 'Test zone for debugging',
+                boundary: {
+                    type: "Polygon",
+                    coordinates: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]
+                },
+                fare: {
+                    baseFare: 5.0,
+                    perKmRate: 0,
+                    perHourRate: 0,
+                    currency: 'VES'
+                }
+            };
+
+            fetch('/api/admin/zones', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(function (r) { 
+                return r.text().then(function (text) {
+                    try {
+                        const data = text ? JSON.parse(text) : null;
+                        return { status: r.status, data: data };
+                    } catch (jsonError) {
+                        console.warn('Failed to parse JSON response:', text);
+                        return { 
+                            status: r.status, 
+                            data: { 
+                                message: r.status >= 400 ? 'Error del servidor: ' + r.statusText : 'Respuesta del servidor inválida' 
+                            } 
+                        };
+                    }
+                });
+            })
+            .then(function (result) {
+                if (result.status === 200 || result.status === 201) {
+                    showResult('✓ Zone created successfully: ' + JSON.stringify(result.data));
+                    window.testZoneId = result.data?.data?.id;
+                } else {
+                    const msg = (result.data && result.data.message) ? result.data.message : 'Error creating zone';
+                    showResult('✗ Error: ' + msg, true);
+                }
+            })
+            .catch(function (err) {
+                console.error('Error creating zone:', err);
+                showResult('✗ Connection error: ' + err.message, true);
+            });
+        }
+
+        function testZoneDeletion() {
+            if (!window.testZoneId) {
+                showResult('✗ No zone ID available. Create a zone first.', true);
+                return;
+            }
+
+            fetch('/api/admin/zones/' + window.testZoneId, { method: 'DELETE' })
+            .then(function (r) { 
+                // Handle empty responses (204 No Content)
+                if (r.status === 204) {
+                    return { status: r.status, data: null };
+                }
+                // For other responses, try to parse JSON
+                return r.text().then(function (text) {
+                    try {
+                        const data = text ? JSON.parse(text) : null;
+                        return { status: r.status, data: data };
+                    } catch (jsonError) {
+                        console.warn('Failed to parse JSON response:', text);
+                        return { status: r.status, data: { message: 'Respuesta del servidor inválida' } };
+                    }
+                });
+            })
+            .then(function (result) {
+                if (result.status === 200 || result.status === 204) {
+                    showResult('✓ Zone deleted successfully');
+                    window.testZoneId = null;
+                } else {
+                    const msg = (result.data && result.data.message) ? result.data.message : 'Error deleting zone';
+                    showResult('✗ Error: ' + msg, true);
+                }
+            })
+            .catch(function (err) {
+                console.error('Error deleting zone:', err);
+                showResult('✗ Connection error: ' + err.message, true);
+            });
+        }
+    </script>
+</body>
+</html>
