@@ -47,6 +47,7 @@ module.exports = ({ config }) => {
     plugins: [
       'expo-router',
       './plugins/withGoogleMapsApiKey',
+      'expo-web-browser',
       [
         'expo-splash-screen',
         {
@@ -95,7 +96,7 @@ module.exports = ({ config }) => {
     extra: {
       router: {},
       eas: {
-        projectId: '18144406-d79f-4baa-8918-1f31ecedd9a5',
+        projectId: 'a1e824c1-d15d-4353-82c8-df22f0cf6077',
       },
       // Store Management System Configuration
       storeImageMaxSizeMB: 5,
