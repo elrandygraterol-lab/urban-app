@@ -48,6 +48,7 @@ module.exports = ({ config }) => {
       'expo-router',
       './plugins/withGoogleMapsApiKey',
       'expo-web-browser',
+      'expo-asset',
       [
         'expo-splash-screen',
         {
