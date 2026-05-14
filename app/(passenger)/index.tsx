@@ -225,6 +225,21 @@ export default function PassengerHomeScreen() {
       type: 'percentage' | 'fixed';
       value: number;
     };
+    // Fare source info
+    fareType?: 'ZONA' | 'KILOMETRO' | 'HORA';
+    usedFallback?: boolean;
+    fallbackType?: 'zone_origin' | 'zone_destination' | 'policy_default';
+    originZoneName?: string;
+    destinationZoneName?: string;
+    // Multi-point breakdown
+    segmentBreakdown?: Array<{
+      segment: number;
+      from: string;
+      to: string;
+      price: number;
+      usedFallback: boolean;
+      fallbackType?: string;
+    }>;
   } | null>(null);
   const [isCalculatingFare, setIsCalculatingFare] = useState(false);
   const [zoneInfo, setZoneInfo] = useState<{ zoneId: string | null; zoneName: string | null; usedFallback: boolean } | null>(null);
@@ -1339,25 +1354,92 @@ export default function PassengerHomeScreen() {
   const calculateFareWithZone = useCallback(async () => {
     if (!pickupLocation || !destinationLocation) return;
 
-    // Calculate distance locally (Haversine) for the API call
+    // Check if we have multiple destinations
+    const hasMultipleDestinations = showSecondDestination && secondDestinationLocation;
+
+    // Calculate total distance locally (Haversine) for all segments
     const R = 6371;
-    const dLat = toRad(destinationLocation.latitude - pickupLocation.latitude);
-    const dLon = toRad(destinationLocation.longitude - pickupLocation.longitude);
-    const lat1 = toRad(pickupLocation.latitude);
-    const lat2 = toRad(destinationLocation.latitude);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c;
+    let totalDistance = 0;
+
+    const haversine = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lng2 - lng1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(toRad(lat1)) * Math.cos(toRad(lat2));
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    };
+
+    // Determine point sequence
+    const hasMultiplePickups = showSecondPickup && secondPickupLocation;
+    const points: Array<{ lat: number; lng: number }> = [{ lat: pickupLocation.latitude, lng: pickupLocation.longitude }];
+    if (hasMultiplePickups) {
+      points.push({ lat: secondPickupLocation.latitude, lng: secondPickupLocation.longitude });
+    }
+    points.push({ lat: destinationLocation.latitude, lng: destinationLocation.longitude });
+    if (hasMultipleDestinations && secondDestinationLocation) {
+      points.push({ lat: secondDestinationLocation.latitude, lng: secondDestinationLocation.longitude });
+    }
+
+    for (let i = 0; i < points.length - 1; i++) {
+      totalDistance += haversine(points[i].lat, points[i].lng, points[i + 1].lat, points[i + 1].lng);
+    }
 
     // Estimate duration (rough estimate: 3 min per km)
-    const estimatedDuration = distance * 3;
+    const estimatedDuration = totalDistance * 3;
 
     setIsCalculatingFare(true);
 
     try {
       const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+      
+      // Build request body
+      const hasMultiplePickups = showSecondPickup && secondPickupLocation;
+      const isMultiPoint = hasMultiplePickups || hasMultipleDestinations;
+
+      const requestBody: any = {
+        distanceKm: totalDistance,
+        durationHours: estimatedDuration / 60,
+      };
+
+      if (isMultiPoint) {
+        // Multi-point: send arrays of points
+        const pickupPoints = [
+          { latitude: pickupLocation.latitude, longitude: pickupLocation.longitude },
+        ];
+        if (hasMultiplePickups) {
+          pickupPoints.push({
+            latitude: secondPickupLocation.latitude,
+            longitude: secondPickupLocation.longitude,
+          });
+        }
+
+        const destPoints = [
+          { latitude: destinationLocation.latitude, longitude: destinationLocation.longitude },
+        ];
+        if (hasMultipleDestinations) {
+          destPoints.push({
+            latitude: secondDestinationLocation.latitude,
+            longitude: secondDestinationLocation.longitude,
+          });
+        }
+
+        requestBody.pickupPoints = pickupPoints;
+        requestBody.destinationPoints = destPoints;
+        console.log('[FARE_DEBUG] Sending multi-point request:', JSON.stringify({
+          pickupPoints,
+          destinationPoints: destPoints,
+          distanceKm: totalDistance,
+        }));
+      } else {
+        // Single point: use individual fields
+        requestBody.pickupLat = pickupLocation.latitude;
+        requestBody.pickupLng = pickupLocation.longitude;
+        requestBody.destinationLat = destinationLocation.latitude;
+        requestBody.destinationLng = destinationLocation.longitude;
+      }
+      
       // Use the full fare estimation engine (zone matrix + time surcharge)
       const response = await fetch(
         `${apiUrl}/api/fares/estimate`,
@@ -1367,14 +1449,7 @@ export default function PassengerHomeScreen() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            pickupLat: pickupLocation.latitude,
-            pickupLng: pickupLocation.longitude,
-            destinationLat: destinationLocation.latitude,
-            destinationLng: destinationLocation.longitude,
-            distanceKm: distance,
-            durationHours: estimatedDuration / 60,
-          }),
+          body: JSON.stringify(requestBody),
         }
       );
 
@@ -1386,6 +1461,20 @@ export default function PassengerHomeScreen() {
 
       if (result.success && result.data) {
         const data = result.data;
+        console.log('[FARE_DEBUG] Backend response:', JSON.stringify({
+          totalPrice: data.totalPrice,
+          currency: data.currency,
+          totalPriceUSD: data.totalPriceUSD,
+          fareType: data.fareType,
+          usedFallback: data.usedFallback,
+          fallbackType: data.fallbackType,
+          originZone: data.originZone,
+          destinationZone: data.destinationZone,
+          segmentBreakdown: data.segmentBreakdown?.map((s: any) => ({
+            from: s.from, to: s.to, price: s.price,
+            usedFallback: s.usedFallback, fallbackType: s.fallbackType
+          })),
+        }));
         setEstimatedFare(data.totalPrice);
         setFareCurrency(data.currency as Currency);
         setZoneInfo({
@@ -1417,15 +1506,42 @@ export default function PassengerHomeScreen() {
           // Exchange rate unavailable — show single currency only
         }
 
+        // Store segment breakdown if available (for multi-point)
+        const segmentBreakdown = data.segmentBreakdown || [];
+        if (segmentBreakdown.length > 0) {
+          console.log('[FareEstimate] Segments:', segmentBreakdown.map((s: any) => ({
+            from: s.from,
+            to: s.to,
+            price: s.price,
+            distanceKm: s.distanceKm,
+          })));
+        }
+
+        // Determinar la tarifa base correcta según el tipo
+        let baseFareValue = 0;
+        if (data.fareType === 'ZONA') {
+          baseFareValue = data.priceBreakdown?.fixedPrice ?? 0;
+        } else if (data.fareType === 'KILOMETRO' || data.fareType === 'HORA') {
+          baseFareValue = data.priceBreakdown?.baseRate ?? 0;
+        } else {
+          baseFareValue = data.priceBreakdown?.baseRate ?? data.priceBreakdown?.fixedPrice ?? 0;
+        }
+
         setFareBreakdown({
-          baseFare: data.priceBreakdown?.baseRate ?? data.priceBreakdown?.fixedPrice ?? 0,
+          baseFare: baseFareValue,
           distanceCost: 0,
           durationCost: 0,
-          distance: distance, // Guardar distancia en km
-          duration: estimatedDuration, // Guardar duración en minutos
+          distance: totalDistance,
+          duration: estimatedDuration,
           dualPrice,
           exchangeRate,
-          timeSurcharge: data.timeSurcharge, // Capturar información del recargo por horario
+          timeSurcharge: data.timeSurcharge,
+          fareType: data.fareType,
+          usedFallback: data.usedFallback,
+          fallbackType: data.fallbackType,
+          originZoneName: data.originZone?.name,
+          destinationZoneName: data.destinationZone?.name,
+          segmentBreakdown: segmentBreakdown.length > 0 ? segmentBreakdown : undefined,
         });
       } else {
         throw new Error('Invalid response from fare estimate API');
@@ -1438,7 +1554,7 @@ export default function PassengerHomeScreen() {
     } finally {
       setIsCalculatingFare(false);
     }
-  }, [pickupLocation, destinationLocation, vehicleType, token]);
+  }, [pickupLocation, destinationLocation, secondDestinationLocation, showSecondDestination, vehicleType, token]);
 
   // Calculate route and fare when destination changes
   useEffect(() => {
@@ -3370,29 +3486,30 @@ export default function PassengerHomeScreen() {
                     )}
                   </View>
 
-                  {/* "+ Punto de Recogida" button — Req. 6.1 */}
-                  {!showSecondPickup && (
-                    <TouchableOpacity
-                      style={styles.addPickupButton}
-                      onPress={() => setShowSecondPickup(true)}
-                      activeOpacity={0.7}
-                    >
-                      <SecondPickupIcon size={14} />
-                      <Text style={styles.addPickupButtonText}>+ Punto de Recogida</Text>
-                    </TouchableOpacity>
-                  )}
+                  {/* Buttons for adding extra points — unified horizontal list style */}
+                  <View style={styles.addPointsContainer}>
+                    {!showSecondPickup && (
+                      <TouchableOpacity
+                        style={styles.addPointButton}
+                        onPress={() => setShowSecondPickup(true)}
+                        activeOpacity={0.7}
+                      >
+                        <SecondPickupIcon size={14} color="#22c55e" />
+                        <Text style={styles.addPointButtonText}>+ Punto de Recogida</Text>
+                      </TouchableOpacity>
+                    )}
 
-                  {/* "+ Punto de Destino" button — Req. 6.2 */}
-                  {!showSecondDestination && (
-                    <TouchableOpacity
-                      style={styles.addDestinationButton}
-                      onPress={() => setShowSecondDestination(true)}
-                      activeOpacity={0.7}
-                    >
-                      <SecondDropoffIcon size={14} />
-                      <Text style={styles.addDestinationButtonText}>+ Punto de Destino</Text>
-                    </TouchableOpacity>
-                  )}
+                    {!showSecondDestination && (
+                      <TouchableOpacity
+                        style={styles.addPointButton}
+                        onPress={() => setShowSecondDestination(true)}
+                        activeOpacity={0.7}
+                      >
+                        <SecondDropoffIcon size={14} color="#22c55e" />
+                        <Text style={styles.addPointButtonText}>+ Punto de Destino</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
 
                   {/* Fare Estimate */}
                   {isCalculatingFare && (
@@ -3404,21 +3521,27 @@ export default function PassengerHomeScreen() {
 
                   {estimatedFare !== null && fareBreakdown && !isCalculatingFare && (
                     <View style={styles.fareContainer}>
-                      {/* Zone Badge - shows zone name when available, otherwise fare type */}
+                      {/* Zone Badge - shows fare source */}
                       <View style={styles.zoneBadge}>
                         <Ionicons 
-                          name={zoneInfo?.zoneName && zoneInfo.zoneName !== 'Desconocida' ? "location" : "pricetag"} 
+                          name={fareBreakdown.usedFallback ? "pricetag" : "grid"} 
                           size={14} 
                           color="#22c55e" 
                         />
                         <Text style={styles.zoneBadgeText}>
-                          {zoneInfo?.zoneName && zoneInfo.zoneName !== 'Desconocida' 
-                            ? zoneInfo.zoneName 
-                            : (fareBreakdown.timeSurcharge?.applied 
-                                ? 'Tarifa base + Recargo de horario'
-                                : 'Tarifa base'
-                              )
+                          {fareBreakdown.segmentBreakdown && fareBreakdown.segmentBreakdown.length > 1
+                            ? 'Tarifa multipunto'
+                            : fareBreakdown.fallbackType === 'zone_origin'
+                              ? (fareBreakdown.originZoneName || 'Tarifa de zona')
+                              : fareBreakdown.fallbackType === 'zone_destination'
+                                ? (fareBreakdown.destinationZoneName || 'Tarifa de zona')
+                                : fareBreakdown.fallbackType === 'policy_default'
+                                  ? 'Tarifa base'
+                                  : fareBreakdown.fareType === 'ZONA'
+                                    ? (fareBreakdown.originZoneName || 'Tarifa de zona')
+                                    : 'Tarifa estimada'
                           }
+                          {fareBreakdown.timeSurcharge?.applied ? ' + Recargo' : ''}
                         </Text>
                       </View>
                       
@@ -3463,14 +3586,65 @@ export default function PassengerHomeScreen() {
                         </Text>
                       </View>
 
-                      {/* Fare Breakdown — zone-based flat rate */}
+                      {/* Fare Breakdown */}
                       <View style={styles.fareBreakdown}>
-                        <View style={styles.fareBreakdownRow}>
-                          <Text style={styles.fareBreakdownLabel}>Tarifa de zona:</Text>
-                          <Text style={styles.fareBreakdownValue}>
-                            {formatCurrency(fareBreakdown.baseFare, fareCurrency)}
-                          </Text>
-                        </View>
+                        {/* Multi-point segment breakdown */}
+                            {fareBreakdown.segmentBreakdown && fareBreakdown.segmentBreakdown.length > 1 ? (
+                          <>
+                            {fareBreakdown.segmentBreakdown.map((seg, idx) => {
+                              let label: string;
+                              let showPrice = true;
+                              if (seg.fallbackType === 'destination_segment') {
+                                label = `${seg.from} → ${seg.to}`;
+                                showPrice = false;
+                              } else if (!seg.usedFallback) {
+                                label = `${seg.from} → ${seg.to}`;
+                              } else if (seg.fallbackType === 'zone_origin') {
+                                label = `${seg.from}`;
+                              } else if (seg.fallbackType === 'zone_destination') {
+                                label = `${seg.to}`;
+                              } else if (seg.fallbackType === 'policy_default') {
+                                label = `Tarifa base`;
+                              } else {
+                                label = `${seg.from} → ${seg.to}`;
+                              }
+                              return (
+                                <View key={idx} style={styles.fareBreakdownRow}>
+                                  <Text style={styles.fareBreakdownLabel}>
+                                    {label}:
+                                  </Text>
+                                  <Text style={styles.fareBreakdownValue}>
+                                    {showPrice ? formatCurrency(seg.price, 'VES') : 'Cubierto'}
+                                  </Text>
+                                </View>
+                              );
+                            })}
+                            <View style={[styles.fareBreakdownRow, { borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 6 }]}>
+                              <Text style={[styles.fareBreakdownLabel, { fontWeight: '700' }]}>Total:</Text>
+                              <Text style={[styles.fareBreakdownValue, { fontWeight: '700' }]}>
+                                {formatCurrency(estimatedFare, fareCurrency)}
+                              </Text>
+                            </View>
+                          </>
+                        ) : (
+                          /* Single destination fare source */
+                          <View style={styles.fareBreakdownRow}>
+                            <Text style={styles.fareBreakdownLabel}>
+                              {fareBreakdown.fallbackType === 'zone_origin'
+                                ? `${fareBreakdown.originZoneName || ''}:`
+                                : fareBreakdown.fallbackType === 'zone_destination'
+                                  ? `${fareBreakdown.destinationZoneName || ''}:`
+                                  : fareBreakdown.fallbackType === 'policy_default'
+                                    ? 'Tarifa base:'
+                                    : fareBreakdown.fareType === 'ZONA'
+                                      ? 'Tarifa de zona:'
+                                      : 'Tarifa:'}
+                            </Text>
+                            <Text style={styles.fareBreakdownValue}>
+                              {formatCurrency(fareBreakdown.baseFare, fareCurrency)}
+                            </Text>
+                          </View>
+                        )}
                         {/* Time Surcharge Breakdown */}
                         {fareBreakdown.timeSurcharge?.applied && (
                           <View style={styles.fareBreakdownRow}>
@@ -5699,24 +5873,32 @@ const styles = StyleSheet.create({
     right: 16,
     left: undefined, // Anular la posición izquierda del componente base
   },
-  // Second pickup point styles (Req. 6.1, 6.3)
-  addPickupButton: {
+  // Container for add point buttons — horizontal row layout
+  addPointsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  // Unified style for add point buttons — compact for single row
+  addPointButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: '#eef2ff', // indigo-50
+    backgroundColor: '#f0fdf4', // green-50
     borderWidth: 1.5,
-    borderColor: '#6366f1', // indigo-500
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    marginBottom: 12,
-    gap: 8,
+    borderColor: '#22c55e', // green-500 — matches system theme
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    gap: 6,
+    flexShrink: 1,
   },
-  addPickupButtonText: {
-    fontSize: 14,
+  addPointButtonText: {
+    fontSize: 12,
     fontWeight: '600',
-    color: '#6366f1',
+    color: '#16a34a', // green-600 — matches system theme
   },
   secondPickupIconContainer: {
     width: 36,
@@ -5724,25 +5906,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // Second destination point styles (Req. 6.2, 6.4)
-  addDestinationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: '#fff1f2', // rose-50
-    borderWidth: 1.5,
-    borderColor: '#e11d48', // rose-600
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    marginBottom: 12,
-    gap: 8,
-  },
-  addDestinationButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#e11d48',
-  },
+  // Keep second destination icon container for compatibility
   secondDestinationIconContainer: {
     width: 36,
     height: 36,

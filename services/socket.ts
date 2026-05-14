@@ -230,20 +230,30 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
       socket = null;
     }
 
-    // Create socket connection - Try websocket first, fallback to polling
+    // Detectar si estamos usando localtunnel (no soporta WebSocket)
+    const isLocaltunnel = SOCKET_URL.includes('.loca.lt');
+    const socketTransports: Array<'websocket' | 'polling'> = isLocaltunnel
+      ? ['polling'] // localtunnel → solo polling (no soporta WebSocket)
+      : ['websocket', 'polling']; // ngrok o red local → websocket con fallback a polling
+
+    if (isLocaltunnel) {
+      console.log('[SOCKET] localtunnel detected, forcing polling transport only');
+    }
+
+    // Create socket connection
     socket = io(SOCKET_URL, {
       auth: {
         token,
       },
-      transports: ['websocket', 'polling'], // ← Intentar websocket primero, luego polling
+      transports: socketTransports,
       reconnection: true,
       reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
-      reconnectionDelay: 2000, // ← Aumentado a 2 segundos
-      reconnectionDelayMax: 10000, // ← Aumentado a 10 segundos
-      timeout: 60000, // ← Aumentado a 60 segundos (1 minuto)
-      upgrade: true, // ← Permitir upgrade
-      forceNew: true, // ← Forzar nueva conexión
-      rememberUpgrade: true, // ← Recordar el upgrade exitoso
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 10000,
+      timeout: 60000,
+      upgrade: !isLocaltunnel,
+      forceNew: true,
+      rememberUpgrade: !isLocaltunnel,
     });
 
     // Connection event handlers

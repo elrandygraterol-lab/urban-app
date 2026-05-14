@@ -54,21 +54,24 @@ export const PickupIcon: React.FC<{ size?: number }> = ({ size = 52 }) => {
   );
 };
 
-/** Second pickup point marker — uses a distinct blue/purple color to differentiate from the primary pickup */
-export const SecondPickupIcon: React.FC<{ size?: number }> = ({ size = 20 }) => {
+/** Second pickup point marker — customizable color, defaults to system theme green */
+export const SecondPickupIcon: React.FC<{ size?: number; color?: string }> = ({ 
+  size = 20, 
+  color = '#22c55e' // green-500 — matches system theme
+}) => {
   return (
     <View
       style={{
-        backgroundColor: '#6366f1', // indigo-500 — visually distinct from primary green pickup
-        padding: 8,
-        borderRadius: 20,
-        borderWidth: 3,
+        backgroundColor: color,
+        padding: 6,
+        borderRadius: 16,
+        borderWidth: 2,
         borderColor: '#fff',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 5,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+        elevation: 3,
         alignItems: 'center',
         justifyContent: 'center',
       }}
@@ -101,21 +104,24 @@ export const DropoffIcon: React.FC<{ size?: number }> = ({ size = 20 }) => {
   );
 };
 
-/** Second destination point marker — uses a distinct red/rose color to differentiate from the primary orange destination */
-export const SecondDropoffIcon: React.FC<{ size?: number }> = ({ size = 20 }) => {
+/** Second destination point marker — customizable color, defaults to system theme green */
+export const SecondDropoffIcon: React.FC<{ size?: number; color?: string }> = ({ 
+  size = 20, 
+  color = '#22c55e' // green-500 — matches system theme
+}) => {
   return (
     <View
       style={{
-        backgroundColor: '#e11d48', // rose-600 — visually distinct from primary orange destination
-        padding: 8,
-        borderRadius: 20,
-        borderWidth: 3,
+        backgroundColor: color,
+        padding: 6,
+        borderRadius: 16,
+        borderWidth: 2,
         borderColor: '#fff',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 5,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+        elevation: 3,
         alignItems: 'center',
         justifyContent: 'center',
       }}
