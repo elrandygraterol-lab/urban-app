@@ -27,6 +27,7 @@
     "build:dev:all": "eas build --profile development --platform all --clear-cache",
     "build:preview:android": "eas build --profile preview --platform android",
     "build:preview:ios": "eas build --profile preview --platform ios",
+    "build:app": "eas build -p android --profile preview --clear-cache",
     "build:prod:android": "eas build --profile production --platform android",
     "build:prod:ios": "eas build --profile production --platform ios",
     "verify:deployment": "node verify-deployment-config.js"
@@ -43,6 +44,7 @@
     "expo": "~54.0.34",
     "expo-asset": "~12.0.13",
     "expo-audio": "~1.1.1",
+    "expo-build-properties": "^55.0.14",
     "expo-constants": "~18.0.13",
     "expo-dev-client": "~6.0.21",
     "expo-device": "~8.0.10",

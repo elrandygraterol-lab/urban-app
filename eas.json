@@ -32,7 +32,8 @@
         "simulator": false
       },
       "env": {
-        "NODE_ENV": "staging"
+        "NODE_ENV": "staging",
+        "EXPO_PUBLIC_API_URL": "https://rifaslsv.com/urbantaxis"
       }
     },
     "production": {
