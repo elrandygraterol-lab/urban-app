@@ -11,7 +11,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import RNMapView, { Marker, Polyline } from 'react-native-maps';
 import { useTranslation } from 'react-i18next';
 import logger from '../utils/logger';
 
@@ -21,7 +21,7 @@ interface Location {
   address?: string;
 }
 
-interface MapViewProps {
+interface MapViewComponentProps {
   pickupLocation?: Location;
   dropoffLocation?: Location;
   driverLocation?: Location;
@@ -34,7 +34,7 @@ interface MapViewProps {
   showUserLocation?: boolean;
 }
 
-export const MapView: React.FC<MapViewProps> = ({
+export const MapViewComponent: React.FC<MapViewComponentProps> = ({
   pickupLocation,
   dropoffLocation,
   driverLocation,
@@ -47,7 +47,7 @@ export const MapView: React.FC<MapViewProps> = ({
   showUserLocation = true,
 }) => {
   const { t } = useTranslation();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<RNMapView>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [mapError, setMapError] = useState<string | null>(null);
 
@@ -169,7 +169,7 @@ export const MapView: React.FC<MapViewProps> = ({
         </View>
       )}
 
-      <MapView
+      <RNMapView
         ref={mapRef}
         style={styles.map}
         testID="map"
@@ -241,7 +241,7 @@ export const MapView: React.FC<MapViewProps> = ({
             testID="route-line"
           />
         )}
-      </MapView>
+      </RNMapView>
 
       {/* Indicador de modo offline */}
       {isOfflineMode && (
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FF9500', // Naranja
+    backgroundColor: '#DC2626',
     borderWidth: 3,
     borderColor: '#FFFFFF',
     justifyContent: 'center',
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#0066CC', // Azul
+    backgroundColor: '#1F2937',
     borderWidth: 3,
     borderColor: '#FFFFFF',
     justifyContent: 'center',
@@ -329,4 +329,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default MapView;
+export default MapViewComponent;

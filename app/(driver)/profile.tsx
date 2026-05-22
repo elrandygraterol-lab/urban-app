@@ -9,9 +9,12 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/theme';
 import { useAuthStore } from '../../store/authStore';
 import { useDriverStore } from '../../store/driverStore';
@@ -19,6 +22,7 @@ import { useLanguage } from '../../hooks/useLanguage';
 import { translations } from '../../i18n/translations';
 import { userAPI, notificationAPI, driverAPI } from '../../services/api';
 import { getSocket } from '@/services/socket';
+import { resolveFileUrl } from '@/services/fileUrl';
 
 interface NotificationPreferences {
   rideRequests?: boolean;
@@ -70,7 +74,7 @@ export default function DriverProfileScreen() {
     rideRequests: true,
     rideUpdates: true,
     payments: true,
-    promotions: false,
+    promotions: true,
   });
 
   useEffect(() => {
@@ -124,33 +128,38 @@ export default function DriverProfileScreen() {
 
       const userData = userResponse.data.data;
 
-      if (!userData.name || !userData.phone || !userData.email) {
-        console.warn('User data is incomplete:', userData);
-        setName(userData.name || '');
-        setPhone(userData.phone || '');
-        setEmail(userData.email || '');
-      } else {
-        setName(userData.name);
-        setPhone(userData.phone);
-        setEmail(userData.email);
+      // Update auth store with fresh data (including profilePhotoUrl)
+      if (user) {
+        useAuthStore.getState().setUser({
+          ...user,
+          name: userData.name || user.name,
+          phone: userData.phone || user.phone,
+          email: userData.email || user.email,
+          profilePhotoUrl: userData.profilePhotoUrl || user.profilePhotoUrl,
+        });
       }
+
+      setName(userData.name || '');
+      setPhone(userData.phone || '');
+      setEmail(userData.email || '');
 
       // Load driver profile to get availability status
       try {
         const driverProfile = await driverAPI.getMyProfile();
-        if (driverProfile.data && driverProfile.data.isAvailable !== undefined) {
-          setIsAvailable(driverProfile.data.isAvailable);
+        const profile = driverProfile.data.data;
+        if (profile && profile.isAvailable !== undefined) {
+          setIsAvailable(profile.isAvailable);
         }
         
         // Load payment information
-        if (driverProfile.data) {
+        if (profile) {
           setPaymentInfo({
-            pagoMovilPhone: driverProfile.data.pagoMovilPhone || '',
-            pagoMovilBank: driverProfile.data.pagoMovilBank || '',
-            pagoMovilCedula: driverProfile.data.pagoMovilCedula || '',
-            bankTransferBank: driverProfile.data.bankTransferBank || '',
-            bankTransferAccount: driverProfile.data.bankTransferAccount || '',
-            bankTransferAccountType: driverProfile.data.bankTransferAccountType || 'Corriente',
+            pagoMovilPhone: profile.pagoMovilPhone || '',
+            pagoMovilBank: profile.pagoMovilBank || '',
+            pagoMovilCedula: profile.pagoMovilCedula || '',
+            bankTransferBank: profile.bankTransferBank || '',
+            bankTransferAccount: profile.bankTransferAccount || '',
+            bankTransferAccountType: profile.bankTransferAccountType || 'Corriente',
           });
         }
       } catch (error) {
@@ -224,16 +233,10 @@ export default function DriverProfileScreen() {
     key: keyof NotificationPreferences,
     value: boolean
   ) => {
-    const newPrefs = { ...notificationPrefs, [key]: value };
-    setNotificationPrefs(newPrefs);
-
-    try {
-      await notificationAPI.updatePreferences(newPrefs);
-    } catch (error) {
-      console.error('Error updating notification preferences:', error);
-      // Revert on error
-      setNotificationPrefs(notificationPrefs);
-    }
+    Alert.alert(
+      'En desarrollo',
+      'Esta opción estará disponible en una futura actualización. Por ahora, las notificaciones permanecen activadas por defecto.'
+    );
   };
 
   const handleLanguageChange = async (newLanguage: 'es' | 'en') => {
@@ -288,15 +291,83 @@ export default function DriverProfileScreen() {
     ]);
   };
 
+  const handleChangePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permiso requerido', 'Necesitamos permiso para acceder a tus fotos');
+        return;
+      }
+
+      Alert.alert('Foto de perfil', 'Elige una opción', [
+        {
+          text: 'Tomar foto',
+          onPress: async () => {
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ['images'],
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+              await uploadPhoto(result.assets[0].uri);
+            }
+          },
+        },
+        {
+          text: 'Elegir de galería',
+          onPress: async () => {
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+              await uploadPhoto(result.assets[0].uri);
+            }
+          },
+        },
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+      ]);
+    } catch (error) {
+      console.error('Error picking profile photo:', error);
+      Alert.alert('Error', 'No se pudo seleccionar la foto');
+    }
+  };
+
+  const uploadPhoto = async (uri: string) => {
+    try {
+      const result = await userAPI.uploadPhoto(uri);
+      const profilePhotoUrl = result.data.profilePhotoUrl;
+      // Update local user state
+      if (user) {
+        useAuthStore.getState().setUser({ ...user, profilePhotoUrl });
+      }
+      Alert.alert('Éxito', 'Foto de perfil actualizada');
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      Alert.alert('Error', 'No se pudo actualizar la foto de perfil');
+    }
+  };
+
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Driver Availability Section - FIRST */}
       <View style={styles.section}>
@@ -373,6 +444,32 @@ export default function DriverProfileScreen() {
         </View>
 
         <View style={styles.card}>
+          {/* Profile Photo */}
+          <View style={styles.avatarSection}>
+            <TouchableOpacity onPress={handleChangePhoto} style={styles.avatarContainer}>
+              {resolveFileUrl(user?.profilePhotoUrl) ? (
+                <Image source={{ uri: resolveFileUrl(user?.profilePhotoUrl) }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Ionicons name="person" size={40} color={Colors.primary} />
+                </View>
+              )}
+              <View style={styles.avatarBadge}>
+                <Ionicons name="camera" size={14} color={Colors.white} />
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.avatarName}>{user?.name || ''}</Text>
+            <Text style={styles.avatarRole}>
+              {user?.role === 'driver' ? 'Conductor' : user?.role || ''}
+            </Text>
+            <TouchableOpacity onPress={handleChangePhoto} style={styles.changePhotoButton}>
+              <Ionicons name="camera-outline" size={16} color={Colors.primary} />
+              <Text style={styles.changePhotoText}>Cambiar foto</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.avatarDivider} />
+
           <View style={styles.inputGroup}>
             <Text style={styles.label}>{t.name}</Text>
             <TextInput
@@ -759,10 +856,15 @@ export default function DriverProfileScreen() {
 
       <View style={styles.bottomSpacer} />
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f0f9ff',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f0f9ff',
@@ -775,6 +877,76 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f0f9ff',
+  },
+  avatarSection: {
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: Spacing.sm,
+  },
+  avatarImage: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 3,
+    borderColor: Colors.primary,
+  },
+  avatarPlaceholder: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#f0fdf4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: Colors.primary,
+  },
+  avatarBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.white,
+  },
+  avatarName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.darkGray,
+    marginBottom: 2,
+  },
+  avatarRole: {
+    fontSize: 14,
+    color: Colors.mediumGray,
+    marginBottom: Spacing.sm,
+  },
+  changePhotoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  changePhotoText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  avatarDivider: {
+    height: 1,
+    backgroundColor: '#f3f4f6',
+    marginBottom: Spacing.md,
   },
   section: {
     marginBottom: Spacing.lg,
@@ -789,6 +961,77 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#1f2937',
+  },
+  paymentMethodSection: {
+    marginBottom: Spacing.md,
+  },
+  paymentMethodHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  paymentMethodTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  configuredBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  configuredText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  accountTypeButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  accountTypeButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+  },
+  accountTypeButtonActive: {
+    borderColor: Colors.primary,
+    backgroundColor: '#f0fdf4',
+  },
+  accountTypeButtonText: {
+    color: '#9ca3af',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  accountTypeButtonTextActive: {
+    color: Colors.primary,
+  },
+  paymentInfoNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#f9fafb',
+    padding: Spacing.md,
+    borderRadius: 10,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  paymentInfoNoteText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#6b7280',
+    lineHeight: 18,
   },
   editButton: {
     flexDirection: 'row',
@@ -981,76 +1224,5 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: Spacing.xxl,
-  },
-  paymentMethodSection: {
-    marginBottom: Spacing.md,
-  },
-  paymentMethodHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  paymentMethodTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
-  },
-  configuredBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#f0fdf4',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-  },
-  configuredText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  accountTypeButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  accountTypeButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    backgroundColor: Colors.white,
-    alignItems: 'center',
-  },
-  accountTypeButtonActive: {
-    borderColor: Colors.primary,
-    backgroundColor: '#f0fdf4',
-  },
-  accountTypeButtonText: {
-    color: '#9ca3af',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  accountTypeButtonTextActive: {
-    color: Colors.primary,
-  },
-  paymentInfoNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: '#f9fafb',
-    padding: Spacing.md,
-    borderRadius: 10,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  paymentInfoNoteText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#6b7280',
-    lineHeight: 18,
   },
 });

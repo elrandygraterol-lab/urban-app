@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 import { TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
@@ -7,24 +7,34 @@ interface CenterLocationButtonProps {
   onPress: () => void;
   style?: ViewStyle | ViewStyle[];
   disabled?: boolean;
+  onLayout?: () => void;
 }
 
-export default function CenterLocationButton({ onPress, style, disabled = false }: CenterLocationButtonProps) {
-  return (
-    <TouchableOpacity
-      style={[styles.button, style, disabled && styles.disabled]}
-      onPress={onPress}
-      disabled={disabled}
-      activeOpacity={0.7}
-    >
-      <Ionicons 
-        name="locate" 
-        size={18} 
-        color={disabled ? Colors.lightGray : Colors.primary} 
-      />
-    </TouchableOpacity>
-  );
-}
+const CenterLocationButton = forwardRef<any, CenterLocationButtonProps>(
+  ({ onPress, style, disabled = false, onLayout, ...rest }, ref) => {
+    return (
+      <TouchableOpacity
+        ref={ref}
+        style={[styles.button, style, disabled && styles.disabled]}
+        onPress={onPress}
+        onLayout={onLayout}
+        disabled={disabled}
+        activeOpacity={0.7}
+        {...rest}
+      >
+        <Ionicons 
+          name="locate" 
+          size={18} 
+          color={disabled ? Colors.lightGray : Colors.primary} 
+        />
+      </TouchableOpacity>
+    );
+  }
+);
+
+CenterLocationButton.displayName = 'CenterLocationButton';
+
+export default CenterLocationButton;
 
 const styles = StyleSheet.create({
   button: {

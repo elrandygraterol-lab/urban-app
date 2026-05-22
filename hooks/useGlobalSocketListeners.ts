@@ -24,6 +24,7 @@ export const useGlobalSocketListeners = ({
   
   // Ref to track if listeners are already registered
   const listenersRegisteredRef = useRef(false);
+  const connectHandlerRef = useRef<(() => void) | null>(null);
 
   // Handler for ride:request_created event (GLOBAL - works on any screen)
   const handleRideRequest = useCallback(
@@ -178,7 +179,9 @@ export const useGlobalSocketListeners = ({
       socket.off('ride:payment_completed', handlePaymentCompleted);
       socket.off('ride:cancelled', handleRideCancelled);
       socket.off('ride:request_created', handleRideRequest);
-      socket.off('connect');
+      if (connectHandlerRef.current) {
+        socket.off('connect', connectHandlerRef.current);
+      }
       socket.offAny(); // Remove debug listener
 
       // Test: Check existing listeners
@@ -218,7 +221,7 @@ export const useGlobalSocketListeners = ({
       listenersRegisteredRef.current = true;
 
       // Handle socket reconnection - re-register listeners with fresh callbacks
-      const handleConnect = () => {
+      connectHandlerRef.current = () => {
         console.log('[GLOBAL_SOCKET] ========================================');
         console.log('[GLOBAL_SOCKET] 🔄 Socket reconnected');
         console.log('[GLOBAL_SOCKET]    Socket ID:', socket.id);
@@ -230,7 +233,7 @@ export const useGlobalSocketListeners = ({
         registerListeners(socket);
       };
 
-      socket.on('connect', handleConnect);
+      socket.on('connect', connectHandlerRef.current);
 
       console.log('[GLOBAL_SOCKET] ========================================');
       console.log('[GLOBAL_SOCKET] ✅ LISTENERS REGISTERED SUCCESSFULLY');
@@ -280,7 +283,6 @@ export const useGlobalSocketListeners = ({
         currentSocket.off('ride:payment_completed', handlePaymentCompleted);
         currentSocket.off('ride:cancelled', handleRideCancelled);
         currentSocket.off('ride:request_created', handleRideRequest);
-        currentSocket.off('connect');
         currentSocket.offAny();
         console.log('[GLOBAL_SOCKET] ✅ Listeners removed');
       } else {

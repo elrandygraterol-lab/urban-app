@@ -47,7 +47,7 @@ export default function PassengerLayout() {
         <Tabs.Screen
           name="delegated-ride-tracking"
           options={{
-            href: null, // Hide from tab bar
+            href: null,
             title: 'Seguimiento de Viaje',
           }}
         />

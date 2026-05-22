@@ -5,7 +5,7 @@
  * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 8.2
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, Component, ErrorInfo, ReactNode } from 'react';
 import {
   View,
   Text,
@@ -13,18 +13,31 @@ import {
   RefreshControl,
   ActivityIndicator,
   TouchableOpacity,
+  AppState,
   StyleSheet,
 } from 'react-native';
 import { Colors as colors } from '@/constants/theme';
 import walletService, {
   WalletResponseDto,
   WalletTransactionDto,
+  ExchangeRateResponse,
+  getExchangeRate,
 } from '@/services/walletService';
-import { formatCurrency } from '@/utils/currency';
+import { formatCurrency, Currency } from '@/utils/currency';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 
 const PAGE_SIZE = 20;
 
 export default function DriverEarningsScreen() {
+  return (
+    <EarningsErrorBoundary>
+      <DriverEarningsScreenContent />
+    </EarningsErrorBoundary>
+  );
+}
+
+function DriverEarningsScreenContent() {
   const [wallet, setWallet] = useState<WalletResponseDto | null>(null);
   const [transactions, setTransactions] = useState<WalletTransactionDto[]>([]);
   const [totalTransactions, setTotalTransactions] = useState(0);
@@ -34,11 +47,35 @@ export default function DriverEarningsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [exchangeRate, setExchangeRate] = useState<ExchangeRateResponse | null>(null);
+
+  const getDateParams = useCallback((filter: string) => {
+    const now = new Date();
+    switch (filter) {
+      case 'today': {
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        return { startDate: start.toISOString() };
+      }
+      case 'week': {
+        const start = new Date(now);
+        start.setDate(start.getDate() - start.getDay());
+        start.setHours(0, 0, 0, 0);
+        return { startDate: start.toISOString() };
+      }
+      case 'month': {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { startDate: start.toISOString() };
+      }
+      default:
+        return {};
+    }
+  }, []);
 
   /**
    * Load initial wallet data and first page of transactions in parallel
    */
-  const loadInitialData = useCallback(async (isRefresh = false) => {
+  const loadInitialData = useCallback(async (isRefresh = false, filter?: string) => {
     try {
       if (isRefresh) {
         setRefreshing(true);
@@ -47,16 +84,21 @@ export default function DriverEarningsScreen() {
       }
       setError(null);
 
-      const [walletData, txData] = await Promise.all([
+      const activeFilter = filter || dateFilter;
+      const dateParams = getDateParams(activeFilter);
+
+      const [walletData, txData, rate] = await Promise.all([
         walletService.getMyWallet(),
-        walletService.getTransactions(PAGE_SIZE, 0),
+        walletService.getTransactions(PAGE_SIZE, 0, dateParams),
+        getExchangeRate().catch(() => null),
       ]);
 
-      setWallet(walletData.wallet);
+      setWallet(walletData);
       setTransactions(txData.transactions);
       setTotalTransactions(txData.totalTransactions);
       setOffset(txData.transactions.length);
       setHasMore(txData.transactions.length < txData.totalTransactions);
+      setExchangeRate(rate);
     } catch (err: any) {
       const message =
         err?.response?.data?.message ||
@@ -67,7 +109,7 @@ export default function DriverEarningsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [dateFilter, getDateParams]);
 
   /**
    * Load more transactions when user scrolls to the end
@@ -77,7 +119,8 @@ export default function DriverEarningsScreen() {
 
     try {
       setLoadingMore(true);
-      const data = await walletService.getTransactions(PAGE_SIZE, offset);
+      const dateParams = getDateParams(dateFilter);
+      const data = await walletService.getTransactions(PAGE_SIZE, offset, dateParams);
       setTransactions(prev => [...prev, ...data.transactions]);
       const newOffset = offset + data.transactions.length;
       setOffset(newOffset);
@@ -88,15 +131,59 @@ export default function DriverEarningsScreen() {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, offset]);
+  }, [loadingMore, hasMore, offset, dateFilter, getDateParams]);
 
   useEffect(() => {
     loadInitialData();
   }, [loadInitialData]);
 
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        loadInitialData(true);
+      }
+    });
+    return () => subscription.remove();
+  }, [loadInitialData]);
+
   const handleRefresh = useCallback(() => {
     loadInitialData(true);
   }, [loadInitialData]);
+
+  const handleDateFilter = useCallback((filter: 'all' | 'today' | 'week' | 'month') => {
+    setDateFilter(filter);
+    loadInitialData(false, filter);
+  }, [loadInitialData]);
+
+  const isEmpty = (!wallet || wallet.balance === 0) && transactions.length === 0;
+  const currency = wallet?.currency ?? 'VES';
+
+  const todayEarnings = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return transactions
+      .filter(tx => tx.type === 'EARNING' && new Date(tx.createdAt) >= today)
+      .reduce((sum, tx) => sum + tx.amount, 0);
+  }, [transactions]);
+
+  const avgPerRide = useMemo(() => {
+    return totalTransactions > 0 && wallet
+      ? wallet.balance / totalTransactions
+      : 0;
+  }, [totalTransactions, wallet]);
+
+  const bcvRate = exchangeRate?.bcv ?? 0;
+  const otherCurrency: Currency = currency === 'USD' ? 'VES' : 'USD';
+  const balanceOtherCurrency = !wallet ? 0
+    : currency === 'USD'
+      ? wallet.balance * bcvRate
+      : bcvRate > 0 ? wallet.balance / bcvRate : 0;
+  const todayEarningsOther = currency === 'USD'
+    ? todayEarnings * bcvRate
+    : bcvRate > 0 ? todayEarnings / bcvRate : 0;
+  const avgPerRideOther = currency === 'USD'
+    ? avgPerRide * bcvRate
+    : bcvRate > 0 ? avgPerRide / bcvRate : 0;
 
   // Initial loading state
   if (loading) {
@@ -120,8 +207,12 @@ export default function DriverEarningsScreen() {
     );
   }
 
-  const isEmpty = (!wallet || wallet.balance === 0) && transactions.length === 0;
-  const currency = wallet?.currency ?? 'VES';
+  const filterChips = [
+    { key: 'all', label: 'Todo' },
+    { key: 'today', label: 'Hoy' },
+    { key: 'week', label: 'Semana' },
+    { key: 'month', label: 'Mes' },
+  ] as const;
 
   return (
     <FlatList
@@ -148,17 +239,86 @@ export default function DriverEarningsScreen() {
           </View>
 
           {/* Balance Card */}
-          <View style={styles.balanceCard}>
+          <LinearGradient
+            colors={[colors.primary, colors.primaryDark]}
+            style={styles.balanceCard}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
             <Text style={styles.balanceLabel}>Balance Actual</Text>
             <Text style={styles.balanceAmount}>
               {formatCurrency(wallet?.balance ?? 0, currency)}
             </Text>
+            {bcvRate > 0 && (
+              <Text style={styles.balanceAmountSecondary}>
+                ≈ {formatCurrency(balanceOtherCurrency, otherCurrency)}
+              </Text>
+            )}
             {isEmpty && (
               <Text style={styles.noEarningsText}>Sin ganancias aún</Text>
             )}
             <Text style={styles.currencyLabel}>
               {currency === 'USD' ? 'Dólares (USD)' : 'Bolívares (VES)'}
+              {bcvRate > 0 && `  •  Tasa: Bs. ${bcvRate.toFixed(2)}`}
             </Text>
+            <View style={styles.balanceIconOverlay}>
+              <Ionicons name="wallet-outline" size={80} color="rgba(255,255,255,0.1)" />
+            </View>
+          </LinearGradient>
+
+          {/* Summary Cards */}
+          <View style={styles.summaryGrid}>
+            <View style={styles.summaryCard}>
+              <Ionicons name="cash-outline" size={20} color={colors.primary} />
+              <Text style={styles.summaryValue}>{formatCurrency(todayEarnings, currency)}</Text>
+              {bcvRate > 0 && (
+                <Text style={styles.summaryValueSecondary}>
+                  ≈ {formatCurrency(todayEarningsOther, otherCurrency)}
+                </Text>
+              )}
+              <Text style={styles.summaryLabel}>Ganado Hoy</Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Ionicons name="car-outline" size={20} color={colors.primary} />
+              <Text style={styles.summaryValue}>{totalTransactions}</Text>
+              <Text style={styles.summaryValueSecondary}>viajes</Text>
+              <Text style={styles.summaryLabel}>Total Viajes</Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Ionicons name="trending-up-outline" size={20} color={colors.primary} />
+              <Text style={styles.summaryValue}>
+                {totalTransactions > 0 ? formatCurrency(avgPerRide, currency) : formatCurrency(0, currency)}
+              </Text>
+              {bcvRate > 0 && (
+                <Text style={styles.summaryValueSecondary}>
+                  ≈ {formatCurrency(avgPerRideOther, otherCurrency)}
+                </Text>
+              )}
+              <Text style={styles.summaryLabel}>Promedio por Viaje</Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
+              <Text style={[styles.summaryValue, { fontSize: 22 }]}>
+                {typeof totalTransactions !== 'undefined' ? `${Math.round((transactions.filter(tx => tx.type === 'EARNING').length / Math.max(totalTransactions, 1)) * 100)}%` : '0%'}
+              </Text>
+              <Text style={styles.summaryValueSecondary}>tasa de éxito</Text>
+              <Text style={styles.summaryLabel}>Tasa Éxito</Text>
+            </View>
+          </View>
+
+          {/* Date Filter */}
+          <View style={styles.filterRow}>
+            {filterChips.map(chip => (
+              <TouchableOpacity
+                key={chip.key}
+                style={[styles.filterChip, dateFilter === chip.key && styles.filterChipActive]}
+                onPress={() => handleDateFilter(chip.key)}
+              >
+                <Text style={[styles.filterChipText, dateFilter === chip.key && styles.filterChipTextActive]}>
+                  {chip.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
           {/* Transaction History Header */}
@@ -177,11 +337,20 @@ export default function DriverEarningsScreen() {
       )}
       ItemSeparatorComponent={() => <View style={styles.separator} />}
       ListEmptyComponent={
-        isEmpty ? (
+        isEmpty && dateFilter === 'all' ? (
           <View style={styles.emptyContainer}>
+            <Ionicons name="cash-outline" size={50} color={colors.lightGray} />
             <Text style={styles.emptyText}>Sin ganancias aún</Text>
             <Text style={styles.emptySubtext}>
               Tus ganancias aparecerán aquí cuando completes viajes
+            </Text>
+          </View>
+        ) : isEmpty ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="filter-outline" size={50} color={colors.lightGray} />
+            <Text style={styles.emptyText}>Sin resultados</Text>
+            <Text style={styles.emptySubtext}>
+              No hay transacciones en este periodo para el filtro seleccionado
             </Text>
           </View>
         ) : null
@@ -196,6 +365,43 @@ export default function DriverEarningsScreen() {
       }
     />
   );
+}
+
+/**
+ * Wraps the earnings screen with an error boundary to prevent
+ * unhandled rendering errors from crashing the global app.
+ */
+class EarningsErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('EarningsScreen error:', error.message, errorInfo.componentStack);
+  }
+
+  handleRetry = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Error al mostrar ganancias</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={this.handleRetry}>
+            <Text style={styles.retryButtonText}>Reintentar</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 /**
@@ -218,32 +424,47 @@ function TransactionItem({
         ? 'Ajuste'
         : 'Reembolso';
 
-  const dateStr = new Date(transaction.createdAt).toLocaleString('es-VE', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
+  let dateStr = '';
+  try {
+    dateStr = transaction.createdAt
+      ? new Date(transaction.createdAt).toLocaleString('es-VE', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        })
+      : '';
+  } catch {
+    dateStr = '';
+  }
 
   return (
     <View style={styles.transactionItem}>
       <View style={styles.transactionDetails}>
         <View style={styles.transactionRow}>
-          <Text style={styles.transactionType}>{typeLabel}</Text>
+          <View style={styles.transactionTypeContainer}>
+            <Ionicons
+              name={isEarning ? 'arrow-up-circle' : 'arrow-down-circle'}
+              size={20}
+              color={amountColor}
+              style={styles.transactionIcon}
+            />
+            <Text style={styles.transactionType}>{typeLabel}</Text>
+          </View>
           <Text style={[styles.transactionAmount, { color: amountColor }]}>
-            +{formatCurrency(transaction.amount, currency)}
+            {isEarning ? '+' : '-'}{formatCurrency(transaction.amount, currency)}
           </Text>
         </View>
         <Text style={styles.transactionDate}>{dateStr}</Text>
         {transaction.rideDetails && (
           <View style={styles.rideDetails}>
             <Text style={styles.rideDetailText} numberOfLines={1}>
-              📍 {transaction.rideDetails.pickup}
+              {transaction.rideDetails.pickup}
             </Text>
             <Text style={styles.rideDetailText} numberOfLines={1}>
-              🏁 {transaction.rideDetails.destination}
+              {transaction.rideDetails.destination}
             </Text>
           </View>
         )}
@@ -334,6 +555,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
+  balanceAmountSecondary: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 4,
+  },
   noEarningsText: {
     fontSize: 13,
     color: 'rgba(255, 255, 255, 0.75)',
@@ -344,6 +571,84 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.7)',
     marginTop: 8,
+  },
+  balanceIconOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  summaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    gap: 10,
+  },
+  summaryCard: {
+    width: '48%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  summaryValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: colors.darkGray,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  summaryValueSecondary: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.lightGray,
+    marginTop: 1,
+    textAlign: 'center',
+  },
+  summaryLabel: {
+    fontSize: 11,
+    color: colors.lightGray,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    gap: 6,
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  filterChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.mediumGray,
+    letterSpacing: 0.3,
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
   },
   historyHeader: {
     flexDirection: 'row',
@@ -363,7 +668,7 @@ const styles = StyleSheet.create({
   },
   transactionItem: {
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 14,
   },
   transactionDetails: {
     flex: 1,
@@ -373,6 +678,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 2,
+  },
+  transactionTypeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  transactionIcon: {
+    marginRight: 4,
   },
   transactionType: {
     fontSize: 14,

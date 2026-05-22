@@ -136,19 +136,19 @@ export default function NotificationsScreen() {
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'STORE_APPROVED':
-        return { name: 'checkmark-circle' as const, color: Colors.light.success };
+        return { name: 'checkmark-circle' as const, color: Colors.success };
       case 'STORE_REJECTED':
-        return { name: 'close-circle' as const, color: Colors.light.error };
+        return { name: 'close-circle' as const, color: Colors.error };
       case 'NEW_REVIEW':
-        return { name: 'star' as const, color: Colors.light.warning };
+        return { name: 'star' as const, color: Colors.warning };
       case 'ride_accepted':
-        return { name: 'car' as const, color: Colors.light.success };
+        return { name: 'car' as const, color: Colors.success };
       case 'payment_completed':
-        return { name: 'cash' as const, color: Colors.light.success };
+        return { name: 'cash' as const, color: Colors.success };
       case 'ride_cancelled':
-        return { name: 'close-circle' as const, color: Colors.light.error };
+        return { name: 'close-circle' as const, color: Colors.error };
       default:
-        return { name: 'notifications' as const, color: Colors.light.tint };
+        return { name: 'notifications' as const, color: Colors.primary };
     }
   };
 
@@ -197,7 +197,7 @@ export default function NotificationsScreen() {
 
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons name="notifications-off-outline" size={64} color={Colors.light.tabIconDefault} />
+      <Ionicons name="notifications-off-outline" size={64} color={Colors.lightGray} />
       <Text style={styles.emptyText}>No hay notificaciones</Text>
       <Text style={styles.emptySubtext}>
         Aquí aparecerán las notificaciones sobre tus tiendas y viajes
@@ -209,7 +209,7 @@ export default function NotificationsScreen() {
     if (!loading || page === 1) return null;
     return (
       <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color={Colors.light.tint} />
+        <ActivityIndicator size="small" color={Colors.primary} />
       </View>
     );
   };
@@ -229,7 +229,7 @@ export default function NotificationsScreen() {
 
       {loading && page === 1 ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.light.tint} />
+          <ActivityIndicator size="large" color={Colors.primary} />
         </View>
       ) : (
         <FlatList
@@ -243,7 +243,7 @@ export default function NotificationsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor={Colors.light.tint}
+              tintColor={Colors.primary}
             />
           }
           onEndReached={handleLoadMore}
@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
     color: '#000',
   },
   badge: {
-    backgroundColor: Colors.light.error,
+    backgroundColor: Colors.error,
     borderRadius: 12,
     minWidth: 24,
     height: 24,
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.light.tint,
+    backgroundColor: Colors.primary,
     marginLeft: 8,
   },
   emptyContainer: {

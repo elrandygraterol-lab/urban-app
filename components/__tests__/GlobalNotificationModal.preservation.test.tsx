@@ -113,6 +113,10 @@ describe('Preservation Properties: GlobalNotificationModal Display', () => {
       warning: { icon: 'warning', color: '#FF9500' },
       error: { icon: 'alert-circle', color: '#FF3B30' },
       info: { icon: 'information-circle', color: '#007AFF' },
+      store_approved: { icon: 'checkmark-circle', color: '#22c55e' },
+      store_rejected: { icon: 'close-circle', color: '#FF3B30' },
+      new_review: { icon: 'star', color: '#f59e0b' },
+      review_reply: { icon: 'chatbubble', color: '#007AFF' },
     };
 
     await fc.assert(

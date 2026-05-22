@@ -43,11 +43,11 @@ export interface GetTransactionsParams {
 }
 
 /**
- * Get the authenticated driver's wallet with recent transactions
+ * Get the authenticated driver's wallet
  */
-export async function getMyWallet(): Promise<WalletWithTransactionsDto> {
-  const response = await api.get<WalletWithTransactionsDto>('/api/wallet/my-wallet');
-  return response.data;
+export async function getMyWallet(): Promise<WalletResponseDto> {
+  const response = await api.get<any>('/api/wallet/my-wallet');
+  return response.data.data;
 }
 
 /**
@@ -58,19 +58,56 @@ export async function getTransactions(
   offset: number = 0,
   params?: Omit<GetTransactionsParams, 'limit' | 'offset'>
 ): Promise<WalletWithTransactionsDto> {
-  const response = await api.get<WalletWithTransactionsDto>('/api/wallet/transactions', {
+  const response = await api.get<any>('/api/wallet/transactions', {
     params: {
       limit,
       offset,
       ...params,
     },
   });
-  return response.data;
+  return response.data.data;
+}
+
+export interface ExchangeRateResponse {
+  bcv: number | null;
+  updatedAt: string;
+  fetchedDate: string;
+}
+
+/**
+ * Get the current BCV exchange rate (VES per USD)
+ */
+export async function getExchangeRate(): Promise<ExchangeRateResponse> {
+  const response = await api.get<any>('/api/fares/exchange-rate');
+  return response.data.data;
+}
+
+export interface CommissionRateResponse {
+  id: string;
+  rate: number;
+  isActive: boolean;
+  effectiveFrom: string;
+  createdAt: string;
+  createdByUser?: {
+    name: string;
+    email: string;
+  };
+  notes?: string;
+}
+
+/**
+ * Get the current commission rate for drivers
+ */
+export async function getCommissionRate(): Promise<CommissionRateResponse> {
+  const response = await api.get<any>('/api/driver/commissions/rate');
+  return response.data.data;
 }
 
 export const walletService = {
   getMyWallet,
   getTransactions,
+  getExchangeRate,
+  getCommissionRate,
 };
 
 export default walletService;

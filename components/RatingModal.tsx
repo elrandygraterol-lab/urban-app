@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, TextInput, Modal, Alert } from 'react-native';
-import { api } from '@/services/api';
+import api from '@/services/api';
 import { Colors as colors } from '@/constants/theme';
 
 interface RatingModalProps {

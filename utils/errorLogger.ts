@@ -70,15 +70,13 @@ export class ErrorLogger {
   logWarning(context: string, warning: any) {
     const timestamp = new Date().toISOString();
 
-    // Use original console.warn to avoid infinite loops
     const originalWarn = (this as any).originalConsoleWarn || console.warn.bind(console);
 
-    originalWarn('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    originalWarn(`⚠️  WARNING [${timestamp}]`);
-    originalWarn(`📍 Context: ${context}`);
-    originalWarn(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    originalWarn(warning);
-    originalWarn('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    const info = typeof warning === 'object' && warning !== null
+      ? ` ${JSON.stringify(warning)}`
+      : ` ${warning}`;
+
+    originalWarn(`⚠️ [${timestamp}] ${context}${info}`);
   }
 
   logInfo(context: string, message: string, data?: any) {

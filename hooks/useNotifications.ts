@@ -178,7 +178,7 @@ export const useNotifications = () => {
       console.log('[NOTIFICATIONS] Current permission status:', existingStatus);
 
       if (existingStatus !== 'granted') {
-        let finalStatus = existingStatus;
+        let finalStatus: string = existingStatus;
         if (Platform.OS === 'ios') {
           const { status } = await Notifications.requestPermissionsAsync({
             ios: {
@@ -189,8 +189,8 @@ export const useNotifications = () => {
           });
           finalStatus = status;
         } else {
-          const { status } = await Notifications.requestPermissionsAsync();
-          finalStatus = status;
+          const result = await Notifications.requestPermissionsAsync();
+          finalStatus = result.status;
         }
         console.log('[NOTIFICATIONS] Requested permissions, new status:', finalStatus);
 

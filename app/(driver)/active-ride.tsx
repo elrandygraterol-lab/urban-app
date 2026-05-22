@@ -26,7 +26,6 @@ import { DriverTaxiIcon, PassengerIcon, DropoffIcon } from '@/src/components/map
 import { bearingAlongRoute, animateNavigationCamera, computeNearestStepIndex, computeNearestRouteIndex, haversineDistance } from '@/src/utils/mapNav';
 import { formatCurrency, Currency } from '@/utils/currency';
 import { formatAddressForCard } from '@/utils/addressFormatter';
-import { useDriverStore } from '@/store/driverStore';
 import { useRideTracking } from '@/hooks/useRideTracking';
 import { useTTS } from '@/hooks/useTTS';
 
@@ -87,6 +86,8 @@ export default function ActiveRideScreen() {
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [routeDistance, setRouteDistance] = useState<number | null>(null);
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
+  const [backendEtaMinutes, setBackendEtaMinutes] = useState<number | null>(null);
+  const [backendEtaDistance, setBackendEtaDistance] = useState<number | null>(null);
   const [heading, setHeading] = useState<number>(0);
   const [routeBearing, setRouteBearing] = useState<number>(0);
   const lastRouteUpdateRef = useRef<number>(0); // Timestamp of last route update
@@ -118,7 +119,6 @@ export default function ActiveRideScreen() {
   const [nearestRouteIndex, setNearestRouteIndex] = useState<number>(0);
   const announcedStepIndexRef = useRef<number>(-1);
 
-  const { addEarning } = useDriverStore();
   const tts = useTTS();
 
   // GPS tracking hook — sends location to backend every 10s during in_progress rides
@@ -308,10 +308,10 @@ export default function ActiveRideScreen() {
 
     setLoadingRoute(true);
 
-    try {
-      // Determine origin and destination based on ride status
-      let origin, destination;
+    // Determine origin and destination based on ride status
+    let origin, destination;
 
+    try {
       if (ride.status === 'accepted' || ride.status === 'arrived') {
         // Route from driver's current location to pickup
         origin = location;
@@ -556,6 +556,19 @@ export default function ActiveRideScreen() {
       );
     };
 
+    // Listen for ETA updates from backend (unified with passenger ETA)
+    const handleETAUpdate = (data: {
+      rideId: string;
+      eta: {
+        estimatedMinutes: number;
+        distanceKm: number;
+      };
+    }) => {
+      if (data.rideId !== rideId) return;
+      setBackendEtaMinutes(data.eta.estimatedMinutes);
+      setBackendEtaDistance(data.eta.distanceKm);
+    };
+
     // Listen for connection events
     const handleConnect = () => {
       console.log('[ACTIVE_RIDE] ========================================');
@@ -577,6 +590,7 @@ export default function ActiveRideScreen() {
     socket.on('ride:cancelled', handleRideCancelled);
     socket.on('ride:payment_method_changed', handlePaymentMethodChanged);
     onPaymentConfirmed(handlePaymentConfirmed);
+    socket.on('ride:eta_update', handleETAUpdate);
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
 
@@ -606,6 +620,7 @@ export default function ActiveRideScreen() {
       socket.off('ride:cancelled', handleRideCancelled);
       socket.off('ride:payment_method_changed', handlePaymentMethodChanged);
       socket.off('ride:payment_confirmed', handlePaymentConfirmed);
+      socket.off('ride:eta_update', handleETAUpdate);
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
     };
@@ -627,13 +642,9 @@ export default function ActiveRideScreen() {
         const rideData = response.data.data || response.data;
 
         // Store final fare from response
-        if (rideData.finalFare) {
-          setFinalFare(rideData.finalFare);
-          // Add earning to wallet
-          addEarning(rideData.finalFare, ride?.currency || 'VES', ride?.id);
-        } else if (ride?.estimatedFare) {
-          // Fallback if finalFare is not provided
-          addEarning(ride.estimatedFare, ride.currency || 'VES', ride.id);
+        const fareValue = rideData.finalFare ?? ride?.estimatedFare ?? 0;
+        if (fareValue > 0) {
+          setFinalFare(fareValue);
         }
 
         // Update ride state
@@ -899,6 +910,10 @@ export default function ActiveRideScreen() {
   // Check if running in Expo Go
   const isExpoGo = Constants.appOwnership === 'expo';
 
+  // Use backend ETA when available (unified with passenger), fall back to local OSRM
+  const displayDistance = backendEtaDistance ?? routeDistance;
+  const displayDuration = backendEtaMinutes ?? routeDuration;
+
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
       {isExpoGo ? (
@@ -960,7 +975,7 @@ export default function ActiveRideScreen() {
               title="Tu Ubicación"
               description="Conductor"
               anchor={{ x: 0.5, y: 0.5 }}
-              flat={true}
+              flat={false}
               rotation={routeBearing || heading}
             >
               <DriverTaxiIcon />
@@ -1244,7 +1259,7 @@ export default function ActiveRideScreen() {
       )}
 
       {/* Route info badge with status indicator */}
-      {routeDistance != null && routeDuration != null && !loadingRoute && (
+      {displayDistance != null && displayDuration != null && !loadingRoute && (
         <View
           style={{
             position: 'absolute',
@@ -1270,14 +1285,14 @@ export default function ActiveRideScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Ionicons name="navigate" size={18} color="#fff" />
             <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>
-              {routeDistance.toFixed(1)} km
+              {displayDistance.toFixed(1)} km
             </Text>
           </View>
           <View style={{ width: 1, height: 20, backgroundColor: 'rgba(255,255,255,0.3)' }} />
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Ionicons name="time" size={18} color="#fff" />
             <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>
-              {Math.round(routeDuration)} min
+              {Math.round(displayDuration)} min
             </Text>
           </View>
         </View>
@@ -1387,9 +1402,9 @@ export default function ActiveRideScreen() {
                         return 'Navegando al Destino';
                       })()}
                 </Text>
-                {routeDistance != null && routeDuration != null && (
+                {displayDistance != null && displayDuration != null && (
                   <Text style={{ fontSize: 14, color: colors.lightGray }}>
-                    {routeDistance.toFixed(1)} km • {Math.round(routeDuration)} min restantes
+                    {displayDistance.toFixed(1)} km • {Math.round(displayDuration)} min restantes
                   </Text>
                 )}
               </View>

@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 import { VehicleIconRenderer, calculateOrientation } from './VehicleIconRenderer';
 import { mapRoutingService } from '../../services/MapRoutingService';
 
@@ -161,7 +161,7 @@ export const MovingTaxiExample: React.FC = () => {
       }}
     >
       {/* Route polyline */}
-      <MapView.Polyline
+      <Polyline
         coordinates={route.coordinates}
         strokeColor="#22c55e"
         strokeWidth={4}

@@ -7,7 +7,7 @@ import { io, Socket } from 'socket.io-client';
 import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
 
-const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'; // definido en eas.json por perfil
 const TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_KEY = 'auth_user';

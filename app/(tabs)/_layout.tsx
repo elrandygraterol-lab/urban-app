@@ -5,15 +5,12 @@ import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { NotificationTabIcon } from '@/components/NotificationTabIcon';
 import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: Colors.primary,
         headerShown: false,
         tabBarButton: HapticTab,
       }}
@@ -39,6 +36,30 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <NotificationTabIcon color={color} focused={focused} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="stores/[id]"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="stores/my-stores"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="stores/form"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="stores/stats/[id]"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

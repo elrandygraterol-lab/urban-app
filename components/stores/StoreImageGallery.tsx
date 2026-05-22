@@ -14,9 +14,8 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView, PinchGestureHandler, PinchGestureHandlerGestureEvent } from 'react-native-gesture-handler';
 import Animated, {
-  useAnimatedGestureHandler,
-  useAnimatedStyle,
   useSharedValue,
+  useAnimatedStyle,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
@@ -206,28 +205,21 @@ const ZoomableImage: React.FC<{ imageUrl: string }> = ({ imageUrl }) => {
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
 
-  const pinchHandler = useAnimatedGestureHandler<PinchGestureHandlerGestureEvent>({
-    onActive: (event) => {
-      scale.value = savedScale.value * event.scale;
-    },
-    onEnd: () => {
-      if (scale.value < 1) {
-        scale.value = withSpring(1);
-        savedScale.value = 1;
-      } else if (scale.value > 3) {
-        scale.value = withSpring(3);
-        savedScale.value = 3;
-      } else {
-        savedScale.value = scale.value;
-      }
-    },
-  });
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: scale.value }],
-    };
-  });
+  const onPinchEnd = () => {
+    if (scale.value < 1) {
+      scale.value = withSpring(1);
+      savedScale.value = 1;
+    } else if (scale.value > 3) {
+      scale.value = withSpring(3);
+      savedScale.value = 3;
+    } else {
+      savedScale.value = scale.value;
+    }
+  };
 
   const handleDoubleTap = () => {
     if (scale.value > 1) {
@@ -241,7 +233,11 @@ const ZoomableImage: React.FC<{ imageUrl: string }> = ({ imageUrl }) => {
 
   return (
     <View style={styles.fullScreenImageContainer}>
-      <PinchGestureHandler onGestureEvent={pinchHandler}>
+      <PinchGestureHandler onGestureEvent={(event: any) => {
+        if (event.nativeEvent) {
+          scale.value = Math.max(1, Math.min(3, event.nativeEvent.scale));
+        }
+      }} onHandlerStateChange={(e: any) => { if (e.nativeEvent.state === 5) onPinchEnd(); }}>
         <Animated.View style={[styles.zoomableContainer, animatedStyle]}>
           <TouchableOpacity
             activeOpacity={1}

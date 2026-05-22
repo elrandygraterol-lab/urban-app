@@ -1,11 +1,14 @@
 import React from 'react';
 import { Modal, SafeAreaView, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useNotificationContext } from '@/context/NotificationContext';
 import RideRequestModal from '@/components/RideRequestModal';
 import { ToastNotification } from '@/components/ToastNotification';
 import { rideAPI } from '@/services/api';
+import { getSocket } from '@/services/socket';
 
 export const GlobalNotificationOverlay: React.FC = () => {
+  const router = useRouter();
   const { activeRideRequest, toastQueue, dismissRideRequest, showToast, dismissToast } =
     useNotificationContext();
 
@@ -15,8 +18,23 @@ export const GlobalNotificationOverlay: React.FC = () => {
     try {
       await rideAPI.acceptRide(rideId);
       dismissRideRequest();
-    } catch {
-      showToast('Error al aceptar el viaje. Intenta de nuevo.', 'error');
+
+      const socket = getSocket();
+      if (socket) {
+        socket.emit('join_ride', { rideId });
+      }
+
+      router.push({
+        pathname: '/(driver)/active-ride',
+        params: { rideId },
+      } as any);
+    } catch (error: any) {
+      dismissRideRequest();
+      if (error?.response?.status === 409) {
+        showToast('El viaje ya fue tomado por otro conductor', 'warning');
+      } else {
+        showToast('Error al aceptar el viaje. Intenta de nuevo.', 'error');
+      }
     }
   };
 

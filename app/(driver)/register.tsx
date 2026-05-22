@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
   },
   vehicleTypeButtonActive: {
     borderColor: COLORS.primary,
-    backgroundColor: COLORS.lightGreen,
+    backgroundColor: COLORS.primaryLight,
   },
   vehicleTypeText: {
     fontSize: 14,

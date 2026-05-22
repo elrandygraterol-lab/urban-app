@@ -12,10 +12,15 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+// import { useCopilot, walkthroughable, CopilotStep } from 'react-native-copilot';
 import { rideAPI } from '../../services/api';
 import { Ride } from '../../src/types';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/theme';
 import { formatCurrency, Currency } from '../../utils/currency';
+import { useSmartTutorial } from '@/hooks/useSmartTutorial';
+import { setActiveTutorialScreen } from '@/utils/tutorialState';
+
+// const WalkthroughView = walkthroughable(View);
 
 interface RideHistoryItem extends Ride {
   driver?: {
@@ -28,6 +33,9 @@ interface RideHistoryItem extends Ride {
 }
 
 export default function PassengerHistoryScreen() {
+  // const { start: startTour } = useCopilot();
+  const { isActive: needsTutorial } = useSmartTutorial('passenger_history');
+
   const [rides, setRides] = useState<RideHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -39,6 +47,13 @@ export default function PassengerHistoryScreen() {
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+
+  useEffect(() => {
+    if (needsTutorial) {
+      setActiveTutorialScreen('passenger_history');
+      // setTimeout(() => { startTour(); }, 800);
+    }
+  }, [needsTutorial]);
 
   const loadRideHistory = useCallback(
     async (filters?: { startDate?: string; endDate?: string }) => {
@@ -62,20 +77,13 @@ export default function PassengerHistoryScreen() {
         // Validación defensiva: asegurar que siempre tengamos un array
         let ridesData: RideHistoryItem[] = [];
 
-        if (response.data?.rides && Array.isArray(response.data.rides)) {
-          ridesData = response.data.rides;
-          console.log(
-            '✅ [HISTORY] Usando response.data.rides (array con',
-            ridesData.length,
-            'elementos)'
-          );
+        const rawRides = response.data?.data?.rides ?? response.data?.rides;
+        if (rawRides && Array.isArray(rawRides)) {
+          ridesData = rawRides;
+          console.log('✅ [HISTORY] Usando rides (array con', ridesData.length, 'elementos)');
         } else if (Array.isArray(response.data)) {
           ridesData = response.data;
-          console.log(
-            '✅ [HISTORY] Usando response.data directamente (array con',
-            ridesData.length,
-            'elementos)'
-          );
+          console.log('✅ [HISTORY] Usando response.data directamente (array con', ridesData.length, 'elementos)');
         } else {
           console.warn('⚠️ [HISTORY] Respuesta inesperada del API, usando array vacío');
           console.warn('⚠️ [HISTORY] Estructura recibida:', response.data);
@@ -465,22 +473,22 @@ export default function PassengerHistoryScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.title}>Historial de Viajes</Text>
-            <Text style={styles.subtitle}>
-              {safeRides.length}{' '}
-              {safeRides.length === 1 ? 'viaje completado' : 'viajes completados'}
-            </Text>
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={styles.title}>Historial de Viajes</Text>
+              <Text style={styles.subtitle}>
+                {safeRides.length}{' '}
+                {safeRides.length === 1 ? 'viaje completado' : 'viajes completados'}
+              </Text>
+            </View>
+                <TouchableOpacity style={styles.filterIconButton} onPress={() => setShowFilters(true)}>
+                  <Ionicons
+                    name="filter"
+                    size={24}
+                    color={startDate || endDate ? Colors.primary : Colors.darkGray}
+                  />
+                </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.filterIconButton} onPress={() => setShowFilters(true)}>
-            <Ionicons
-              name="filter"
-              size={24}
-              color={startDate || endDate ? Colors.primary : Colors.darkGray}
-            />
-          </TouchableOpacity>
-        </View>
 
         {(startDate || endDate) && (
           <View style={styles.activeFilters}>
@@ -500,6 +508,7 @@ export default function PassengerHistoryScreen() {
           </View>
         )}
       </View>
+
 
       {safeRides.length === 0 ? (
         <ScrollView

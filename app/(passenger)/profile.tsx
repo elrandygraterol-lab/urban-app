@@ -10,15 +10,23 @@ import {
   Alert,
   ActivityIndicator,
   StatusBar,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+// import { useCopilot, walkthroughable, CopilotStep } from 'react-native-copilot';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/theme';
 import { useAuthStore } from '../../store/authStore';
 import { useLanguage } from '../../hooks/useLanguage';
 import { translations } from '../../i18n/translations';
 import { userAPI, notificationAPI } from '../../services/api';
+import * as ImagePicker from 'expo-image-picker';
+import { useSmartTutorial } from '@/hooks/useSmartTutorial';
+import { setActiveTutorialScreen } from '@/utils/tutorialState';
+import { resolveFileUrl } from '@/services/fileUrl';
+
+// const WalkthroughView = walkthroughable(View);
 
 interface NotificationPreferences {
   driverArrival?: boolean;
@@ -32,6 +40,15 @@ export default function PassengerProfileScreen() {
   const { user, logout } = useAuthStore();
   const { language, setLanguage } = useLanguage();
   const t = translations[language].profile;
+  // const { start: startTour } = useCopilot();
+  const { isActive: needsTutorial } = useSmartTutorial('passenger_profile');
+
+  useEffect(() => {
+    if (needsTutorial) {
+      setActiveTutorialScreen('passenger_profile');
+      // setTimeout(() => { startTour(); }, 800);
+    }
+  }, [needsTutorial]);
 
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -47,7 +64,7 @@ export default function PassengerProfileScreen() {
     driverArrival: true,
     rideUpdates: true,
     tripReminders: true,
-    promotions: false,
+    promotions: true,
   });
 
   useEffect(() => {
@@ -71,18 +88,20 @@ export default function PassengerProfileScreen() {
 
       const userData = userResponse.data.data;
 
-      // Validate user data has required fields
-      if (!userData.name || !userData.phone || !userData.email) {
-        console.warn('User data is incomplete:', userData);
-        // Set defaults for missing fields
-        setName(userData.name || '');
-        setPhone(userData.phone || '');
-        setEmail(userData.email || '');
-      } else {
-        setName(userData.name);
-        setPhone(userData.phone);
-        setEmail(userData.email);
+      // Update auth store with fresh data (including profilePhotoUrl)
+      if (user) {
+        useAuthStore.getState().setUser({
+          ...user,
+          name: userData.name || user.name,
+          phone: userData.phone || user.phone,
+          email: userData.email || user.email,
+          profilePhotoUrl: userData.profilePhotoUrl || user.profilePhotoUrl,
+        });
       }
+
+      setName(userData.name || '');
+      setPhone(userData.phone || '');
+      setEmail(userData.email || '');
 
       // Load notification preferences
       try {
@@ -119,16 +138,10 @@ export default function PassengerProfileScreen() {
     key: keyof NotificationPreferences,
     value: boolean
   ) => {
-    const newPrefs = { ...notificationPrefs, [key]: value };
-    setNotificationPrefs(newPrefs);
-
-    try {
-      await notificationAPI.updatePreferences(newPrefs);
-    } catch (error) {
-      console.error('Error updating notification preferences:', error);
-      // Revert on error
-      setNotificationPrefs(notificationPrefs);
-    }
+    Alert.alert(
+      'En desarrollo',
+      'Esta opción estará disponible en una futura actualización. Por ahora, las notificaciones permanecen activadas por defecto.'
+    );
   };
 
   const handleLanguageChange = async (newLanguage: 'es' | 'en') => {
@@ -185,6 +198,71 @@ export default function PassengerProfileScreen() {
     ]);
   };
 
+  const handleChangePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permiso requerido', 'Necesitamos permiso para acceder a tus fotos');
+        return;
+      }
+
+      Alert.alert('Foto de perfil', 'Elige una opción', [
+        {
+          text: 'Tomar foto',
+          onPress: async () => {
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ['images'],
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+              await uploadPhoto(result.assets[0].uri);
+            }
+          },
+        },
+        {
+          text: 'Elegir de galería',
+          onPress: async () => {
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+              await uploadPhoto(result.assets[0].uri);
+            }
+          },
+        },
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+      ]);
+    } catch (error) {
+      console.error('Error picking profile photo:', error);
+      Alert.alert('Error', 'No se pudo seleccionar la foto');
+    }
+  };
+
+  const uploadPhoto = async (uri: string) => {
+    try {
+      const result = await userAPI.uploadPhoto(uri);
+      const profilePhotoUrl = result.data.profilePhotoUrl;
+      // Update local user state
+      if (user) {
+        useAuthStore.getState().setUser({ ...user, profilePhotoUrl });
+      }
+      Alert.alert('Éxito', 'Foto de perfil actualizada');
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      Alert.alert('Error', 'No se pudo actualizar la foto de perfil');
+    }
+  };
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -213,6 +291,30 @@ export default function PassengerProfileScreen() {
         </View>
 
         <View style={styles.card}>
+          {/* Profile Photo */}
+          <View style={styles.avatarSection}>
+            <TouchableOpacity onPress={handleChangePhoto} style={styles.avatarContainer}>
+              {resolveFileUrl(user?.profilePhotoUrl) ? (
+                <Image source={{ uri: resolveFileUrl(user?.profilePhotoUrl) }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Ionicons name="person" size={40} color={Colors.primary} />
+                </View>
+              )}
+              <View style={styles.avatarBadge}>
+                <Ionicons name="camera" size={14} color={Colors.white} />
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.avatarName}>{user?.name || ''}</Text>
+            <Text style={styles.avatarRole}>Pasajero</Text>
+            <TouchableOpacity onPress={handleChangePhoto} style={styles.changePhotoButton}>
+              <Ionicons name="camera-outline" size={16} color={Colors.primary} />
+              <Text style={styles.changePhotoText}>Cambiar foto</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.avatarDivider} />
+
           <View style={styles.inputGroup}>
             <Text style={styles.label}>{t.name}</Text>
             <TextInput
@@ -446,6 +548,76 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f0f9ff',
+  },
+  avatarSection: {
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: Spacing.sm,
+  },
+  avatarImage: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 3,
+    borderColor: Colors.primary,
+  },
+  avatarPlaceholder: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#f0fdf4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: Colors.primary,
+  },
+  avatarBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.white,
+  },
+  avatarName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.darkGray,
+    marginBottom: 2,
+  },
+  avatarRole: {
+    fontSize: 14,
+    color: Colors.mediumGray || '#9ca3af',
+    marginBottom: Spacing.sm,
+  },
+  changePhotoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  changePhotoText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  avatarDivider: {
+    height: 1,
+    backgroundColor: '#f3f4f6',
+    marginBottom: Spacing.md,
   },
   section: {
     marginBottom: Spacing.lg,

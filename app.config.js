@@ -1,7 +1,7 @@
 module.exports = ({ config }) => {
   return {
     ...config,
-    name: 'app-taxis',
+    name: 'UrbanTaxis',
     slug: 'app-taxis',
     version: '1.0.0',
     orientation: 'portrait',

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '@/store/authStore';
-import { api } from '@/services/api';
+import api from '@/services/api';
 import { Colors as colors } from '@/constants/theme';
 import { uploadDocumentToCloudinary } from '@/services/cloudinary';
 
@@ -54,7 +54,7 @@ export default function DocumentsScreen() {
   const pickImage = async (documentType: string) => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images',
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,

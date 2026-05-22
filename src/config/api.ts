@@ -9,12 +9,8 @@ import axios from 'axios';
 console.log('[API CONFIG] EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
 console.log('[API CONFIG] __DEV__:', __DEV__);
 
-// API Base URL - Uses EXPO_PUBLIC_API_URL from .env
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL
-  ? `${process.env.EXPO_PUBLIC_API_URL}/api`
-  : __DEV__
-    ? 'http://192.168.1.7:3000/api'
-    : 'https://api.urbantaxi.com/api';
+// API Base URL - Uses EXPO_PUBLIC_API_URL from eas.json profile
+export const API_BASE_URL = `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api`;
 
 console.log('[API CONFIG] Final API_BASE_URL:', API_BASE_URL);
 

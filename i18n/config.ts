@@ -5,7 +5,8 @@ import es from './es.json';
 import en from './en.json';
 
 // Get device language
-const deviceLanguage = Localization.locale.split('-')[0];
+const locales = Localization.getLocales();
+const deviceLanguage = (locales?.[0]?.languageTag ?? 'es').split('-')[0];
 
 // Define resources
 const resources = {

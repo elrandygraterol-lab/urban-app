@@ -3,9 +3,9 @@ import { View, Text, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, Mod
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/authStore';
 import { useDriverStore } from '@/store/driverStore';
-import { rideAPI } from '@/services/api';
 import {
   connectSocket,
   getSocket,
@@ -21,23 +21,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { logError } from '@/utils/errorLogger';
 import type { Socket } from 'socket.io-client';
 import { DriverTaxiIcon } from '@/src/components/map/markers';
-import { useTourState } from '@/hooks/useTourState';
-import { useCopilot, walkthroughable, CopilotStep } from 'react-native-copilot';
+// import { useSmartTutorial } from '@/hooks/useSmartTutorial';
+// import { setActiveTutorialScreen } from '@/utils/tutorialState';
+// import { useCopilot, walkthroughable, CopilotStep } from 'react-native-copilot';
 import CenterLocationButton from '@/components/CenterLocationButton';
 
-const WalkthroughTouchableOpacity = walkthroughable(TouchableOpacity);
+// const WalkthroughTouchableOpacity = walkthroughable(TouchableOpacity);
+// const WalkthroughCenterLocationButton = walkthroughable(CenterLocationButton);
 
-interface RideRequest {
-  id: string;
-  passengerName: string;
-  pickupAddress: string;
-  destinationAddress: string;
-  estimatedFare: number;
-  currency?: string;
-  zoneName?: string | null;
-  distance: number;
-  expiresAt: string;
-}
 
 export default function DriverHomeScreen() {
   const { user, token } = useAuthStore();
@@ -45,6 +36,7 @@ export default function DriverHomeScreen() {
     useDriverStore();
   const { playNotificationSound } = useSound();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
 
   // Wallet Modal state
@@ -52,41 +44,31 @@ export default function DriverHomeScreen() {
   const isMountedRef = useRef(true);
   const cleanupRideCancelledRef = useRef<(() => void) | null>(null);
   const cleanupAvailabilityChangedRef = useRef<(() => void) | null>(null);
+  const connectHandlerRef = useRef<(() => void) | null>(null);
+  const disconnectHandlerRef = useRef<((reason: string) => void) | null>(null);
+  const errorHandlerRef = useRef<((error: any) => void) | null>(null);
+  const reconnectHandlerRef = useRef<(() => void) | null>(null);
+  const disconnectLogHandlerRef = useRef<((reason: string) => void) | null>(null);
+  const localListenersRegisteredRef = useRef(false);
 
   useSocketReconnect();
 
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [heading, setHeading] = useState<number | null>(null); // Add heading state
   const [loading, setLoading] = useState(true);
-  const [rideRequest, setRideRequest] = useState<RideRequest | null>(null);
-  const [requestTimeout, setRequestTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
-  const [countdown, setCountdown] = useState(30);
   const [socketInstance, setSocketInstance] = useState<Socket | null>(null);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
 
-  // Copilot (Tour) state
-  const { start: startTour } = useCopilot();
-  const { hasSeenTour, markTourAsSeen } = useTourState('driver_home');
+  // Smart Tutorial state
+  // const { start: startTour } = useCopilot();
+  // const { isActive: needsTutorial } = useSmartTutorial('driver_home');
+  // const tutorialStartedRef = useRef(false);
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    if (rideRequest && countdown > 0) {
-      interval = setInterval(() => {
-        setCountdown(prev => prev - 1);
-      }, 1000);
+    if (false && !loading && location) {
+      // Tutorial disabled for first release
     }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [rideRequest, countdown]);
-
-  useEffect(() => {
-    if (hasSeenTour === false && !loading && location) {
-      setTimeout(() => {
-        startTour();
-        markTourAsSeen();
-      }, 1000);
-    }
-  }, [hasSeenTour, loading, location, startTour, markTourAsSeen]);
+  }, [loading, location]);
 
   // Function to toggle driver availability - now uses the store
   const handleToggleAvailability = async () => {
@@ -113,49 +95,6 @@ export default function DriverHomeScreen() {
     }
   };
 
-  // Memoized callback for handling ride requests with fresh state references
-  const handleRideRequest = useCallback(
-    (data: RideRequest) => {
-      console.log('[DRIVER] ========================================');
-      console.log('[DRIVER] 🚗 RIDE REQUEST RECEIVED!');
-      console.log('[DRIVER]    Ride ID:', data.id);
-      console.log('[DRIVER]    Passenger:', data.passengerName);
-      console.log('[DRIVER]    Pickup:', data.pickupAddress);
-      console.log('[DRIVER]    Destination:', data.destinationAddress);
-      console.log('[DRIVER]    Fare:', data.estimatedFare);
-      console.log('[DRIVER]    Distance:', data.distance);
-      console.log('[DRIVER]    Expires:', data.expiresAt);
-      console.log('[DRIVER]    Timestamp:', new Date().toISOString());
-      console.log('[DRIVER]    Component Mounted:', isMountedRef.current);
-      console.log('[DRIVER] ========================================');
-
-      // Verify component is still mounted before updating state
-      if (!isMountedRef.current) {
-        console.warn('[DRIVER] ⚠️ Component unmounted, skipping state update');
-        return;
-      }
-
-      // Play notification sound
-      playNotificationSound();
-
-      // Use functional state update to guarantee React detects the change
-      setRideRequest(prev => {
-        console.log('[DRIVER] 📝 State update: prev =', prev, ', new =', data);
-        return data;
-      });
-      setCountdown(30);
-
-      const timeout = setTimeout(() => {
-        console.log('[DRIVER] ⏰ Ride request timeout expired for:', data.id);
-        if (isMountedRef.current) {
-          setRideRequest(null);
-        }
-      }, 30000);
-      setRequestTimeout(timeout);
-    },
-    [playNotificationSound]
-  );
-
   const startLocationUpdates = useCallback(async () => {
     const subscription = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
@@ -174,11 +113,15 @@ export default function DriverHomeScreen() {
             longitude: newCoords.longitude,
           });
         }
+        // Update heading if available
+        if (newLocation.coords.heading !== null && newLocation.coords.heading !== undefined) {
+          setHeading(newLocation.coords.heading);
+        }
       }
     );
 
     return subscription;
-  }, [user?.id]);
+  }, [user?.id, setHeading]);
 
   const initializeLocation = useCallback(async () => {
     try {
@@ -201,6 +144,11 @@ export default function DriverHomeScreen() {
         longitude: currentLocation.coords.longitude,
       };
       setLocation(coords);
+
+      // Set initial heading if available
+      if (currentLocation.coords.heading !== null && currentLocation.coords.heading !== undefined) {
+        setHeading(currentLocation.coords.heading);
+      }
       setLoading(false);
 
       // Enviar ubicación inicial al servidor
@@ -217,8 +165,7 @@ export default function DriverHomeScreen() {
       // Iniciar actualizaciones de ubicación
       startLocationUpdates();
     } catch (error: any) {
-      console.error('Failed to get location:', error);
-      logError('DriverHomeScreen', error, { context: 'Getting location' });
+      console.warn('[DRIVER] Location error (handled with fallback):', error?.message || error);
 
       // Show user-friendly error message
       const errorMessage = error?.message || 'No se pudo obtener la ubicación';
@@ -343,12 +290,6 @@ export default function DriverHomeScreen() {
       // Play notification sound
       playNotificationSound();
 
-      // Clear any active ride request if it matches
-      if (rideRequest?.id === data.rideId) {
-        setRideRequest(null);
-        if (requestTimeout) clearTimeout(requestTimeout);
-      }
-
       // Build cancellation message
       let message = `El pasajero ha cancelado el viaje`;
 
@@ -364,7 +305,7 @@ export default function DriverHomeScreen() {
       // Show alert to driver
       Alert.alert('Viaje Cancelado', message, [{ text: 'Entendido', style: 'default' }]);
     },
-    [playNotificationSound, rideRequest, requestTimeout]
+    [playNotificationSound]
   );
 
   // Memoized callback for handling driver availability changes
@@ -415,6 +356,12 @@ export default function DriverHomeScreen() {
         return;
       }
 
+      // Skip if local listeners already registered (avoids duplicates)
+      if (localListenersRegisteredRef.current) {
+        console.log('[DRIVER] ⚠️ Local listeners already registered, skipping');
+        return;
+      }
+
       console.log('[DRIVER] ========================================');
       console.log('[DRIVER] 🎧 SETTING UP SOCKET LISTENERS');
       console.log('[DRIVER]    Socket ID:', socket.id);
@@ -422,14 +369,6 @@ export default function DriverHomeScreen() {
       console.log('[DRIVER]    User ID:', user?.id);
       console.log('[DRIVER]    User Role:', user?.role);
       console.log('[DRIVER] ========================================');
-
-      // Remove existing listeners first to avoid duplicates
-      socket.off('ride:request_created');
-      socket.off('ride:cancelled');
-      socket.off('driver:availability_changed');
-      socket.off('connect');
-      socket.off('disconnect');
-      socket.off('error');
 
       // Clean up previous ride cancelled listener if it exists
       if (cleanupRideCancelledRef.current) {
@@ -443,44 +382,40 @@ export default function DriverHomeScreen() {
         cleanupAvailabilityChangedRef.current = null;
       }
 
-      // Register ride request listener with memoized callback
-      socket.on('ride:request_created', handleRideRequest);
-
       // Register ride cancelled listener using imported helper function
       // Store the cleanup function returned by onRideCancelled
       cleanupRideCancelledRef.current = onRideCancelled(handleRideCancelled);
 
       // Register driver availability changed listener
       // Store the cleanup function returned by onDriverAvailabilityChanged
-      cleanupAvailabilityChangedRef.current =
-        onDriverAvailabilityChanged(handleAvailabilityChanged);
-
-      // Register driver availability changed listener
-      // Store the cleanup function returned by onDriverAvailabilityChanged
-      cleanupAvailabilityChangedRef.current =
-        onDriverAvailabilityChanged(handleAvailabilityChanged);
+      if (!cleanupAvailabilityChangedRef.current) {
+        cleanupAvailabilityChangedRef.current =
+          onDriverAvailabilityChanged(handleAvailabilityChanged);
+      }
 
       // Evento 'ride:payment_completed' ahora se maneja globalmente en useGlobalSocketListeners
 
-      // Add connection status listeners for debugging
-      socket.on('connect', () => {
+      // Add connection status listeners for debugging (store refs for targeted cleanup)
+      connectHandlerRef.current = () => {
         console.log('[DRIVER] ========================================');
         console.log('[DRIVER] ✅ SOCKET CONNECTED EVENT');
         console.log('[DRIVER]    Socket ID:', socket.id);
         console.log('[DRIVER]    Timestamp:', new Date().toISOString());
         console.log('[DRIVER] ========================================');
-      });
+      };
+      socket.on('connect', connectHandlerRef.current);
 
-      socket.on('disconnect', reason => {
+      disconnectHandlerRef.current = (reason: string) => {
         console.log('[DRIVER] ========================================');
         console.log('[DRIVER] ❌ SOCKET DISCONNECTED EVENT');
         console.log('[DRIVER]    Reason:', reason);
         console.log('[DRIVER]    Socket ID:', socket.id);
         console.log('[DRIVER]    Timestamp:', new Date().toISOString());
         console.log('[DRIVER] ========================================');
-      });
+      };
+      socket.on('disconnect', disconnectHandlerRef.current);
 
-      socket.on('error', (error: any) => {
+      errorHandlerRef.current = (error: any) => {
         console.error('[DRIVER] ========================================');
         console.error('[DRIVER] ❌ SOCKET ERROR EVENT');
         console.error('[DRIVER]    Socket ID:', socket.id);
@@ -488,11 +423,11 @@ export default function DriverHomeScreen() {
         console.error('[DRIVER]    Error Details:', JSON.stringify(error, null, 2));
         console.error('[DRIVER]    Timestamp:', new Date().toISOString());
         console.error('[DRIVER] ========================================');
-      });
+      };
+      socket.on('error', errorHandlerRef.current);
 
       console.log('[DRIVER] ========================================');
       console.log('[DRIVER] ✅ LISTENERS REGISTERED (Local)');
-      console.log('[DRIVER]    - ride:request_created (local)');
       console.log('[DRIVER]    - ride:cancelled (local - via onRideCancelled helper)');
       console.log(
         '[DRIVER]    - driver:availability_changed (local - via onDriverAvailabilityChanged helper)'
@@ -502,8 +437,10 @@ export default function DriverHomeScreen() {
       console.log('[DRIVER]    - error');
       console.log('[DRIVER]    Note: ride:payment_completed handled globally');
       console.log('[DRIVER] ========================================');
+
+      localListenersRegisteredRef.current = true;
     },
-    [handleRideRequest, handleRideCancelled, handleAvailabilityChanged, user?.id, user?.role]
+    [handleRideCancelled, handleAvailabilityChanged, user?.id, user?.role]
   );
 
   const initializeSocket = useCallback(async () => {
@@ -539,25 +476,28 @@ export default function DriverHomeScreen() {
       setupSocketListeners(socket);
 
       // Re-setup listeners on reconnection with fresh callback references
-      socket.on('connect', () => {
+      reconnectHandlerRef.current = () => {
         console.log('[DRIVER] ========================================');
         console.log('[DRIVER] 🔄 SOCKET RECONNECTED');
         console.log('[DRIVER]    Socket ID:', socket.id);
         console.log('[DRIVER]    Re-registering listeners with fresh callbacks...');
         console.log('[DRIVER] ========================================');
+        localListenersRegisteredRef.current = false; // Allow re-registration
         setSocketInstance(socket); // Update state on reconnect
         setupSocketListeners(socket); // Re-register with fresh callbacks
-      });
+      };
+      socket.on('connect', reconnectHandlerRef.current);
 
       // Update state on disconnect
-      socket.on('disconnect', reason => {
+      disconnectLogHandlerRef.current = (reason: string) => {
         console.log('[DRIVER] ========================================');
         console.log('[DRIVER] ❌ SOCKET DISCONNECTED');
         console.log('[DRIVER]    Reason:', reason);
         console.log('[DRIVER]    Socket ID:', socket.id);
         console.log('[DRIVER] ========================================');
         setSocketInstance(socket); // Trigger re-render to show disconnected state
-      });
+      };
+      socket.on('disconnect', disconnectLogHandlerRef.current);
 
       console.log('[DRIVER] ✅ Socket initialization complete');
     } catch (error: any) {
@@ -599,9 +539,10 @@ export default function DriverHomeScreen() {
       try {
         const { driverAPI } = await import('@/services/api');
         const driverProfile = await driverAPI.getMyProfile();
-        if (driverProfile.data && driverProfile.data.isAvailable !== undefined) {
-          setIsAvailable(driverProfile.data.isAvailable);
-          console.log('[DRIVER] Loaded availability status:', driverProfile.data.isAvailable);
+        const profile = driverProfile.data.data;
+        if (profile && profile.isAvailable !== undefined) {
+          setIsAvailable(profile.isAvailable);
+          console.log('[DRIVER] Loaded availability status:', profile.isAvailable);
         }
       } catch (error) {
         console.log('[DRIVER] Could not load driver availability:', error);
@@ -635,8 +576,6 @@ export default function DriverHomeScreen() {
       removeConnectionListener(connectionListener);
       isMountedRef.current = false;
 
-      if (requestTimeout) clearTimeout(requestTimeout);
-
       // Clean up ride cancelled listener using the stored cleanup function
       if (cleanupRideCancelledRef.current) {
         cleanupRideCancelledRef.current();
@@ -649,59 +588,31 @@ export default function DriverHomeScreen() {
         cleanupAvailabilityChangedRef.current = null;
       }
 
+      localListenersRegisteredRef.current = false;
+
       const socket = getSocket();
       if (socket) {
-        socket.off('ride:request_created');
-        socket.off('connect');
-        socket.off('disconnect');
-        socket.off('error');
+        // Only remove LOCAL listeners — never global ones
+        if (reconnectHandlerRef.current) {
+          socket.off('connect', reconnectHandlerRef.current);
+        }
+        if (disconnectLogHandlerRef.current) {
+          socket.off('disconnect', disconnectLogHandlerRef.current);
+        }
+        if (connectHandlerRef.current) {
+          socket.off('connect', connectHandlerRef.current);
+        }
+        if (disconnectHandlerRef.current) {
+          socket.off('disconnect', disconnectHandlerRef.current);
+        }
+        if (errorHandlerRef.current) {
+          socket.off('error', errorHandlerRef.current);
+        }
       }
       // Don't disconnect socket here - keep it alive for the session
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, token]);
-
-  const acceptRide = async () => {
-    if (!rideRequest) return;
-
-    try {
-      await rideAPI.acceptRide(rideRequest.id);
-      const acceptedRideId = rideRequest.id;
-      setRideRequest(null);
-      if (requestTimeout) clearTimeout(requestTimeout);
-
-      // Play notification sound when accepting ride
-      playNotificationSound();
-
-      // Join ride room immediately after accepting to receive payment notifications
-      const socket = getSocket();
-      if (socket) {
-        console.log(
-          '[DRIVER] 🔌 Joining ride room immediately after accept:',
-          `ride:${acceptedRideId}`
-        );
-        socket.emit('join_ride', { rideId: acceptedRideId });
-      } else {
-        console.warn('[DRIVER] ⚠️ Socket not available to join ride room');
-      }
-
-      Alert.alert('Éxito', '¡Viaje aceptado!');
-      // Pass the rideId as a parameter to the active-ride screen
-      router.push({
-        pathname: '/(driver)/active-ride',
-        params: { rideId: acceptedRideId },
-      } as any);
-    } catch (error) {
-      console.error('Accept ride error:', error);
-      logError('DriverHomeScreen', error, { context: 'Accept ride' });
-      // Don't show technical error to user
-    }
-  };
-
-  const rejectRide = () => {
-    setRideRequest(null);
-    if (requestTimeout) clearTimeout(requestTimeout);
-  };
 
   if (loading || !location) {
     return (
@@ -723,21 +634,34 @@ export default function DriverHomeScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Map */}
       <MapView
         ref={mapRef}
         style={styles.map}
         initialRegion={{
           latitude: location.latitude,
           longitude: location.longitude,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
         }}
+        showsUserLocation={false}
+        showsMyLocationButton={false}
+        scrollEnabled={true}
+        zoomEnabled={true}
         rotateEnabled={true}
         pitchEnabled={true}
-        showsBuildings={true}
+        toolbarEnabled={false}
+        moveOnMarkerPress={false}
       >
-        <Marker coordinate={location} title="Tu Ubicación" anchor={{ x: 0.5, y: 0.5 }} flat={true}>
+        <Marker
+          coordinate={{
+            latitude: location.latitude,
+            longitude: location.longitude,
+          }}
+          title="Mi ubicación"
+          anchor={{ x: 0.5, y: 0.5 }}
+          flat={false}
+          rotation={heading || 0}
+        >
           <DriverTaxiIcon />
         </Marker>
       </MapView>
@@ -746,135 +670,34 @@ export default function DriverHomeScreen() {
       <CenterLocationButton
         onPress={handleCenterOnUserLocation}
         disabled={!location}
-        style={styles.centerLocationButton}
+        style={[styles.centerLocationButton, { top: insets.top + 4 }]}
       />
 
-      {/* Wallet Trigger Button */}
-      <TouchableOpacity 
-        style={styles.walletTrigger}
-        onPress={() => setShowWallet(true)}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="wallet-outline" size={24} color={colors.primary} />
-        <View>
-          <Text style={styles.walletTriggerLabel}>Ganancias</Text>
-          <Text style={styles.walletTriggerValue}>Bs. {balanceVES.toFixed(2)}</Text>
-        </View>
-      </TouchableOpacity>
-
       {/* Driver Availability Status Indicator - Clickable Toggle */}
-      <CopilotStep
-        text="Toca aquí para ponerte 'Disponible' y empezar a recibir viajes, o 'No Disponible' para descansar."
-        order={1}
-        name="availability"
+      <TouchableOpacity
+        style={[
+          styles.availabilityStatus,
+          isAvailable ? styles.available : styles.unavailable,
+          { top: insets.top + 4 }
+        ]}
+        onPress={handleToggleAvailability}
+        disabled={isUpdatingAvailability}
+        activeOpacity={0.7}
       >
-        <WalkthroughTouchableOpacity
-          style={[styles.availabilityStatus, isAvailable ? styles.available : styles.unavailable]}
-          onPress={handleToggleAvailability}
-          disabled={isUpdatingAvailability}
-          activeOpacity={0.7}
-        >
-          {isUpdatingAvailability ? (
-            <ActivityIndicator size="small" color={isAvailable ? '#10B981' : '#F59E0B'} />
-          ) : (
-            <>
-              <View
-                style={[
-                  styles.statusDot,
-                  isAvailable ? styles.dotAvailable : styles.dotUnavailable,
-                ]}
-              />
-              <Text style={styles.statusText}>{isAvailable ? 'Disponible' : 'No Disponible'}</Text>
-            </>
-          )}
-        </WalkthroughTouchableOpacity>
-      </CopilotStep>
-
-      {/* Ride Request Card */}
-      {rideRequest && (
-        <View style={styles.rideRequestCard}>
-          <View style={styles.requestHeader}>
-            <View style={styles.requestHeaderIconBox}>
-              <Ionicons name="notifications-outline" size={22} color={colors.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.requestTitle}>Nueva Solicitud</Text>
-              <Text style={styles.requestSubtitle}>Recoge en {rideRequest.pickupAddress.split(',')[0]}</Text>
-            </View>
-            <View style={styles.timerContainer}>
-              <Ionicons name="time-outline" size={14} color={colors.mediumGray} />
-              <Text style={styles.timerText}>{countdown}s</Text>
-            </View>
-          </View>
-
-          <View style={styles.requestDetails}>
-            <View style={styles.requestPassengerInfo}>
-              <View style={styles.passengerAvatar}>
-                <Ionicons name="person" size={20} color={colors.mediumGray} />
-              </View>
-              <View>
-                <Text style={styles.passengerLabel}>Pasajero</Text>
-                <Text style={styles.requestTextBold}>{rideRequest.passengerName}</Text>
-              </View>
-            </View>
-
-            <View style={styles.requestLocationContainer}>
-              <View style={styles.requestRouteLineContainer}>
-                <View style={styles.requestRouteDotPickup} />
-                <View style={styles.requestRouteLine} />
-                <View style={styles.requestRouteDotDropoff} />
-              </View>
-              <View style={styles.requestLocationTexts}>
-                <View style={styles.requestLocationItem}>
-                  <Text style={styles.requestLocationLabel}>PUNTO DE PARTIDA</Text>
-                  <Text style={styles.requestLocationValue} numberOfLines={1}>{rideRequest.pickupAddress}</Text>
-                </View>
-                <View style={styles.requestLocationItem}>
-                  <Text style={styles.requestLocationLabel}>DESTINO FINAL</Text>
-                  <Text style={styles.requestLocationValue} numberOfLines={1}>{rideRequest.destinationAddress}</Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.fareRow}>
-              {rideRequest.zoneName && (
-                <View style={styles.zoneInfoRow}>
-                  <Ionicons name="location-outline" size={14} color={colors.mediumGray} />
-                  <Text style={styles.zoneInfoText}>Zona: {rideRequest.zoneName}</Text>
-                </View>
-              )}
-              <View style={styles.fareItem}>
-                <Text style={styles.fareLabel}>GANANCIA ESTIMADA</Text>
-                <Text style={styles.fareValue}>
-                  {rideRequest.currency === 'USD' ? '$' : 'Bs.'} {rideRequest.estimatedFare.toFixed(2)}
-                </Text>
-              </View>
-              <View style={styles.fareDivider} />
-              <View style={styles.fareItem}>
-                <Text style={styles.fareLabel}>DISTANCIA</Text>
-                <Text style={styles.fareValueDist}>{rideRequest.distance.toFixed(1)} km</Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.requestActions}>
-            <TouchableOpacity
-              onPress={rejectRide}
-              style={[styles.requestButton, styles.rejectButton]}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.rejectButtonText}>Rechazar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={acceptRide}
-              style={[styles.requestButton, styles.acceptButton]}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.acceptButtonText}>Aceptar Viaje</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
+        {isUpdatingAvailability ? (
+          <ActivityIndicator size="small" color={isAvailable ? '#10B981' : '#F59E0B'} />
+        ) : (
+          <>
+            <View
+              style={[
+                styles.statusDot,
+                isAvailable ? styles.dotAvailable : styles.dotUnavailable,
+              ]}
+            />
+            <Text style={styles.statusText}>{isAvailable ? 'Disponible' : 'No Disponible'}</Text>
+          </>
+        )}
+      </TouchableOpacity>
 
       {/* Digital Wallet Modal */}
       <Modal
@@ -987,230 +810,6 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  rideRequestCard: {
-    position: 'absolute',
-    bottom: 40,
-    left: 16,
-    right: 16,
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
-  },
-  requestHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    gap: 12,
-  },
-  requestHeaderIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  requestTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.darkGray,
-    letterSpacing: -0.5,
-  },
-  requestSubtitle: {
-    fontSize: 13,
-    color: colors.mediumGray,
-    marginTop: 1,
-  },
-  timerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    gap: 4,
-  },
-  timerText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.mediumGray,
-  },
-  requestDetails: {
-    marginBottom: 24,
-  },
-  requestPassengerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    gap: 12,
-    backgroundColor: colors.background,
-    padding: 12,
-    borderRadius: 14,
-  },
-  passengerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
-  },
-  passengerLabel: {
-    fontSize: 10,
-    color: colors.mediumGray,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  requestTextBold: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.darkGray,
-  },
-  requestLocationContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 4,
-    marginBottom: 20,
-  },
-  requestRouteLineContainer: {
-    alignItems: 'center',
-    width: 20,
-    marginRight: 12,
-    paddingVertical: 6,
-  },
-  requestRouteDotPickup: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.primary,
-    borderWidth: 2,
-    borderColor: '#fff',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  requestRouteLine: {
-    width: 2,
-    flex: 1,
-    backgroundColor: '#E5E7EB',
-    marginVertical: 4,
-  },
-  requestRouteDotDropoff: {
-    width: 10,
-    height: 10,
-    borderRadius: 2,
-    backgroundColor: colors.darkGray,
-  },
-  requestLocationTexts: {
-    flex: 1,
-    gap: 16,
-  },
-  requestLocationItem: {
-    justifyContent: 'center',
-  },
-  requestLocationLabel: {
-    fontSize: 10,
-    color: colors.mediumGray,
-    fontWeight: '600',
-    marginBottom: 2,
-    letterSpacing: 0.5,
-  },
-  requestLocationValue: {
-    fontSize: 14,
-    color: colors.darkGray,
-    fontWeight: '500',
-  },
-  fareRow: {
-    flexDirection: 'row',
-    backgroundColor: colors.background,
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  zoneInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 8,
-    width: '100%',
-  },
-  zoneInfoText: {
-    fontSize: 12,
-    color: colors.mediumGray,
-    fontWeight: '500',
-  },
-  fareItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  fareLabel: {
-    fontSize: 10,
-    color: colors.mediumGray,
-    fontWeight: '600',
-    marginBottom: 4,
-    letterSpacing: 0.5,
-  },
-  fareValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  fareDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-  },
-  fareValueDist: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.darkGray,
-  },
-  requestActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  requestButton: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rejectButton: {
-    backgroundColor: '#fff',
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-  },
-  rejectButtonText: {
-    color: colors.mediumGray,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  acceptButton: {
-    backgroundColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  acceptButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
-  },
   connectionStatus: {
     position: 'absolute',
     top: 60,
@@ -1260,8 +859,8 @@ const styles = StyleSheet.create({
   },
   availabilityStatus: {
     position: 'absolute',
-    top: 50, // Moved higher up
-    right: 16,
+    // top: 12, // Remove fixed top
+    left: 16,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -1281,34 +880,6 @@ const styles = StyleSheet.create({
   unavailable: {
     borderWidth: 1,
     borderColor: '#F59E0B',
-  },
-  walletTrigger: {
-    position: 'absolute',
-    top: 50,
-    left: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    gap: 10,
-  },
-  walletTriggerLabel: {
-    fontSize: 10,
-    color: colors.mediumGray,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  walletTriggerValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.darkGray,
   },
   modalOverlay: {
     flex: 1,
@@ -1441,9 +1012,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   centerLocationButton: {
-    top: 50, // Misma altura que el botón de wallet
-    right: 16, // En la esquina derecha
-    left: undefined, // Anular la posición izquierda del componente base
+    right: 16,
+    left: undefined,
+    top: undefined,
   },
 });
 

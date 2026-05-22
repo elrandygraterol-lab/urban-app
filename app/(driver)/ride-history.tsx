@@ -43,15 +43,16 @@ export default function DriverRideHistoryScreen() {
     async (filters?: { startDate?: string; endDate?: string }) => {
       try {
         setLoading(true);
-        const response = await rideAPI.getRideHistory({ ...filters, role: 'driver' });
+        const response = await rideAPI.getRideHistory(filters);
 
         // Validación defensiva: asegurar que siempre tengamos un array
         let ridesData: RideHistoryItem[] = [];
 
-        if (response.data?.rides && Array.isArray(response.data.rides)) {
-          ridesData = response.data.rides;
-        } else if (Array.isArray(response.data)) {
-          ridesData = response.data;
+        const payload = response.data?.data ?? response.data;
+        if (payload?.rides && Array.isArray(payload.rides)) {
+          ridesData = payload.rides;
+        } else if (Array.isArray(payload)) {
+          ridesData = payload;
         } else {
           ridesData = [];
         }

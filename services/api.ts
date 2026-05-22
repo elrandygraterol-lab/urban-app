@@ -8,10 +8,30 @@ import type {
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 const TOKEN_KEY = 'auth_token';
+const REFRESH_TOKEN_KEY = 'refresh_token';
+const USER_KEY = 'auth_user';
 
 // Timeout configurations
 const DEFAULT_TIMEOUT = 10000; // 10 seconds
 const CANCELLATION_TIMEOUT = 15000; // 15 seconds for cancellation operations
+
+// Token refresh state
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value: any) => void;
+  reject: (reason?: any) => void;
+}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach(({ resolve, reject }) => {
+    if (error) {
+      reject(error);
+    } else {
+      resolve(token);
+    }
+  });
+  failedQueue = [];
+};
 
 // Create axios instance
 const api: AxiosInstance = axios.create({
@@ -40,34 +60,76 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
+// Response interceptor for error handling with automatic token refresh
 api.interceptors.response.use(
   response => response,
   async (error: AxiosError) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(token => {
+          if (token && originalRequest.headers) {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+          }
+          return api(originalRequest);
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+        if (!refreshToken) {
+          throw new Error('No refresh token available');
+        }
+
+        const response = await axios.post(`${API_URL}/api/auth/refresh`, { refreshToken });
+        const { accessToken, refreshToken: newRefreshToken } = response.data?.data || {};
+
+        if (!accessToken) {
+          throw new Error('Token refresh failed');
+        }
+
+        await SecureStore.setItemAsync(TOKEN_KEY, accessToken);
+        if (newRefreshToken) {
+          await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, newRefreshToken);
+        }
+
+        processQueue(null, accessToken);
+
+        if (originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        }
+        return api(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        await SecureStore.deleteItemAsync(TOKEN_KEY);
+        await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+        await SecureStore.deleteItemAsync(USER_KEY);
+        console.log('Token expired or invalid');
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
     if (error.response) {
-      // Server responded with error status
       const status = error.response.status;
 
-      if (status === 401) {
-        // Unauthorized - token expired or invalid
-        await SecureStore.deleteItemAsync(TOKEN_KEY);
-        // You might want to redirect to login here
-        console.log('Token expired or invalid');
-      } else if (status === 403) {
-        // Forbidden
+      if (status === 403) {
         console.log('Access forbidden');
       } else if (status === 404) {
-        // Not found
         console.log('Resource not found');
       } else if (status >= 500) {
-        // Server error
         console.log('Server error');
       }
     } else if (error.request) {
-      // Request made but no response
       console.log('Network error - no response received');
     } else {
-      // Error setting up request
       console.log('Request setup error:', error.message);
     }
 
@@ -246,6 +308,8 @@ export const rideAPI = {
 export const paymentAPI = {
   getPaymentMethods: () => api.get('/api/payments/methods'),
 
+  getPlatformPaymentMethods: () => api.get('/api/payments/platform-methods'),
+
   addPaymentMethod: (data: {
     methodType: 'cash' | 'card' | 'digital_wallet';
     cardToken?: string;
@@ -331,6 +395,40 @@ export const userAPI = {
     api.put('/api/users/me', data),
 
   deleteAccount: () => api.delete('/api/users/me'),
+
+  uploadPhoto: (uri: string): Promise<any> => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const token = await SecureStore.getItemAsync(TOKEN_KEY);
+        const filename = uri.split('/').pop() || 'photo.jpg';
+        const ext = filename.split('.').pop()?.toLowerCase() || 'jpg';
+        const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+        const formData = new FormData();
+        formData.append('photo', { uri, name: filename, type: mime } as any);
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${API_URL}/api/users/me/photo`);
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        xhr.onload = () => {
+          try {
+            const body = JSON.parse(xhr.responseText);
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve(body);
+            } else {
+              reject(new Error(body.message || `HTTP ${xhr.status}`));
+            }
+          } catch {
+            reject(new Error('Error al subir foto'));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Network request failed'));
+        xhr.ontimeout = () => reject(new Error('Request timeout'));
+        xhr.timeout = 30000;
+        xhr.send(formData);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  },
 };
 
 export const passengersAPI = {

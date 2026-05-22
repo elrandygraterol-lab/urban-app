@@ -18,8 +18,9 @@ import { Colors as colors } from '@/constants/theme';
 import walletService, {
   WalletResponseDto,
   WalletTransactionDto,
+  CommissionRateResponse,
 } from '@/services/walletService';
-import TransactionHistory from './components/TransactionHistory';
+import TransactionHistory from '@/src/components/driver/TransactionHistory';
 
 const PAGE_SIZE = 20;
 
@@ -31,6 +32,7 @@ export default function WalletScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [offset, setOffset] = useState(0);
+  const [commissionRate, setCommissionRate] = useState<CommissionRateResponse | null>(null);
 
   const loadWalletData = useCallback(async (isRefresh = false) => {
     try {
@@ -40,11 +42,17 @@ export default function WalletScreen() {
         setLoading(true);
       }
 
-      const data = await walletService.getMyWallet();
-      setWallet(data.wallet);
-      setTransactions(data.transactions);
-      setTotalTransactions(data.totalTransactions);
-      setOffset(data.transactions.length);
+      const [walletData, txData, rateData] = await Promise.all([
+        walletService.getMyWallet(),
+        walletService.getTransactions(PAGE_SIZE, 0),
+        walletService.getCommissionRate().catch(() => null),
+      ]);
+
+      setWallet(walletData);
+      setTransactions(txData.transactions);
+      setTotalTransactions(txData.totalTransactions);
+      setOffset(txData.transactions.length);
+      setCommissionRate(rateData);
     } catch (error: any) {
       const message =
         error?.response?.data?.message ||
@@ -138,6 +146,16 @@ export default function WalletScreen() {
         </Text>
       </View>
 
+      {/* Commission Rate Info */}
+      {commissionRate && (
+        <View style={styles.commissionInfo}>
+          <View style={styles.commissionDot} />
+          <Text style={styles.commissionText}>
+            Ganas el <Text style={styles.commissionHighlight}>{Number(commissionRate.rate).toFixed(1)}%</Text> del total de cada viaje
+          </Text>
+        </View>
+      )}
+
       {/* Transaction History */}
       <View style={styles.historySection}>
         <TransactionHistory
@@ -218,6 +236,32 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.7)',
     marginTop: 8,
+  },
+  commissionInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    gap: 8,
+  },
+  commissionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  commissionText: {
+    fontSize: 13,
+    color: '#15803D',
+    flex: 1,
+  },
+  commissionHighlight: {
+    fontWeight: '700',
+    fontSize: 14,
   },
   historySection: {
     paddingHorizontal: 20,

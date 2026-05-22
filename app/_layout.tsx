@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { InteractionManager } from 'react-native';
+import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
+import { InteractionManager, Platform, StatusBar } from 'react-native';
 import 'react-native-reanimated';
-import { CopilotProvider } from 'react-native-copilot';
+// import { CopilotProvider } from 'react-native-copilot';
+// import CopilotTooltip from '@/components/tutorial/CopilotTooltip';
+// import { handleTourEnd } from '@/utils/tutorialState';
 //React Native Best Practices expo-dev-client
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuthStore } from '@/store/authStore';
@@ -144,7 +146,7 @@ function AppContent() {
         <Stack.Screen name="(driver)" />
       </Stack>
       <GlobalNotificationOverlay />
-      <StatusBar style="auto" />
+      <ExpoStatusBar style="auto" />
     </>
   );
 }
@@ -156,9 +158,7 @@ export default function RootLayout() {
     <ErrorBoundary>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <NotificationProvider>
-          <CopilotProvider stopOnOutsideClick androidStatusBarVisible>
             <AppContent />
-          </CopilotProvider>
         </NotificationProvider>
       </ThemeProvider>
     </ErrorBoundary>

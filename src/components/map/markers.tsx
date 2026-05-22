@@ -1,82 +1,99 @@
 import React from 'react';
-import { View, Image } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import passengerImage from '../../assets/passengerMarker';
+
+const MARKER_BORDER = '#FFFFFF';
+
+const styles = StyleSheet.create({
+  base: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+});
 
 export const DriverTaxiIcon: React.FC = () => {
   return (
     <View
-      style={{
-        backgroundColor: '#9CA3AF',
-        padding: 6,
-        borderRadius: 18,
-        borderWidth: 2,
-        borderColor: '#fff',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 3,
-        elevation: 4,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
+      style={[
+        styles.base,
+        {
+          backgroundColor: '#1F2937',
+          width: 44,
+          height: 44,
+          borderRadius: 22,
+          borderWidth: 3,
+          borderColor: MARKER_BORDER,
+        },
+      ]}
     >
-      <MaterialIcons name="local-taxi" size={20} color="#fff" />
+      <MaterialIcons name="local-taxi" size={22} color="#FFFFFF" />
     </View>
   );
 };
 
-export const PassengerIcon: React.FC<{ size?: number }> = ({ size = 52 }) => {
+export const PassengerIcon: React.FC<{ size?: number }> = ({ size = 44 }) => {
   return (
-    <Image
-      source={passengerImage}
-      style={{
-        width: size,
-        height: size,
-        resizeMode: 'contain',
-        backgroundColor: 'transparent',
-      }}
-    />
+    <View
+      style={[
+        styles.base,
+        {
+          backgroundColor: '#22c55e',
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 3,
+          borderColor: MARKER_BORDER,
+        },
+      ]}
+    >
+      <Ionicons name="person" size={size * 0.5} color="#FFFFFF" />
+    </View>
   );
 };
 
-export const PickupIcon: React.FC<{ size?: number }> = ({ size = 52 }) => {
+export const PickupIcon: React.FC<{ size?: number }> = ({ size = 36 }) => {
   return (
-    <Image
-      source={passengerImage}
-      style={{
-        width: size,
-        height: size,
-        resizeMode: 'contain',
-        backgroundColor: 'transparent',
-      }}
-    />
+    <View
+      style={[
+        styles.base,
+        {
+          backgroundColor: '#22c55e',
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 3,
+          borderColor: MARKER_BORDER,
+        },
+      ]}
+    >
+      <Ionicons name="location" size={size * 0.5} color="#FFFFFF" />
+    </View>
   );
 };
 
-/** Second pickup point marker — customizable color, defaults to system theme green */
-export const SecondPickupIcon: React.FC<{ size?: number; color?: string }> = ({ 
-  size = 20, 
-  color = '#22c55e' // green-500 — matches system theme
+export const SecondPickupIcon: React.FC<{ size?: number; color?: string }> = ({
+  size = 20,
+  color = '#22c55e',
 }) => {
   return (
     <View
-      style={{
-        backgroundColor: color,
-        padding: 6,
-        borderRadius: 16,
-        borderWidth: 2,
-        borderColor: '#fff',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 2,
-        elevation: 3,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
+      style={[
+        styles.base,
+        {
+          backgroundColor: color,
+          padding: 6,
+          borderRadius: 16,
+          borderWidth: 2,
+          borderColor: MARKER_BORDER,
+        },
+      ]}
     >
-      <Ionicons name="person-add" size={size} color="#fff" />
+      <Ionicons name="person-add" size={size} color="#FFFFFF" />
     </View>
   );
 };
@@ -84,49 +101,40 @@ export const SecondPickupIcon: React.FC<{ size?: number; color?: string }> = ({
 export const DropoffIcon: React.FC<{ size?: number }> = ({ size = 20 }) => {
   return (
     <View
-      style={{
-        backgroundColor: '#FF8C00',
-        padding: 8,
-        borderRadius: 20,
-        borderWidth: 3,
-        borderColor: '#fff',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 5,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
+      style={[
+        styles.base,
+        {
+          backgroundColor: '#DC2626',
+          padding: 8,
+          borderRadius: 20,
+          borderWidth: 3,
+          borderColor: MARKER_BORDER,
+        },
+      ]}
     >
-      <Ionicons name="flag" size={size} color="#fff" />
+      <Ionicons name="flag" size={size} color="#FFFFFF" />
     </View>
   );
 };
 
-/** Second destination point marker — customizable color, defaults to system theme green */
-export const SecondDropoffIcon: React.FC<{ size?: number; color?: string }> = ({ 
-  size = 20, 
-  color = '#22c55e' // green-500 — matches system theme
+export const SecondDropoffIcon: React.FC<{ size?: number; color?: string }> = ({
+  size = 20,
+  color = '#22c55e',
 }) => {
   return (
     <View
-      style={{
-        backgroundColor: color,
-        padding: 6,
-        borderRadius: 16,
-        borderWidth: 2,
-        borderColor: '#fff',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 2,
-        elevation: 3,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
+      style={[
+        styles.base,
+        {
+          backgroundColor: color,
+          padding: 6,
+          borderRadius: 16,
+          borderWidth: 2,
+          borderColor: MARKER_BORDER,
+        },
+      ]}
     >
-      <Ionicons name="flag" size={size} color="#fff" />
+      <Ionicons name="flag" size={size} color="#FFFFFF" />
     </View>
   );
 };

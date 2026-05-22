@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -4,
     right: -8,
-    backgroundColor: Colors.light.error,
+    backgroundColor: Colors.error,
     borderRadius: 10,
     minWidth: 20,
     height: 20,

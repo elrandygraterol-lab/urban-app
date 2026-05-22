@@ -15,11 +15,30 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { paymentAPI } from '@/services/api';
+import { formatCurrency, Currency } from '@/utils/currency';
+
+interface PlatformPaymentMethod {
+  id: string;
+  name: string;
+  type: 'pago_movil' | 'bank_transfer';
+  mobilePhone?: string;
+  mobileCedula?: string;
+  mobileBank?: string;
+  accountNumber?: string;
+  accountType?: string;
+  transferCedula?: string;
+  transferBank?: string;
+  description?: string;
+  isActive: boolean;
+}
 
 interface MobilePaymentModalProps {
   visible: boolean;
   amount: number;
+  currency?: Currency;
+  exchangeRate?: number;
   rideId: string;
+  platformMethod?: PlatformPaymentMethod;
   onPaymentComplete: (paymentData: {
     method: 'mobile_payment' | 'cash';
     referenceNumber?: string;
@@ -39,9 +58,9 @@ interface MobilePaymentModalProps {
 // Datos de prueba para el pago móvil
 const TEST_PAYMENT_DATA = {
   mobile: {
-    referencia: '123456789012',
+    referencia: '123456',
     fecha: '15/12/2024',
-    banco: 'venezuela',
+    banco: '0102',
     telefonoP: '5844122144339',
     identificacion: 'V25213842',
     pagador: 'Juan Pérez',
@@ -57,7 +76,10 @@ const MAX_EXTENSIONS = 3;
 export default function MobilePaymentModal({
   visible,
   amount,
+  currency = 'VES',
+  exchangeRate,
   rideId,
+  platformMethod,
   onPaymentComplete,
   onCancel,
 }: MobilePaymentModalProps) {
@@ -82,11 +104,43 @@ export default function MobilePaymentModal({
   const [isTimerActive, setIsTimerActive] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const otherCurrency: Currency = currency === 'USD' ? 'VES' : 'USD';
+  const equivalentAmount =
+    exchangeRate && exchangeRate > 0
+      ? currency === 'USD'
+        ? amount * exchangeRate
+        : amount / exchangeRate
+      : null;
+
   const banks = [
-    { id: 'banesco', name: 'Banesco', phone: '0134', account: '0134' },
-    { id: 'venezuela', name: 'Banco de Venezuela', phone: '0102', account: '0102' },
-    { id: 'mercantil', name: 'Mercantil', phone: '0105', account: '0105' },
-    { id: 'provincial', name: 'Provincial', phone: '0108', account: '0108' },
+    { id: '0102', name: 'Banco de Venezuela', code: '0102' },
+    { id: '0104', name: 'Venezolano de Crédito', code: '0104' },
+    { id: '0105', name: 'Mercantil Banco', code: '0105' },
+    { id: '0108', name: 'BBVA Provincial', code: '0108' },
+    { id: '0114', name: 'Bancaribe', code: '0114' },
+    { id: '0115', name: 'Banex', code: '0115' },
+    { id: '0116', name: 'Banplus', code: '0116' },
+    { id: '0128', name: 'Bancrecer', code: '0128' },
+    { id: '0134', name: 'Banesco', code: '0134' },
+    { id: '0137', name: 'Sofitasa', code: '0137' },
+    { id: '0138', name: 'Banfanb', code: '0138' },
+    { id: '0140', name: 'Banco del Sur', code: '0140' },
+    { id: '0146', name: 'BanBif', code: '0146' },
+    { id: '0149', name: 'Banco Exterior', code: '0149' },
+    { id: '0151', name: 'BFC Banco Fondo Común', code: '0151' },
+    { id: '0156', name: '100% Banco', code: '0156' },
+    { id: '0157', name: 'DelSur', code: '0157' },
+    { id: '0163', name: 'Banco del Tesoro', code: '0163' },
+    { id: '0166', name: 'Banco Agrícola de Venezuela', code: '0166' },
+    { id: '0168', name: 'Banvalu', code: '0168' },
+    { id: '0169', name: 'Mi Banco', code: '0169' },
+    { id: '0171', name: 'BOD', code: '0171' },
+    { id: '0172', name: 'Banco Caroní', code: '0172' },
+    { id: '0173', name: 'Banco Plaza', code: '0173' },
+    { id: '0175', name: 'Banco Bicentenario', code: '0175' },
+    { id: '0176', name: 'Bangente', code: '0176' },
+    { id: '0190', name: 'Citibank', code: '0190' },
+    { id: '0191', name: 'BNC', code: '0191' },
   ];
 
   // Timer effect - Solo para pago móvil
@@ -229,7 +283,7 @@ export default function MobilePaymentModal({
       // Efectivo no requiere validación
       Alert.alert(
         'Pago en Efectivo',
-        `Pagarás Bs. ${amount.toFixed(2)} en efectivo al conductor al finalizar el viaje.`,
+        `Pagarás ${formatCurrency(amount, currency)} en efectivo al conductor al finalizar el viaje.`,
         [
           {
             text: 'Confirmar',
@@ -254,10 +308,10 @@ export default function MobilePaymentModal({
         return;
       }
 
-      // Validar longitud de referencia - si > 12 chars, tomar últimos 12 dígitos
-      let referenciaFinal = referencia;
-      if (referencia.length > 12) {
-        referenciaFinal = referencia.slice(-12);
+      // Validar referencia de 6 dígitos
+      if (referencia.length !== 6 || !/^\d{6}$/.test(referencia)) {
+        Alert.alert('Error', 'La referencia debe tener exactamente 6 dígitos numéricos');
+        return;
       }
 
       if (telefonoP.length < 10) {
@@ -281,22 +335,16 @@ export default function MobilePaymentModal({
     try {
       if (paymentMethod === 'mobile') {
         const selectedBankData = banks.find(b => b.id === selectedBank);
-        
-        // Usar referencia final (últimos 12 dígitos si es necesario)
-        let referenciaFinal = referencia;
-        if (referencia.length > 12) {
-          referenciaFinal = referencia.slice(-12);
-        }
-        
+
         // Call P2C verification API - Requisito 2.1
         const response = await paymentAPI.verifyP2CPayment(rideId, {
-          referencia: referenciaFinal,
+          referencia,
           fecha,
-          banco: selectedBankData?.name || '',
-          telefonoP,  // Usar telefonoP
+          banco: selectedBankData?.code || selectedBank,
+          telefonoP,
           monto: amount,
-          identificacion,  // Usar identificacion
-          pagador,  // Usar pagador
+          identificacion,
+          pagador,
         });
 
         console.log('✅ P2C Payment verified:', response.data);
@@ -304,9 +352,9 @@ export default function MobilePaymentModal({
         // Preparar datos del pago P2C
         const paymentData = {
           method: 'mobile_payment' as const,
-          referencia: referenciaFinal,
+          referencia,
           fecha,
-          banco: selectedBankData?.name,
+          banco: selectedBankData?.code || selectedBank,
           telefonoP,
           monto: amount,
           identificacion,
@@ -316,7 +364,7 @@ export default function MobilePaymentModal({
         // Show success message - Requisito 2.2 (200 response)
         Alert.alert(
           'Pago Verificado',
-          `Tu Pago Móvil de Bs. ${amount.toFixed(2)} ha sido verificado exitosamente.\n\nReferencia: ${referenciaFinal}`,
+          `Tu Pago Móvil de ${formatCurrency(amount, currency)} ha sido verificado exitosamente.\n\nReferencia: ${referencia}`,
           [
             {
               text: 'OK',
@@ -442,7 +490,16 @@ export default function MobilePaymentModal({
             {/* Amount */}
             <View style={styles.amountContainer}>
               <Text style={styles.amountLabel}>Monto a Pagar</Text>
-              <Text style={styles.amountValue}>Bs. {amount.toFixed(2)}</Text>
+              <Text style={styles.amountValue}>{formatCurrency(amount, currency)}</Text>
+              {equivalentAmount !== null && (
+                <Text style={styles.amountEquivalent}>
+                  {formatCurrency(equivalentAmount, otherCurrency)}
+                  {'  '}
+                  <Text style={styles.amountRate}>
+                    (@ {exchangeRate!.toFixed(2)})
+                  </Text>
+                </Text>
+              )}
             </View>
 
             {/* Payment Method Selection - Solo Pago Móvil y Efectivo */}
@@ -529,10 +586,61 @@ export default function MobilePaymentModal({
             {/* Payment Forms - Solo Pago Móvil */}
             {paymentMethod === 'mobile' && (
               <>
-                {/* Bank Selection - Dropdown Style */}
+                {/* Admin-configured account info */}
+                {platformMethod && platformMethod.type === 'pago_movil' && (
+                  <View style={styles.destinationInfoBox}>
+                    <View style={styles.destinationHeader}>
+                      <Ionicons name="phone-portrait" size={20} color={Colors.primary} />
+                      <Text style={styles.destinationTitle}>Paga con Pago Móvil a:</Text>
+                    </View>
+                    <Text style={styles.destinationText}>
+                      {platformMethod.mobileBank}
+                    </Text>
+                    <Text style={styles.destinationDetail}>
+                      Teléfono: {platformMethod.mobilePhone}
+                    </Text>
+                    <Text style={styles.destinationDetail}>
+                      Cédula: {platformMethod.mobileCedula}
+                    </Text>
+                    {platformMethod.description && (
+                      <Text style={styles.destinationDetail}>
+                        {platformMethod.description}
+                      </Text>
+                    )}
+                  </View>
+                )}
+
+                {/* Admin-configured bank transfer info */}
+                {platformMethod && platformMethod.type === 'bank_transfer' && (
+                  <View style={styles.destinationInfoBox}>
+                    <View style={styles.destinationHeader}>
+                      <Ionicons name="business" size={20} color={Colors.primary} />
+                      <Text style={styles.destinationTitle}>Transfiere a:</Text>
+                    </View>
+                    <Text style={styles.destinationText}>
+                      {platformMethod.transferBank}
+                    </Text>
+                    <Text style={styles.destinationDetail}>
+                      Cuenta: {platformMethod.accountNumber}
+                    </Text>
+                    <Text style={styles.destinationDetail}>
+                      Tipo: {platformMethod.accountType || 'Corriente'}
+                    </Text>
+                    <Text style={styles.destinationDetail}>
+                      Cédula/RIF: {platformMethod.transferCedula}
+                    </Text>
+                    {platformMethod.description && (
+                      <Text style={styles.destinationDetail}>
+                        {platformMethod.description}
+                      </Text>
+                    )}
+                  </View>
+                )}
+
+                {/* Bank Selection - Scrollable Picker */}
                 <View style={styles.section}>
                   <Text style={styles.label}>Banco</Text>
-                  <View style={styles.bankDropdownContainer}>
+                  <ScrollView style={styles.bankDropdownContainer} nestedScrollEnabled>
                     {banks.map(bank => (
                       <TouchableOpacity
                         key={bank.id}
@@ -551,28 +659,28 @@ export default function MobilePaymentModal({
                           >
                             {bank.name}
                           </Text>
-                          <Text style={styles.bankCode}>{bank.phone}</Text>
+                          <Text style={styles.bankCode}>{bank.code}</Text>
                         </View>
                         {selectedBank === bank.id && (
                           <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
                         )}
                       </TouchableOpacity>
                     ))}
-                  </View>
+                  </ScrollView>
                 </View>
 
-                {/* Referencia */}
+                {/* Referencia - 6 dígitos */}
                 <View style={styles.section}>
-                  <Text style={styles.label}>Referencia (máx 12 caracteres)</Text>
+                  <Text style={styles.label}>Referencia (6 dígitos)</Text>
                   <View style={styles.inputContainer}>
                     <Ionicons name="document-text-outline" size={20} color={Colors.mediumGray} />
                     <TextInput
                       style={styles.input}
-                      placeholder="123456789012"
+                      placeholder="123456"
                       value={referencia}
                       onChangeText={setReferencia}
-                      keyboardType="default"
-                      maxLength={12}
+                      keyboardType="number-pad"
+                      maxLength={6}
                     />
                   </View>
                 </View>
@@ -781,6 +889,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.primary,
   },
+  amountEquivalent: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  amountRate: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
   paymentMethodGrid: {
     flexDirection: 'row',
     gap: 12,
@@ -865,6 +983,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   bankDropdownContainer: {
+    maxHeight: 280,
     gap: 10,
   },
   bankButton: {
@@ -968,5 +1087,35 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#fff',
+  },
+  destinationInfoBox: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  destinationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  destinationTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  destinationText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  destinationDetail: {
+    fontSize: 13,
+    color: '#4b5563',
+    marginTop: 2,
   },
 });

@@ -87,7 +87,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email, password, role) => {
     set({ isLoading: true });
     try {
-      const url = `${process.env.EXPO_PUBLIC_API_URL}/api/auth/login`;
+      const url = `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/auth/login`;
       console.log('[LOGIN] Starting login...');
       console.log('[LOGIN] URL:', url);
       console.log('[LOGIN] Email/Phone:', email);
@@ -192,7 +192,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         endpoint = '/api/auth/register/owner';
       }
 
-      const url = `${process.env.EXPO_PUBLIC_API_URL}${endpoint}`;
+      const url = `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}${endpoint}`;
       console.log('[REGISTER] Starting registration...');
       console.log('[REGISTER] URL:', url);
       console.log('[REGISTER] Data:', { ...data, password: '[HIDDEN]' });
