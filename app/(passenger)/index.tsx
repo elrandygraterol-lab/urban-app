@@ -885,6 +885,13 @@ export default function PassengerHomeScreen() {
 
     // Listen for ride cancelled event
     const handleRideCancelled = (data: any) => {
+      // CRITICAL: Only handle cancellation for the CURRENT active ride
+      // Otherwise, an auto-cancelled previous ride will wipe the active ride's state
+      if (data.rideId !== activeRide?.id) {
+        console.log('❌ Cancellation for different ride, ignoring. Cancelled:', data.rideId, 'Active:', activeRide?.id);
+        return;
+      }
+
       console.log('❌ Ride cancelled:', data);
 
       // Play notification sound

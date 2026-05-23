@@ -3,20 +3,27 @@
  * Intercepts all console.log/warn/error calls globally and stores them
  * in a circular buffer for real-time display in the profile's Sistema section.
  *
+ * Also sends logs to the backend in real-time so they appear in the admin
+ * Sistema page log window. Uses Socket.IO when connected, falls back to HTTP POST.
+ *
  * Initialize once at app startup: import '@/services/logCapture';
  */
 
 type LogLevel = 'log' | 'warn' | 'error';
+type LogCategory = 'socket' | 'network' | 'auth' | 'ui' | 'system';
 
 interface LogEntry {
   id: number;
   timestamp: string;
+  iso: string;
   level: LogLevel;
   message: string;
+  source: string;
+  category: LogCategory;
 }
 
 // Circular buffer — keep last N entries
-const MAX_LOGS = 500;
+const MAX_LOGS = 1000;
 const logBuffer: LogEntry[] = [];
 let logId = 0;
 
@@ -24,14 +31,13 @@ let logId = 0;
 type Subscriber = (entry: LogEntry) => void;
 const subscribers = new Set<Subscriber>();
 
-// Throttle batch notifications — avoid overloading React with 100+ re-renders/sec
-const THROTTLE_MS = 100; // Flush to subscribers at most every 100ms
+// Throttle batch notifications
+const THROTTLE_MS = 100;
 let throttleTimer: ReturnType<typeof setTimeout> | null = null;
 const pendingEntries: LogEntry[] = [];
 
 function flushPendingEntries(): void {
   throttleTimer = null;
-  // Notify subscribers with each pending entry (in order)
   for (const entry of pendingEntries) {
     subscribers.forEach(cb => {
       try {
@@ -45,7 +51,7 @@ function flushPendingEntries(): void {
 }
 
 function scheduleFlush(): void {
-  if (throttleTimer) return; // Already scheduled
+  if (throttleTimer) return;
   throttleTimer = setTimeout(flushPendingEntries, THROTTLE_MS);
 }
 
@@ -56,29 +62,60 @@ const originalConsole = {
   error: console.error.bind(console),
 };
 
-/** Format a log argument into a readable string */
+const SOURCE_TAG_REGEX = /^\[(\w+)\]/;
+
+const SOURCE_CATEGORY_MAP: Record<string, LogCategory> = {
+  SOCKET: 'socket',
+  GLOBAL_SOCKET: 'socket',
+  DRIVER_PROFILE: 'ui',
+  PROFILE: 'ui',
+  AUTH: 'auth',
+  REFRESH: 'auth',
+  TOKEN: 'auth',
+  API: 'network',
+  NET: 'network',
+  DIAG: 'system',
+  SYSTEM: 'system',
+};
+
+function detectSource(message: string): string {
+  const match = message.match(SOURCE_TAG_REGEX);
+  if (match) return match[1];
+  return 'APP';
+}
+
+function detectCategory(source: string): LogCategory {
+  return SOURCE_CATEGORY_MAP[source] || 'system';
+}
+
 function formatArg(arg: unknown): string {
   if (arg === null) return 'null';
   if (arg === undefined) return 'undefined';
   if (typeof arg === 'string') return arg;
   if (typeof arg === 'number' || typeof arg === 'boolean') return String(arg);
-  if (arg instanceof Error) return `${arg.name}: ${arg.message}`;
+  if (arg instanceof Error) return `${arg.name}: ${arg.message}\n${arg.stack?.split('\n').slice(0, 3).join('\n') || ''}`;
   try {
     const str = JSON.stringify(arg, null, 0);
-    return str && str.length < 200 ? str : str?.substring(0, 200) + '…';
+    if (!str) return String(arg);
+    if (str.length <= 500) return str;
+    return str.substring(0, 500) + '…';
   } catch {
     return String(arg);
   }
 }
 
-/** Add a log entry to the buffer and notify subscribers */
 function addLogEntry(level: LogLevel, args: unknown[]): void {
   const message = args.map(formatArg).join(' ');
+  const source = detectSource(message);
+  const now = new Date();
   const entry: LogEntry = {
     id: ++logId,
-    timestamp: new Date().toLocaleTimeString('es-VE', { hour12: false }),
+    timestamp: now.toLocaleTimeString('es-VE', { hour12: false }),
+    iso: now.toISOString(),
     level,
     message,
+    source,
+    category: detectCategory(source),
   };
 
   logBuffer.push(entry);
@@ -86,37 +123,125 @@ function addLogEntry(level: LogLevel, args: unknown[]): void {
     logBuffer.shift();
   }
 
-  // Throttled notification — batch entries and flush at most every THROTTLE_MS
+  // Add to remote queue
+  queueForRemote(entry);
+
+  // Throttled notification
   pendingEntries.push(entry);
   scheduleFlush();
 }
 
-// --- Override console.log ---
+// --- Override console ---
 console.log = function (...args: unknown[]) {
   originalConsole.log(...args);
   addLogEntry('log', args);
 };
 
-// --- Override console.warn ---
 console.warn = function (...args: unknown[]) {
   originalConsole.warn(...args);
   addLogEntry('warn', args);
 };
 
-// --- Override console.error ---
 console.error = function (...args: unknown[]) {
   originalConsole.error(...args);
   addLogEntry('error', args);
 };
 
+// --- Remote log delivery ---
+
+const REMOTE_FLUSH_INTERVAL = 2000; // flush every 2s
+const BATCH_MAX_SIZE = 50;
+
+const remoteQueue: LogEntry[] = [];
+let remoteTimer: ReturnType<typeof setInterval> | null = null;
+let apiUrl = '';
+
+// Set the API base URL so HTTP fallback works
+export function setLogApiUrl(url: string): void {
+  apiUrl = url.replace(/\/+$/, '');
+}
+
+function queueForRemote(entry: LogEntry): void {
+  remoteQueue.push(entry);
+}
+
+async function flushRemoteBatch(): Promise<void> {
+  if (remoteQueue.length === 0) return;
+
+  const batch = remoteQueue.splice(0, BATCH_MAX_SIZE);
+
+  // Try Socket.IO first (real-time)
+  try {
+    const { getSocket } = require('./socket');
+    const sock = getSocket();
+    if (sock && sock.connected) {
+      sock.emit('client:log', {
+        entries: batch.map(e => ({
+          level: e.level === 'log' ? 'info' : e.level,
+          message: `[${e.source}] ${e.message}`,
+          timestamp: e.iso,
+          source: e.source,
+          category: e.category,
+        })),
+      });
+      return;
+    }
+  } catch {
+    // socket module not available, fall through to HTTP
+  }
+
+  // Fallback to HTTP POST
+  if (!apiUrl) return;
+  try {
+    await fetch(`${apiUrl}/api/logs/ingest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        entries: batch.map(e => ({
+          level: e.level === 'log' ? 'info' : e.level,
+          message: `[${e.source}] ${e.message}`,
+          timestamp: e.iso,
+          source: e.source,
+          category: e.category,
+        })),
+      }),
+    });
+  } catch {
+    // Silently fail — logs will be re-sent on next cycle
+    remoteQueue.unshift(...batch);
+  }
+}
+
+export function startRemoteLogging(): void {
+  if (remoteTimer) return;
+  remoteTimer = setInterval(flushRemoteBatch, REMOTE_FLUSH_INTERVAL);
+}
+
+export function stopRemoteLogging(): void {
+  if (remoteTimer) {
+    clearInterval(remoteTimer);
+    remoteTimer = null;
+  }
+}
+
 // --- Public API ---
 
-/** Get all current logs (for initial load) */
 export function getAllLogs(): LogEntry[] {
   return [...logBuffer];
 }
 
-/** Subscribe to new log entries. Returns an unsubscribe function. */
+export function getLogsByLevel(level: LogLevel): LogEntry[] {
+  return logBuffer.filter(e => e.level === level);
+}
+
+export function getLogsBySource(source: string): LogEntry[] {
+  return logBuffer.filter(e => e.source === source.toUpperCase());
+}
+
+export function getLogsByCategory(category: LogCategory): LogEntry[] {
+  return logBuffer.filter(e => e.category === category);
+}
+
 export function subscribeToLogs(callback: Subscriber): () => void {
   subscribers.add(callback);
   return () => {
@@ -124,20 +249,43 @@ export function subscribeToLogs(callback: Subscriber): () => void {
   };
 }
 
-/** Clear all captured logs (including pending throttled entries) */
 export function clearLogs(): void {
   logBuffer.length = 0;
   pendingEntries.length = 0;
+  remoteQueue.length = 0;
   if (throttleTimer !== null) {
     clearTimeout(throttleTimer);
     throttleTimer = null;
   }
 }
 
-/** Get current log count */
 export function getLogCount(): number {
   return logBuffer.length;
 }
 
-export type { LogEntry, LogLevel };
-export default { getAllLogs, subscribeToLogs, clearLogs, getLogCount };
+export function getLogsAsText(filter?: { level?: LogLevel; source?: string }): string {
+  let entries = logBuffer;
+  if (filter?.level) {
+    entries = entries.filter(e => e.level === filter.level);
+  }
+  if (filter?.source) {
+    const sourceVal = filter.source;
+    entries = entries.filter(e => e.source === sourceVal.toUpperCase());
+  }
+  return entries
+    .map(e => {
+      const prefix = e.level === 'error' ? '❌' : e.level === 'warn' ? '⚠️' : '  ';
+      return `${prefix} [${e.timestamp}] [${e.source}] ${e.message}`;
+    })
+    .join('\n');
+}
+
+// Auto-start remote logging — reads API URL from env
+const autoUrl = process.env.EXPO_PUBLIC_API_URL || '';
+if (autoUrl) {
+  setLogApiUrl(autoUrl);
+  startRemoteLogging();
+}
+
+export type { LogEntry, LogLevel, LogCategory };
+export default { getAllLogs, subscribeToLogs, clearLogs, getLogCount, getLogsAsText };

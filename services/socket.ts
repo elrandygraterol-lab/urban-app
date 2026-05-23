@@ -34,24 +34,54 @@ try {
 }
 
 // Log inmediato de la configuración de URL (aparece al cargar el módulo)
-console.log('[SOCKET] 📋 URL Config:', {
+console.log('[SOCKET] 📋 ===== SOCKET MODULE INITIALIZED =====');
+console.log('[SOCKET] 📋 URL Config:', JSON.stringify({
   raw: SOCKET_URL,
   baseUrl: SOCKET_BASE_URL,
   path: SOCKET_PATH,
-});
+}, null, 2));
+console.log('[SOCKET] 📋 Environment variables:');
+console.log('[SOCKET]    EXPO_PUBLIC_API_URL:', SOCKET_URL);
+console.log('[SOCKET]    EXPO_PUBLIC_API_URL (falls back to localhost if not set)');
+console.log('[SOCKET]    Parsed host:', SOCKET_BASE_URL);
+console.log('[SOCKET]    Parsed path:', SOCKET_PATH);
+console.log('[SOCKET]    Full socket URL:', SOCKET_BASE_URL + SOCKET_PATH);
+console.log('[SOCKET]    Is localtunnel:', SOCKET_URL.includes('.loca.lt'));
+    console.log('[SOCKET]    Transport mode: polling only (LiteSpeed proxy workaround)');
+console.log('[SOCKET] 📋 ===== END MODULE INIT =====');
 
 // Hacer un ping de diagnóstico al backend para confirmar conectividad
 // Esto ayuda a diagnosticar si la app está usando la URL correcta
 const runDiagnosticPing = async (): Promise<void> => {
+  console.log('[SOCKET] 🔍 ===== STARTING DIAGNOSTIC PING =====');
+  console.log('[SOCKET] 🔍 Diagnostic ping to:', `${SOCKET_URL}/api/diagnostics/ping`);
+  console.log('[SOCKET] 🔍 Timeout: 10s');
+  console.log('[SOCKET] 🔍 Current time:', new Date().toISOString());
   try {
     const diagnosticUrl = `${SOCKET_URL}/api/diagnostics/ping`;
-    console.log('[SOCKET] 🔍 Diagnostic ping to:', diagnosticUrl);
+    console.log('[SOCKET] 🔍 Sending GET to:', diagnosticUrl);
+    const startTime = Date.now();
     const response = await axios.get(diagnosticUrl, { timeout: 10000 });
-    console.log('[SOCKET] ✅ Diagnostic ping OK:', response.data?.data?.ip || 'no ip');
+    const elapsed = Date.now() - startTime;
+    console.log('[SOCKET] ✅ ===== DIAGNOSTIC PING SUCCESS =====');
+    console.log('[SOCKET] ✅ Response status:', response.status, response.statusText);
+    console.log('[SOCKET] ✅ Response time:', elapsed + 'ms');
+    console.log('[SOCKET] ✅ Response data:', JSON.stringify(response.data));
+    console.log('[SOCKET] ✅ Server IP:', response.data?.data?.ip || 'unknown');
   } catch (error: any) {
-    console.error('[SOCKET] ❌ Diagnostic ping FAILED:', error.message);
-    console.error('[SOCKET]    URL intentada:', `${SOCKET_URL}/api/diagnostics/ping`);
-    console.error('[SOCKET]    ¿EXPO_PUBLIC_API_URL está correcto?');
+    console.error('[SOCKET] ❌ ===== DIAGNOSTIC PING FAILED =====');
+    console.error('[SOCKET] ❌ Error name:', error.name);
+    console.error('[SOCKET] ❌ Error message:', error.message);
+    console.error('[SOCKET] ❌ Error code:', error.code || 'N/A');
+    console.error('[SOCKET] ❌ URL intentada:', `${SOCKET_URL}/api/diagnostics/ping`);
+    console.error('[SOCKET] ❌ ¿EXPO_PUBLIC_API_URL está correcto?');
+    if (error.response) {
+      console.error('[SOCKET] ❌ Response status:', error.response.status);
+      console.error('[SOCKET] ❌ Response data:', JSON.stringify(error.response.data));
+    } else if (error.request) {
+      console.error('[SOCKET] ❌ No response received (network error / timeout / DNS)');
+    }
+    console.error('[SOCKET] ❌ Full error:', error.stack || 'no stack');
   }
 };
 
@@ -254,12 +284,22 @@ const getValidToken = async (providedToken?: string): Promise<string | null> => 
  * @param authToken - Optional authentication token. If not provided, will try to read from SecureStore
  */
 export const connectSocket = async (authToken?: string): Promise<Socket> => {
+  const connectId = Date.now().toString(36).slice(-6); // unique short ID for tracing this connection attempt
   console.log('[SOCKET] ========== CONNECT SOCKET CALLED ==========');
-  console.log('[SOCKET] URL:', SOCKET_URL);
+  console.log('[SOCKET]    Connect ID:', connectId);
+  console.log('[SOCKET]    URL:', SOCKET_URL);
+  console.log('[SOCKET]    Base URL:', SOCKET_BASE_URL);
+  console.log('[SOCKET]    Path:', SOCKET_PATH);
+  console.log('[SOCKET]    Full URL:', SOCKET_BASE_URL + SOCKET_PATH);
+  console.log('[SOCKET]    Existing socket:', !!socket, 'isConnected:', isConnected, 'isConnecting:', isConnecting);
+  console.log('[SOCKET]    has authToken param:', !!authToken);
+  console.log('[SOCKET]    Timestamp:', new Date().toISOString());
 
   // Return existing socket if already connected
   if (socket && isConnected) {
     console.log('[SOCKET] Already connected, returning existing socket');
+    console.log('[SOCKET]    Socket ID:', socket.id);
+    console.log('[SOCKET]    Transport:', socket.io?.engine?.transport?.name || 'unknown');
     return socket;
   }
 
@@ -270,35 +310,60 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
       const checkInterval = setInterval(() => {
         if (socket && isConnected) {
           clearInterval(checkInterval);
+          console.log('[SOCKET] Connection completed while waiting:', socket.id);
           resolve(socket);
         }
       }, 100);
 
       setTimeout(() => {
         clearInterval(checkInterval);
+        console.error('[SOCKET] Connection timeout after 10s waiting');
         reject(new Error('Socket connection timeout'));
       }, 10000);
     });
   }
 
   isConnecting = true;
+  console.log('[SOCKET] 🔌 Step 1: isConnecting set to TRUE');
 
   try {
     // Get valid token (will refresh if expired)
+    console.log('[SOCKET] 🔑 Step 2: Getting valid token...');
     const token = await getValidToken(authToken);
 
     if (!token) {
       isConnecting = false;
-      console.error('[SOCKET] ❌ No valid authentication token available');
+      console.error('[SOCKET] ❌ Step 2 FAILED: No valid authentication token available');
+      console.error('[SOCKET]    authToken param provided:', !!authToken);
+      console.error('[SOCKET]    Token from SecureStore:', !!authToken ? '(provided)' : '(not provided)');
       throw new Error('No valid authentication token');
     }
 
-    console.log('[SOCKET] ✅ Valid token obtained');
-    console.log('[SOCKET] Connecting to:', SOCKET_BASE_URL, 'path:', SOCKET_PATH);
+    console.log('[SOCKET] ✅ Step 2: Valid token obtained');
+    console.log('[SOCKET]    Token length:', token.length);
+    console.log('[SOCKET]    Token prefix:', token.substring(0, 20) + '...');
+
+    // Decode token payload for debugging (without verification)
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      console.log('[SOCKET]    Token user ID:', payload.id || payload.sub || 'unknown');
+      console.log('[SOCKET]    Token role:', payload.role || 'unknown');
+      console.log('[SOCKET]    Token exp:', payload.exp ? new Date(payload.exp * 1000).toISOString() : 'unknown');
+      console.log('[SOCKET]    Token iat:', payload.iat ? new Date(payload.iat * 1000).toISOString() : 'unknown');
+    } catch {
+      console.error('[SOCKET]    Could not decode token payload (malformed?)');
+    }
+
+    console.log('[SOCKET] 🌐 Step 3: Connecting to server...');
+    console.log('[SOCKET]    Server:', SOCKET_BASE_URL);
+    console.log('[SOCKET]    Path:', SOCKET_PATH);
+    console.log('[SOCKET]    Token provided in auth:', true);
 
     // Disconnect existing socket if any
     if (socket) {
       console.log('[SOCKET] Disconnecting existing socket before new connection');
+      console.log('[SOCKET]    Old socket ID:', socket.id);
+      console.log('[SOCKET]    Old socket connected:', socket.connected);
       socket.removeAllListeners();
       socket.disconnect();
       socket = null;
@@ -309,17 +374,15 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
     lastError = null;
     shouldAutoReconnect = true;
 
-    // Detectar si estamos usando localtunnel (no soporta WebSocket)
-    const isLocaltunnel = SOCKET_URL.includes('.loca.lt');
-    const socketTransports: Array<'websocket' | 'polling'> = isLocaltunnel
-      ? ['polling'] // localtunnel → solo polling (no soporta WebSocket)
-      : ['websocket', 'polling']; // ngrok o red local → websocket con fallback a polling
+    // Forzar solo polling porque LiteSpeed detrás del proxy no reenvía
+    // el upgrade a WebSocket correctamente. HTTP polling funciona sin problema.
+    const socketTransports: Array<'websocket' | 'polling'> = ['polling'];
 
-    if (isLocaltunnel) {
-      console.log('[SOCKET] localtunnel detected, forcing polling transport only');
-    }
+    console.log('[SOCKET]    Transports:', JSON.stringify(socketTransports));
+    console.log('[SOCKET]    Force polling-only mode (LiteSpeed proxy workaround)');
 
     // Create socket connection — with INFINITE reconnection
+    console.log('[SOCKET] 🔌 Step 4: Creating Socket.IO instance...');
     socket = io(SOCKET_BASE_URL, {
       path: SOCKET_PATH,
       auth: {
@@ -331,10 +394,15 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
       reconnectionDelay: 2000,
       reconnectionDelayMax: 30000,     // Max 30s between retries
       timeout: 60000,
-      upgrade: !isLocaltunnel,
+      upgrade: false,
       forceNew: true,
-      rememberUpgrade: !isLocaltunnel,
+      rememberUpgrade: false,
     });
+
+    console.log('[SOCKET] ✅ Step 4: Socket.IO instance created');
+    console.log('[SOCKET]    Socket ID (pre-connect):', socket.id || 'null (not yet assigned)');
+    console.log('[SOCKET]    Socket connected (pre-connect):', socket.connected);
+    console.log('[SOCKET]    Socket.IO version:', (socket as any).io?.engine?.transport?.name || 'unknown');
 
     // Connection event handlers
     socket.on('connect', () => {
@@ -342,28 +410,49 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
       lastError = null;
       isConnecting = false;
       reconnectAttempts = 0;
-      console.log('[SOCKET] ========================================');
-      console.log('[SOCKET] ✅ CONNECTED SUCCESSFULLY!');
+      const connectedAt = new Date().toISOString();
+      console.log('[SOCKET] ============================================');
+      console.log('[SOCKET] ✅ ===== CONNECTED SUCCESSFULLY! =====');
       console.log('[SOCKET]    Socket ID:', socket?.id);
       console.log('[SOCKET]    Transport:', lastTransport);
       console.log('[SOCKET]    URL:', SOCKET_URL);
       console.log('[SOCKET]    Token present:', !!token);
-      console.log('[SOCKET] ========================================');
+      console.log('[SOCKET]    Connected at:', connectedAt);
+      console.log('[SOCKET]    Reconnect attempts before success:', reconnectAttempts);
+      // Log all transports available
+      try {
+        const transports = socket?.io?.engine?.transport?.name;
+        const upgrades = ['polling', 'websocket'];
+        console.log('[SOCKET]    Current transport:', transports);
+        if (transports === 'polling') {
+          console.log('[SOCKET]    ⚠️ Currently on polling, upgrade to WebSocket pending...');
+        }
+      } catch {}
+      console.log('[SOCKET] ============================================');
       notifyConnectionChange(true);
     });
 
     socket.on('disconnect', reason => {
-      console.log('[SOCKET] ❌ Disconnected:', reason);
+      console.log('[SOCKET] ❌ ===== DISCONNECTED =====');
+      console.log('[SOCKET]    Reason:', reason);
+      console.log('[SOCKET]    Socket ID was:', socket?.id || 'unknown');
+      console.log('[SOCKET]    Was connected:', socket?.connected);
+      console.log('[SOCKET]    Transport was:', socket?.io?.engine?.transport?.name || 'unknown');
+      console.log('[SOCKET]    Disconnected at:', new Date().toISOString());
+      console.log('[SOCKET]    Time connected:', 'N/A');
+      console.log('[SOCKET]    shouldAutoReconnect:', shouldAutoReconnect);
+      console.log('[SOCKET] ========================');
       notifyConnectionChange(false);
 
       // Don't try to reconnect if disconnected intentionally by us
       if (reason === 'io client disconnect' || reason === 'io server disconnect') {
-        console.log('[SOCKET] Intentional disconnect, setting auto-reconnect = false');
+        console.log('[SOCKET] Intentional disconnect, setting shouldAutoReconnect = false');
         shouldAutoReconnect = false;
         return;
       }
 
       // For transport errors / ping timeout, keep auto-reconnect on
+      console.log('[SOCKET] Transport error disconnect — Socket.IO will auto-reconnect');
       shouldAutoReconnect = true;
     });
 
@@ -372,70 +461,98 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
       reconnectAttempts++;
       lastError = error.message;
 
-      console.error('[SOCKET] ========================================');
-      console.error('[SOCKET] ❌ CONNECTION ERROR (Attempt', reconnectAttempts + ')');
+      console.error('[SOCKET] ============================================');
+      console.error(`[SOCKET] ❌ CONNECTION ERROR (Attempt ${reconnectAttempts})`);
       console.error('[SOCKET]    Error:', error.message);
+      console.error('[SOCKET]    Error type:', (error as any).type || 'N/A');
+      console.error('[SOCKET]    Error description:', (error as any).description || 'N/A');
       console.error('[SOCKET]    URL:', SOCKET_URL);
-      console.error('[SOCKET] ========================================');
+      console.error('[SOCKET]    Base URL:', SOCKET_BASE_URL);
+      console.error('[SOCKET]    Path:', SOCKET_PATH);
+      console.error('[SOCKET]    Transport:', socket?.io?.engine?.transport?.name || 'no transport yet');
+      console.error('[SOCKET]    Socket ID:', socket?.id || 'no id');
+      console.error('[SOCKET]    Connected:', socket?.connected);
+      console.error('[SOCKET]    Time:', new Date().toISOString());
+      console.error('[SOCKET]    Reconnect delay:', Math.min(2000 * Math.pow(1.5, reconnectAttempts), 30000) + 'ms');
+      console.error('[SOCKET] ============================================');
 
       // Periodically refresh token (every 5 attempts) to handle expired tokens
       if (reconnectAttempts % 5 === 0) {
-        console.log('[SOCKET] Periodic token refresh (attempt', reconnectAttempts + ')...');
+        console.log('[SOCKET] 🔄 Periodic token refresh (attempt', reconnectAttempts + ')...');
+        console.log('[SOCKET]    Current time:', new Date().toISOString());
         const newToken = await refreshAuthToken();
         if (newToken && socket) {
           socket.auth = { token: newToken };
           console.log('[SOCKET] ✅ Token refreshed for next attempt');
+          console.log('[SOCKET]    New token length:', newToken.length);
+          console.log('[SOCKET]    New token prefix:', newToken.substring(0, 20) + '...');
         } else {
           console.error('[SOCKET] ❌ Token refresh failed');
+          console.error('[SOCKET]    newToken:', !!newToken);
+          console.error('[SOCKET]    socket exists:', !!socket);
         }
       }
 
       // NEVER call disconnectSocket() here — let Socket.IO keep retrying forever
-      // Only log the error and continue
       console.log('[SOCKET] Socket.IO will retry automatically (delay increasing up to 30s)');
+      console.log('[SOCKET]    Current attempt:', reconnectAttempts);
     });
 
     socket.on('error', error => {
       lastError = typeof error === 'string' ? error : error.message || 'Unknown socket error';
-      console.error('[SOCKET] ========================================');
-      console.error('[SOCKET] ❌ SOCKET ERROR');
+      console.error('[SOCKET] ============================================');
+      console.error('[SOCKET] ❌ ===== SOCKET ERROR =====');
       console.error('[SOCKET]    Error:', typeof error === 'object' ? JSON.stringify(error) : error);
       console.error('[SOCKET]    Socket ID:', socket?.id);
       console.error('[SOCKET]    Connected:', socket?.connected);
-      console.error('[SOCKET] ========================================');
+      console.error('[SOCKET]    Transport:', socket?.io?.engine?.transport?.name || 'unknown');
+      console.error('[SOCKET]    Time:', new Date().toISOString());
+      console.error('[SOCKET] ============================================');
     });
 
     // Wait for connection with a shorter initial timeout — returns quickly to not block UI
+    console.log('[SOCKET] ⏱️ Step 5: Waiting for connection (timeout: 15s)...');
+    console.log('[SOCKET]    Socket will continue in background after timeout');
     try {
       await new Promise<void>((resolve) => {
         const timeout = setTimeout(() => {
           console.warn('[SOCKET] ⚠️ Initial connection not yet established after 15s');
-          console.warn('[SOCKET] Socket will continue trying in background...');
+          console.warn('[SOCKET]    Socket STATE at timeout:');
+          console.warn('[SOCKET]    - connected:', socket?.connected);
+          console.warn('[SOCKET]    - id:', socket?.id);
+          console.warn('[SOCKET]    - transport:', socket?.io?.engine?.transport?.name);
+          console.warn('[SOCKET]    Socket will continue trying in background...');
           resolve();
         }, 15000);
 
         socket!.once('connect', () => {
           clearTimeout(timeout);
-          console.log('[SOCKET] ✅ Initial connection established');
+          console.log('[SOCKET] ✅ Initial connection established within timeout');
           resolve();
         });
 
-        socket!.once('connect_error', () => {
+        socket!.once('connect_error', (err) => {
           clearTimeout(timeout);
+          console.warn('[SOCKET] ⚠️ First connect_error before timeout:', err.message);
+          console.warn('[SOCKET]    Not rejecting — Socket.IO will keep retrying');
           // Don't reject on first error — Socket.IO will keep retrying
           resolve();
         });
       });
-    } catch (timeoutError) {
+    } catch (timeoutError: any) {
+      console.warn('[SOCKET] ⚠️ Timeout error caught:', timeoutError.message);
       console.warn('[SOCKET] Returning socket despite error — will connect in background');
     }
 
-    console.log('[SOCKET] ========== CONNECT SOCKET COMPLETE ==========');
+    console.log('[SOCKET] ========== CONNECT SOCKET COMPLETE (ID:', connectId + ') ==========');
+    console.log('[SOCKET]    Final state — connected:', socket?.connected, 'id:', socket?.id);
     return socket;
-  } catch (error) {
+  } catch (error: any) {
     isConnecting = false;
-    console.error('[SOCKET] ❌ Failed to connect:', error);
-    console.error('[SOCKET] ========== CONNECT SOCKET FAILED ==========');
+    console.error('[SOCKET] ❌ ===== CONNECT SOCKET FAILED =====');
+    console.error('[SOCKET]    Error:', error.message);
+    console.error('[SOCKET]    Stack:', error.stack || 'no stack');
+    console.error('[SOCKET] ===================================');
     throw error;
   }
 };
@@ -444,10 +561,18 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
  * Disconnect from WebSocket server
  */
 export const disconnectSocket = (): void => {
-  console.log('[SOCKET] 🔌 disconnectSocket() called — will auto-reconnect:', shouldAutoReconnect);
+  console.log('[SOCKET] 🔌 ===== DISCONNECT SOCKET CALLED =====');
+  console.log('[SOCKET]    shouldAutoReconnect before:', shouldAutoReconnect);
+  console.log('[SOCKET]    socket exists:', !!socket);
+  console.log('[SOCKET]    socket connected:', socket?.connected);
+  console.log('[SOCKET]    socket id:', socket?.id);
+  console.log('[SOCKET]    reconnectAttempts:', reconnectAttempts);
   if (socket) {
+    console.log('[SOCKET]    transport:', socket?.io?.engine?.transport?.name || 'unknown');
     socket.removeAllListeners();
+    console.log('[SOCKET]    listeners removed');
     socket.disconnect();
+    console.log('[SOCKET]    disconnected');
     socket = null;
     reconnectAttempts = 0;
     lastTransport = null;
@@ -455,6 +580,8 @@ export const disconnectSocket = (): void => {
     shouldAutoReconnect = false;
     notifyConnectionChange(false);
     console.log('[SOCKET] ✅ Socket disconnected and cleaned up');
+  } else {
+    console.log('[SOCKET] ⚠️ No socket to disconnect');
   }
 };
 
@@ -462,27 +589,36 @@ export const disconnectSocket = (): void => {
  * Reconnect with a fresh token (useful after app resume or manual tap)
  */
 export const reconnectSocket = async (): Promise<Socket | null> => {
-  console.log('[SOCKET] 🔄 reconnectSocket() called — getting fresh token...');
+  console.log('[SOCKET] 🔄 ===== RECONNECT SOCKET CALLED =====');
+  console.log('[SOCKET]    Time:', new Date().toISOString());
+  console.log('[SOCKET]    Current socket exists:', !!socket);
+  console.log('[SOCKET]    Current socket connected:', socket?.connected);
 
   // Disconnect existing socket — this clears shouldAutoReconnect
+  console.log('[SOCKET]    Step 1: Disconnecting existing socket...');
   disconnectSocket();
 
   // Small delay to ensure cleanup is complete
+  console.log('[SOCKET]    Step 2: Waiting 300ms for cleanup...');
   await new Promise(resolve => setTimeout(resolve, 300));
 
   try {
     // Get fresh token
+    console.log('[SOCKET]    Step 3: Getting fresh token...');
     const token = await getValidToken();
 
     if (!token) {
-      console.error('[SOCKET] ❌ Cannot reconnect: No valid token');
+      console.error('[SOCKET] ❌ Step 3 FAILED: No valid token');
+      console.error('[SOCKET]    Token from SecureStore was null');
       return null;
     }
 
-    console.log('[SOCKET] ✅ Fresh token obtained, connecting...');
+    console.log('[SOCKET] ✅ Fresh token obtained, length:', token.length);
+    console.log('[SOCKET]    Step 4: Calling connectSocket...');
     return await connectSocket(token);
-  } catch (error) {
-    console.error('[SOCKET] ❌ Reconnection failed:', error);
+  } catch (error: any) {
+    console.error('[SOCKET] ❌ Reconnection failed:', error.message);
+    console.error('[SOCKET]    Stack:', error.stack || 'no stack');
     return null;
   }
 };
@@ -491,6 +627,8 @@ export const reconnectSocket = async (): Promise<Socket | null> => {
  * Get current socket instance
  */
 export const getSocket = (): Socket | null => {
+  const exists = socket !== null;
+  console.log('[SOCKET] getSocket() called — exists:', exists, 'connected:', socket?.connected, 'id:', socket?.id || 'N/A');
   return socket;
 };
 

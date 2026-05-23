@@ -141,26 +141,41 @@ export const useGlobalSocketListeners = ({
 
   // Register global socket listeners
   useEffect(() => {
-    console.log('[GLOBAL_SOCKET] ========================================');
+    console.log('[GLOBAL_SOCKET] ============================================');
     console.log('[GLOBAL_SOCKET] useEffect TRIGGERED');
     console.log('[GLOBAL_SOCKET]    isAuthenticated:', isAuthenticated);
-    console.log('[GLOBAL_SOCKET]    user:', user?.id, user?.role);
-    console.log('[GLOBAL_SOCKET] ========================================');
+    console.log('[GLOBAL_SOCKET]    user ID:', user?.id);
+    console.log('[GLOBAL_SOCKET]    user role:', user?.role);
+    console.log('[GLOBAL_SOCKET]    user name:', user?.name || 'N/A');
+    console.log('[GLOBAL_SOCKET]    listenersRegisteredRef:', listenersRegisteredRef.current);
+    console.log('[GLOBAL_SOCKET]    hook deps: isAuth, user.id, user.role, handlers');
+    console.log('[GLOBAL_SOCKET]    Timestamp:', new Date().toISOString());
+    console.log('[GLOBAL_SOCKET] ============================================');
 
     // Only register listeners if user is authenticated
     if (!isAuthenticated || !user) {
       console.log('[GLOBAL_SOCKET] ❌ User not authenticated, skipping listener registration');
       console.log('[GLOBAL_SOCKET]    isAuthenticated:', isAuthenticated);
-      console.log('[GLOBAL_SOCKET]    user:', user);
+      console.log('[GLOBAL_SOCKET]    user object:', user ? 'exists' : 'null');
+      console.log('[GLOBAL_SOCKET]    Returns early — no cleanup function set');
       return;
     }
+
+    console.log('[GLOBAL_SOCKET] ✅ User authenticated, proceeding with socket setup');
 
     // Helper function to register all listeners
     const registerListeners = (socket: any) => {
       if (!socket) {
         console.log('[GLOBAL_SOCKET] ❌ Socket not available for listener registration');
+        console.log('[GLOBAL_SOCKET]    Socket parameter is null/undefined');
         return;
       }
+
+      console.log('[GLOBAL_SOCKET] registerListeners called');
+      console.log('[GLOBAL_SOCKET]    Socket ID:', socket.id);
+      console.log('[GLOBAL_SOCKET]    Socket connected:', socket.connected);
+      console.log('[GLOBAL_SOCKET]    Socket transport:', socket.io?.engine?.transport?.name || 'unknown');
+      console.log('[GLOBAL_SOCKET]    listenersRegisteredRef:', listenersRegisteredRef.current);
 
       // Check if listeners are already registered for this socket
       if (listenersRegisteredRef.current && socket.id) {
@@ -168,185 +183,263 @@ export const useGlobalSocketListeners = ({
         return;
       }
 
-      console.log('[GLOBAL_SOCKET] ========================================');
+      console.log('[GLOBAL_SOCKET] ============================================');
       console.log('[GLOBAL_SOCKET] ✅ REGISTERING GLOBAL SOCKET LISTENERS');
       console.log('[GLOBAL_SOCKET]    User ID:', user.id);
       console.log('[GLOBAL_SOCKET]    User Role:', user.role);
       console.log('[GLOBAL_SOCKET]    Socket ID:', socket.id);
       console.log('[GLOBAL_SOCKET]    Socket Connected:', socket.connected);
       console.log('[GLOBAL_SOCKET]    Socket Transport:', socket.io?.engine?.transport?.name);
-      console.log('[GLOBAL_SOCKET] ========================================');
+      console.log('[GLOBAL_SOCKET]    Socket Namespace:', socket.nsp);
+      console.log('[GLOBAL_SOCKET]    Socket Handshake:', JSON.stringify(socket.auth ? { hasToken: !!socket.auth.token } : { hasToken: false }));
+      console.log('[GLOBAL_SOCKET]    Timestamp:', new Date().toISOString());
+      console.log('[GLOBAL_SOCKET] ============================================');
 
       // IMPORTANT: Remove existing listeners FIRST to prevent duplicates
+      console.log('[GLOBAL_SOCKET] Removing existing listeners...');
+      const beforeCount = socket.listeners('ride:payment_completed').length;
+      console.log('[GLOBAL_SOCKET]    Existing ride:payment_completed listeners:', beforeCount);
+      
       socket.off('ride:payment_completed', handlePaymentCompleted);
       socket.off('ride:cancelled', handleRideCancelled);
       socket.off('ride:request_created', handleRideRequest);
       if (connectHandlerRef.current) {
         socket.off('connect', connectHandlerRef.current);
+        console.log('[GLOBAL_SOCKET]    Removed previous connect handler');
       }
       socket.offAny(); // Remove debug listener
-
-      // Test: Check existing listeners
-      const existingListeners = socket.listeners('ride:payment_completed');
-      console.log('[GLOBAL_SOCKET] 📊 Existing listeners for ride:payment_completed:', existingListeners.length);
+      console.log('[GLOBAL_SOCKET]    Existing listeners cleared');
 
       // Register listeners
+      console.log('[GLOBAL_SOCKET] Registering new listeners...');
       socket.on('ride:payment_completed', handlePaymentCompleted);
+      console.log('[GLOBAL_SOCKET]    ✓ ride:payment_completed registered');
+      
       socket.on('ride:cancelled', handleRideCancelled);
+      console.log('[GLOBAL_SOCKET]    ✓ ride:cancelled registered');
       
       // Register ride request listener (ONLY for drivers)
       if (user.role === 'driver') {
         socket.on('ride:request_created', handleRideRequest);
-        console.log('[GLOBAL_SOCKET] ✅ Registered ride:request_created listener for driver');
+        console.log('[GLOBAL_SOCKET]    ✓ ride:request_created registered (driver only)');
+      } else {
+        console.log('[GLOBAL_SOCKET]    Skipping ride:request_created — user role is:', user.role);
       }
 
       // DEBUG: Listen to ALL events to see what's coming
       const debugAllEvents = (eventName: string, ...args: any[]) => {
         console.log('[GLOBAL_SOCKET] 📨 DEBUG: Event received:', eventName);
         if (eventName === 'ride:payment_completed') {
-          console.log('[GLOBAL_SOCKET] ========================================');
+          console.log('[GLOBAL_SOCKET] ============================================');
           console.log('[GLOBAL_SOCKET] 💰💰💰 PAYMENT EVENT IN DEBUG LISTENER!');
           console.log('[GLOBAL_SOCKET]    Data:', JSON.stringify(args, null, 2));
           console.log('[GLOBAL_SOCKET]    This means event IS arriving!');
           console.log('[GLOBAL_SOCKET]    But handlePaymentCompleted might not be called');
-          console.log('[GLOBAL_SOCKET] ========================================');
+          console.log('[GLOBAL_SOCKET] ============================================');
         }
       };
 
       socket.onAny(debugAllEvents);
+      console.log('[GLOBAL_SOCKET]    ✓ onAny debug listener registered');
 
       // Verify listeners were registered
-      const afterListeners = socket.listeners('ride:payment_completed');
-      console.log('[GLOBAL_SOCKET] 📊 After registration, listeners for ride:payment_completed:', afterListeners.length);
+      const afterCount = socket.listeners('ride:payment_completed').length;
+      console.log('[GLOBAL_SOCKET] 📊 After registration, listeners for ride:payment_completed:', afterCount);
+      if (afterCount === 0) {
+        console.error('[GLOBAL_SOCKET] ❌ CRITICAL: Listener registration FAILED (count=0)');
+      } else {
+        console.log('[GLOBAL_SOCKET]    ✓ Listener count OK');
+      }
 
       // Mark listeners as registered
       listenersRegisteredRef.current = true;
+      console.log('[GLOBAL_SOCKET]    listenersRegisteredRef set to TRUE');
 
       // Handle socket reconnection - re-register listeners with fresh callbacks
       connectHandlerRef.current = () => {
-        console.log('[GLOBAL_SOCKET] ========================================');
+        console.log('[GLOBAL_SOCKET] ============================================');
         console.log('[GLOBAL_SOCKET] 🔄 Socket reconnected');
         console.log('[GLOBAL_SOCKET]    Socket ID:', socket.id);
+        console.log('[GLOBAL_SOCKET]    Socket transport:', socket.io?.engine?.transport?.name);
         console.log('[GLOBAL_SOCKET]    Re-registering listeners...');
-        console.log('[GLOBAL_SOCKET] ========================================');
+        console.log('[GLOBAL_SOCKET] ============================================');
         
         // Reset flag and re-register on reconnection
         listenersRegisteredRef.current = false;
+        console.log('[GLOBAL_SOCKET]    listenersRegisteredRef set to FALSE, calling registerListeners...');
         registerListeners(socket);
       };
 
       socket.on('connect', connectHandlerRef.current);
+      console.log('[GLOBAL_SOCKET]    ✓ connect handler registered for reconnection');
 
-      console.log('[GLOBAL_SOCKET] ========================================');
+      console.log('[GLOBAL_SOCKET] ============================================');
       console.log('[GLOBAL_SOCKET] ✅ LISTENERS REGISTERED SUCCESSFULLY');
       console.log('[GLOBAL_SOCKET]    - ride:payment_completed');
       console.log('[GLOBAL_SOCKET]    - ride:cancelled');
       if (user.role === 'driver') {
         console.log('[GLOBAL_SOCKET]    - ride:request_created (driver only)');
       }
-      console.log('[GLOBAL_SOCKET]    - connect');
-      console.log('[GLOBAL_SOCKET] ========================================');
+      console.log('[GLOBAL_SOCKET]    - connect (reconnection handler)');
+      console.log('[GLOBAL_SOCKET]    - onAny (debug all events)');
+      console.log('[GLOBAL_SOCKET] ============================================');
     };
 
     // Initialize socket connection if not already connected
     let socket = getSocket();
+    console.log('[GLOBAL_SOCKET] getSocket() returned:', !!socket, 'connected:', socket?.connected);
     
     if (!socket) {
       console.log('[GLOBAL_SOCKET] 🔌 Socket not initialized, connecting...');
+      console.log('[GLOBAL_SOCKET]    Calling connectSocket()...');
       
       // Connect socket asynchronously
       connectSocket()
         .then(connectedSocket => {
-          console.log('[GLOBAL_SOCKET] ✅ Socket connected successfully');
+          console.log('[GLOBAL_SOCKET] ✅ Socket connected successfully via connectSocket()');
+          console.log('[GLOBAL_SOCKET]    Socket ID:', connectedSocket.id);
+          console.log('[GLOBAL_SOCKET]    Socket connected:', connectedSocket.connected);
+          console.log('[GLOBAL_SOCKET]    Socket transport:', connectedSocket.io?.engine?.transport?.name);
           
           // Register listeners after connection
+          console.log('[GLOBAL_SOCKET]    Calling registerListeners...');
           registerListeners(connectedSocket);
           
           // Add auto-reconnect on disconnect
+          console.log('[GLOBAL_SOCKET]    Calling setupDisconnectHandler...');
           setupDisconnectHandler(connectedSocket);
         })
         .catch(error => {
-          console.error('[GLOBAL_SOCKET] ❌ Failed to connect socket:', error);
+          console.error('[GLOBAL_SOCKET] ❌ Failed to connect socket:', error.message);
+          console.error('[GLOBAL_SOCKET]    Error name:', error.name);
+          console.error('[GLOBAL_SOCKET]    Error stack:', error.stack);
           
           // Schedule a retry after 10 seconds
+          const retryDelay = 10000;
+          console.log('[GLOBAL_SOCKET] 🔄 Scheduling retry in ' + (retryDelay/1000) + 's...');
           reconnectTimeoutRef.current = setTimeout(() => {
             console.log('[GLOBAL_SOCKET] 🔄 Retrying socket connection...');
+            console.log('[GLOBAL_SOCKET]    Time:', new Date().toISOString());
             const s = getSocket();
+            console.log('[GLOBAL_SOCKET]    Current socket state — exists:', !!s, 'connected:', s?.connected);
             if (!s || !s.connected) {
+              console.log('[GLOBAL_SOCKET]    Calling connectSocket() (retry)...');
               connectSocket()
                 .then(connectedSocket => {
+                  console.log('[GLOBAL_SOCKET] ✅ Retry successful!');
                   registerListeners(connectedSocket);
                   setupDisconnectHandler(connectedSocket);
                 })
-                .catch(console.error);
+                .catch(err => {
+                  console.error('[GLOBAL_SOCKET] ❌ Retry also failed:', err.message);
+                });
+            } else {
+              console.log('[GLOBAL_SOCKET]    Socket already connected, no retry needed');
             }
-          }, 10000);
+          }, retryDelay);
         });
       
       // Return early - listeners will be registered after connection
+      console.log('[GLOBAL_SOCKET]    Returning early — cleanup will run on unmount');
       return cleanup;
     }
     
     // Socket already exists, register listeners immediately
+    console.log('[GLOBAL_SOCKET] Socket already exists, registering listeners immediately');
+    console.log('[GLOBAL_SOCKET]    Socket ID:', socket.id);
+    console.log('[GLOBAL_SOCKET]    Socket connected:', socket.connected);
     registerListeners(socket);
     setupDisconnectHandler(socket);
+
+    console.log('[GLOBAL_SOCKET]    Full setup complete, returning cleanup func');
 
     // Cleanup function
     return cleanup;
     
     // Helper: Set up handler for socket disconnect events
     function setupDisconnectHandler(sock: any) {
+      console.log('[GLOBAL_SOCKET] setupDisconnectHandler called');
+      console.log('[GLOBAL_SOCKET]    Socket ID:', sock?.id);
+      
       if (disconnectHandlerRef.current) {
+        console.log('[GLOBAL_SOCKET]    Removing previous disconnect handler');
         sock.off('disconnect', disconnectHandlerRef.current);
       }
       
       disconnectHandlerRef.current = (reason: string) => {
-        console.log('[GLOBAL_SOCKET] 🔌 Socket disconnected:', reason);
+        console.log('[GLOBAL_SOCKET] ============================================');
+        console.log('[GLOBAL_SOCKET] 🔌 Socket disconnected event');
+        console.log('[GLOBAL_SOCKET]    Reason:', reason);
+        console.log('[GLOBAL_SOCKET]    Time:', new Date().toISOString());
+        console.log('[GLOBAL_SOCKET]    Transport was:', sock?.io?.engine?.transport?.name || 'unknown');
+        console.log('[GLOBAL_SOCKET]    Socket ID was:', sock?.id || 'unknown');
         
         // If the socket was intentionally disconnected by us, don't reconnect
         if (reason === 'io client disconnect') {
-          console.log('[GLOBAL_SOCKET] Intentional disconnect, not auto-reconnecting');
+          console.log('[GLOBAL_SOCKET]    Intentional disconnect from client, not auto-reconnecting');
           return;
         }
         
+        console.log('[GLOBAL_SOCKET]    This is an unexpected disconnect, scheduling auto-reconnect...');
+        
         // Schedule reconnection after a delay
         if (reconnectTimeoutRef.current) {
+          console.log('[GLOBAL_SOCKET]    Clearing previous reconnect timer');
           clearTimeout(reconnectTimeoutRef.current);
         }
         
+        const reconnectDelay = 5000;
+        console.log('[GLOBAL_SOCKET]    Scheduling reconnect in ' + (reconnectDelay/1000) + 's...');
         reconnectTimeoutRef.current = setTimeout(() => {
           console.log('[GLOBAL_SOCKET] 🔄 Attempting auto-reconnect after disconnect...');
+          console.log('[GLOBAL_SOCKET]    Time:', new Date().toISOString());
           const currentSocket = getSocket();
+          console.log('[GLOBAL_SOCKET]    Current socket — exists:', !!currentSocket, 'connected:', currentSocket?.connected);
           if (!currentSocket || !currentSocket.connected) {
+            console.log('[GLOBAL_SOCKET]    Calling connectSocket() (auto-reconnect)...');
             connectSocket()
               .then(connectedSocket => {
+                console.log('[GLOBAL_SOCKET] ✅ Auto-reconnect successful!');
+                console.log('[GLOBAL_SOCKET]    New Socket ID:', connectedSocket.id);
                 registerListeners(connectedSocket);
                 setupDisconnectHandler(connectedSocket);
               })
               .catch(error => {
-                console.error('[GLOBAL_SOCKET] ❌ Auto-reconnect failed:', error);
+                console.error('[GLOBAL_SOCKET] ❌ Auto-reconnect failed:', error.message);
               });
+          } else {
+            console.log('[GLOBAL_SOCKET]    Socket already reconnected, skipping');
           }
-        }, 5000);
+        }, reconnectDelay);
       };
       
+      console.log('[GLOBAL_SOCKET]    Setting disconnect handler on socket...');
       sock.on('disconnect', disconnectHandlerRef.current);
+      console.log('[GLOBAL_SOCKET] ✅ setupDisconnectHandler complete');
     }
     
     // Cleanup helper
     function cleanup() {
-      console.log('[GLOBAL_SOCKET] ========================================');
+      console.log('[GLOBAL_SOCKET] ============================================');
       console.log('[GLOBAL_SOCKET] 🧹 CLEANING UP GLOBAL SOCKET LISTENERS');
       console.log('[GLOBAL_SOCKET]    User ID:', user?.id);
-      console.log('[GLOBAL_SOCKET] ========================================');
+      console.log('[GLOBAL_SOCKET]    User role:', user?.role);
+      console.log('[GLOBAL_SOCKET]    listenersRegisteredRef:', listenersRegisteredRef.current);
+      console.log('[GLOBAL_SOCKET]    Timestamp:', new Date().toISOString());
+      console.log('[GLOBAL_SOCKET] ============================================');
 
       if (reconnectTimeoutRef.current) {
+        console.log('[GLOBAL_SOCKET]    Cleaning up reconnect timeout');
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
       }
 
       const currentSocket = getSocket();
       if (currentSocket) {
+        console.log('[GLOBAL_SOCKET]    Socket available, removing listeners...');
+        const beforeCount = currentSocket.listeners('ride:payment_completed').length;
+        console.log('[GLOBAL_SOCKET]    Listeners before cleanup:', beforeCount);
+        
         currentSocket.off('ride:payment_completed', handlePaymentCompleted);
         currentSocket.off('ride:cancelled', handleRideCancelled);
         currentSocket.off('ride:request_created', handleRideRequest);
@@ -354,13 +447,23 @@ export const useGlobalSocketListeners = ({
           currentSocket.off('disconnect', disconnectHandlerRef.current);
         }
         currentSocket.offAny();
-        console.log('[GLOBAL_SOCKET] ✅ Listeners removed');
+        
+        const afterCount = currentSocket.listeners('ride:payment_completed').length;
+        console.log('[GLOBAL_SOCKET]    Listeners after cleanup:', afterCount);
+        
+        if (afterCount === 0) {
+          console.log('[GLOBAL_SOCKET] ✅ All listeners removed successfully');
+        } else {
+          console.warn('[GLOBAL_SOCKET] ⚠️ Some listeners may not have been removed:', afterCount);
+        }
       } else {
         console.log('[GLOBAL_SOCKET] ⚠️ Socket not available for cleanup');
       }
       
       // Reset flag on cleanup
       listenersRegisteredRef.current = false;
+      console.log('[GLOBAL_SOCKET]    listenersRegisteredRef reset to FALSE');
+      console.log('[GLOBAL_SOCKET] ========== CLEANUP COMPLETE ==========');
     }
   }, [isAuthenticated, user?.id, user?.role, handlePaymentCompleted, handleRideCancelled, handleRideRequest]);
 

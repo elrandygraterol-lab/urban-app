@@ -105,7 +105,7 @@ module.exports = ({ config }) => {
     extra: {
       router: {},
       eas: {
-      projectId:'f454393f-392d-435f-afd1-492ae42a4a20',
+      projectId:'d5d00c82-5977-4eca-9535-22c8b356cb71',
       },
       // Store Management System Configuration
       storeImageMaxSizeMB: 5,
