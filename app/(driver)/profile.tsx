@@ -283,7 +283,7 @@ export default function DriverProfileScreen() {
       setIsPaymentSectionExpanded(false);
     } catch (error: any) {
       console.error('Error updating payment info:', error);
-      const errorMessage = error.response?.data?.message || 'Error al actualizar información de pago';
+      const errorMessage = error?.response?.data?.error?.message || 'Error al actualizar información de pago';
       Alert.alert('Error', errorMessage);
     } finally {
       setIsSavingPayment(false);

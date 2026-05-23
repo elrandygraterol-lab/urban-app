@@ -84,7 +84,7 @@ export default function DriverPaymentMethodsScreen() {
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (error: any) {
-      const message = error?.response?.data?.message || 'Error al guardar los métodos de pago';
+      const message = error?.response?.data?.error?.message || 'Error al guardar los métodos de pago';
       Alert.alert('Error', message);
     } finally {
       setSaving(false);
