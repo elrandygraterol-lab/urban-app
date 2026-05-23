@@ -15,6 +15,10 @@ import { useGlobalSocketListeners } from '@/hooks/useGlobalSocketListeners';
 import { useBadgeSync } from '@/hooks/useBadgeSync';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { logInfo, logError } from '@/utils/errorLogger';
+
+// Initialize log capture for the in-app Sistema log viewer
+// Must be imported early to intercept all console.log/warn/error
+import '@/services/logCapture';
 import { NotificationProvider } from '@/context/NotificationContext';
 import { GlobalNotificationOverlay } from '@/components/GlobalNotificationOverlay';
 

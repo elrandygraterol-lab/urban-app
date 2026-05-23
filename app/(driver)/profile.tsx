@@ -21,8 +21,10 @@ import { useDriverStore } from '../../store/driverStore';
 import { useLanguage } from '../../hooks/useLanguage';
 import { translations } from '../../i18n/translations';
 import { userAPI, notificationAPI, driverAPI } from '../../services/api';
-import { getSocket, addConnectionListener, removeConnectionListener } from '@/services/socket';
+import { getSocket, addConnectionListener, removeConnectionListener, reconnectSocket, getSocketDiagnostics } from '@/services/socket';
 import { resolveFileUrl } from '@/services/fileUrl';
+import { subscribeToLogs, getAllLogs, clearLogs } from '@/services/logCapture';
+import type { LogEntry } from '@/services/logCapture';
 
 interface NotificationPreferences {
   rideRequests?: boolean;
@@ -51,8 +53,15 @@ export default function DriverProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
+  const [isReconnectingSocket, setIsReconnectingSocket] = useState(false);
+  const [socketRetryCount, setSocketRetryCount] = useState(0);
+  const [socketTransport, setSocketTransport] = useState<string | null>(null);
+  const [socketLastError, setSocketLastError] = useState<string | null>(null);
   const [isPaymentSectionExpanded, setIsPaymentSectionExpanded] = useState(false);
   const [isSavingPayment, setIsSavingPayment] = useState(false);
+  const [isSystemSectionExpanded, setIsSystemSectionExpanded] = useState(false);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const logScrollRef = React.useRef<ScrollView>(null);
 
   // User data
   const [name, setName] = useState(user?.name || '');
@@ -85,6 +94,12 @@ export default function DriverProfileScreen() {
     const connectionListener = (connected: boolean) => {
       console.log('[DRIVER PROFILE] 🔌 Socket connection state:', connected ? 'Conectado' : 'Desconectado');
       setIsSocketConnected(connected);
+      
+      // Update diagnostic info whenever state changes
+      const diag = getSocketDiagnostics();
+      setSocketRetryCount(diag.reconnectAttempts);
+      setSocketTransport(diag.lastTransport);
+      setSocketLastError(diag.lastError);
     };
     addConnectionListener(connectionListener);
     
@@ -115,6 +130,38 @@ export default function DriverProfileScreen() {
       removeConnectionListener(connectionListener);
     };
   }, []);
+
+  // Subscribe to global log capture for the Sistema section
+  useEffect(() => {
+    // Load existing logs
+    setLogs(getAllLogs());
+
+    // Subscribe to new logs
+    const unsubscribe = subscribeToLogs((entry) => {
+      setLogs(prev => {
+        const next = [...prev, entry];
+        // Keep only last 500 locally too
+        if (next.length > 500) {
+          return next.slice(next.length - 500);
+        }
+        return next;
+      });
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  // Auto-scroll log view when new entries arrive
+  useEffect(() => {
+    if (isSystemSectionExpanded && logScrollRef.current && logs.length > 0) {
+      // Use requestAnimationFrame to let the render complete first
+      requestAnimationFrame(() => {
+        logScrollRef.current?.scrollToEnd({ animated: true });
+      });
+    }
+  }, [logs.length, isSystemSectionExpanded]);
 
   const loadUserData = async () => {
     try {
@@ -377,30 +424,66 @@ export default function DriverProfileScreen() {
         <Text style={styles.sectionTitle}>Disponibilidad</Text>
 
         <View style={styles.card}>
-          {/* Socket Connection Status */}
-          <View style={styles.settingItem}>
+          {/* Socket Connection Status - Tappable to reconnect */}
+          {/* Socket Connection Status - Tappable to reconnect */}
+          <TouchableOpacity
+            style={styles.settingItem}
+            activeOpacity={isSocketConnected ? 1 : 0.6}
+            onPress={async () => {
+              if (!isSocketConnected && !isReconnectingSocket) {
+                setIsReconnectingSocket(true);
+                setSocketLastError(null);
+                try {
+                  await reconnectSocket();
+                } catch (error) {
+                  console.error('[PROFILE] Manual reconnection failed:', error);
+                } finally {
+                  setIsReconnectingSocket(false);
+                }
+              }
+            }}
+          >
             <View style={styles.settingLeft}>
               <View style={[styles.iconContainer, isSocketConnected && styles.iconContainerActive]}>
                 <Ionicons
-                  name={isSocketConnected ? 'wifi' : 'wifi-outline'}
+                  name={isSocketConnected ? 'wifi' : isReconnectingSocket ? 'sync' : 'wifi-outline'}
                   size={22}
                   color={isSocketConnected ? Colors.primary : Colors.mediumGray}
                 />
               </View>
               <View style={styles.availabilityTextContainer}>
-                <Text style={styles.settingLabel}>Socket</Text>
-                <Text style={styles.availabilitySubtext}>
-                  {isSocketConnected ? 'Conectado' : 'Desconectado'}
+                <Text style={styles.settingLabel}>
+                  {isReconnectingSocket ? 'Reconectando...' : 'Socket'}
                 </Text>
+                <Text style={styles.availabilitySubtext}>
+                  {isReconnectingSocket
+                    ? 'Conectando...'
+                    : isSocketConnected
+                      ? socketTransport
+                        ? `Conectado (${socketTransport})`
+                        : 'Conectado'
+                      : socketLastError
+                        ? `Error: ${socketLastError.substring(0, 40)}`
+                        : 'Toca para reconectar'}
+                </Text>
+                {!isSocketConnected && socketRetryCount > 0 && (
+                  <Text style={styles.availabilitySubtext}>
+                    {socketRetryCount} intentos
+                  </Text>
+                )}
               </View>
             </View>
-            <View
-              style={[
-                styles.statusIndicator,
-                isSocketConnected ? styles.statusConnected : styles.statusDisconnected,
-              ]}
-            />
-          </View>
+            {isReconnectingSocket ? (
+              <ActivityIndicator size="small" color={Colors.primary} />
+            ) : (
+              <View
+                style={[
+                  styles.statusIndicator,
+                  isSocketConnected ? styles.statusConnected : styles.statusDisconnected,
+                ]}
+              />
+            )}
+          </TouchableOpacity>
 
           <View style={styles.divider} />
 
@@ -855,6 +938,177 @@ export default function DriverProfileScreen() {
             <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
           </TouchableOpacity>
         </View>
+      </View>
+
+      {/* Sistema Section — Log viewer */}
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.sectionHeader}
+          onPress={() => setIsSystemSectionExpanded(!isSystemSectionExpanded)}
+          activeOpacity={0.7}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Ionicons
+              name="terminal-outline"
+              size={22}
+              color={isSystemSectionExpanded ? Colors.primary : '#1f2937'}
+            />
+            <Text style={styles.sectionTitle}>Sistema</Text>
+            {logs.length > 0 && (
+              <View style={{
+                backgroundColor: Colors.primary,
+                borderRadius: 10,
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                minWidth: 20,
+                alignItems: 'center',
+              }}>
+                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>
+                  {logs.length}
+                </Text>
+              </View>
+            )}
+          </View>
+          <Ionicons
+            name={isSystemSectionExpanded ? 'chevron-up' : 'chevron-down'}
+            size={24}
+            color={Colors.primary}
+          />
+        </TouchableOpacity>
+
+        {isSystemSectionExpanded && (
+          <View style={styles.card}>
+            {/* Socket Diagnostics Summary */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+              <View style={{
+                flex: 1,
+                backgroundColor: isSocketConnected ? '#f0fdf4' : '#fef2f2',
+                borderRadius: 10,
+                padding: 10,
+              }}>
+                <Text style={{ fontSize: 11, color: '#6b7280', fontWeight: '600' }}>SOCKET</Text>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: isSocketConnected ? '#16a34a' : '#dc2626' }}>
+                  {isSocketConnected ? 'Conectado' : 'Desconectado'}
+                </Text>
+                {socketTransport && (
+                  <Text style={{ fontSize: 11, color: '#9ca3af' }}>{socketTransport}</Text>
+                )}
+              </View>
+              <View style={{
+                flex: 1,
+                backgroundColor: '#f9fafb',
+                borderRadius: 10,
+                padding: 10,
+              }}>
+                <Text style={{ fontSize: 11, color: '#6b7280', fontWeight: '600' }}>INTENTOS</Text>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: socketRetryCount > 0 ? '#dc2626' : '#16a34a' }}>
+                  {socketRetryCount}
+                </Text>
+              </View>
+              <View style={{
+                flex: 1,
+                backgroundColor: '#f9fafb',
+                borderRadius: 10,
+                padding: 10,
+              }}>
+                <Text style={{ fontSize: 11, color: '#6b7280', fontWeight: '600' }}>LOGS</Text>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#1f2937' }}>
+                  {logs.length}
+                </Text>
+              </View>
+            </View>
+
+            {/* Actions row */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  backgroundColor: '#f9fafb',
+                  borderRadius: 8,
+                  paddingVertical: 8,
+                  borderWidth: 1,
+                  borderColor: '#e5e7eb',
+                }}
+                onPress={() => {
+                  clearLogs();
+                  setLogs([]);
+                }}
+              >
+                <Ionicons name="trash-outline" size={16} color="#6b7280" />
+                <Text style={{ fontSize: 13, color: '#6b7280', fontWeight: '600' }}>Limpiar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  backgroundColor: '#f9fafb',
+                  borderRadius: 8,
+                  paddingVertical: 8,
+                  borderWidth: 1,
+                  borderColor: '#e5e7eb',
+                }}
+                onPress={() => {
+                  logScrollRef.current?.scrollToEnd({ animated: true });
+                }}
+              >
+                <Ionicons name="arrow-down" size={16} color="#6b7280" />
+                <Text style={{ fontSize: 13, color: '#6b7280', fontWeight: '600' }}>Ir al final</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Log list */}
+            <ScrollView
+              ref={logScrollRef}
+              style={{
+                maxHeight: 350,
+                backgroundColor: '#1e293b',
+                borderRadius: 10,
+                padding: 8,
+              }}
+              nestedScrollEnabled
+            >
+              {logs.length === 0 ? (
+                <Text style={{ color: '#64748b', fontSize: 12, textAlign: 'center', paddingVertical: 20 }}>
+                  Esperando logs...
+                </Text>
+              ) : (
+                logs.map((entry) => (
+                  <View
+                    key={entry.id}
+                    style={{ flexDirection: 'row', marginBottom: 2 }}
+                  >
+                    <Text style={{ color: '#64748b', fontSize: 10, fontFamily: 'monospace', marginRight: 4, minWidth: 60 }}>
+                      {entry.timestamp}
+                    </Text>
+                    <Text
+                      style={{
+                        color:
+                          entry.level === 'error'
+                            ? '#ef4444'
+                            : entry.level === 'warn'
+                              ? '#f59e0b'
+                              : '#e2e8f0',
+                        fontSize: 10,
+                        fontFamily: 'monospace',
+                        flex: 1,
+                        lineHeight: 16,
+                      }}
+                    >
+                      {entry.message}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        )}
       </View>
 
       <View style={styles.bottomSpacer} />

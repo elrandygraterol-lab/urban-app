@@ -25,6 +25,8 @@ export const useGlobalSocketListeners = ({
   // Ref to track if listeners are already registered
   const listenersRegisteredRef = useRef(false);
   const connectHandlerRef = useRef<(() => void) | null>(null);
+  const disconnectHandlerRef = useRef<((reason: string) => void) | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Handler for ride:request_created event (GLOBAL - works on any screen)
   const handleRideRequest = useCallback(
@@ -259,30 +261,98 @@ export const useGlobalSocketListeners = ({
           
           // Register listeners after connection
           registerListeners(connectedSocket);
+          
+          // Add auto-reconnect on disconnect
+          setupDisconnectHandler(connectedSocket);
         })
         .catch(error => {
           console.error('[GLOBAL_SOCKET] ❌ Failed to connect socket:', error);
+          
+          // Schedule a retry after 10 seconds
+          reconnectTimeoutRef.current = setTimeout(() => {
+            console.log('[GLOBAL_SOCKET] 🔄 Retrying socket connection...');
+            const s = getSocket();
+            if (!s || !s.connected) {
+              connectSocket()
+                .then(connectedSocket => {
+                  registerListeners(connectedSocket);
+                  setupDisconnectHandler(connectedSocket);
+                })
+                .catch(console.error);
+            }
+          }, 10000);
         });
       
       // Return early - listeners will be registered after connection
-      return;
+      return cleanup;
     }
     
     // Socket already exists, register listeners immediately
     registerListeners(socket);
+    setupDisconnectHandler(socket);
 
     // Cleanup function
-    return () => {
+    return cleanup;
+    
+    // Helper: Set up handler for socket disconnect events
+    function setupDisconnectHandler(sock: any) {
+      if (disconnectHandlerRef.current) {
+        sock.off('disconnect', disconnectHandlerRef.current);
+      }
+      
+      disconnectHandlerRef.current = (reason: string) => {
+        console.log('[GLOBAL_SOCKET] 🔌 Socket disconnected:', reason);
+        
+        // If the socket was intentionally disconnected by us, don't reconnect
+        if (reason === 'io client disconnect') {
+          console.log('[GLOBAL_SOCKET] Intentional disconnect, not auto-reconnecting');
+          return;
+        }
+        
+        // Schedule reconnection after a delay
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+        }
+        
+        reconnectTimeoutRef.current = setTimeout(() => {
+          console.log('[GLOBAL_SOCKET] 🔄 Attempting auto-reconnect after disconnect...');
+          const currentSocket = getSocket();
+          if (!currentSocket || !currentSocket.connected) {
+            connectSocket()
+              .then(connectedSocket => {
+                registerListeners(connectedSocket);
+                setupDisconnectHandler(connectedSocket);
+              })
+              .catch(error => {
+                console.error('[GLOBAL_SOCKET] ❌ Auto-reconnect failed:', error);
+              });
+          }
+        }, 5000);
+      };
+      
+      sock.on('disconnect', disconnectHandlerRef.current);
+    }
+    
+    // Cleanup helper
+    function cleanup() {
       console.log('[GLOBAL_SOCKET] ========================================');
       console.log('[GLOBAL_SOCKET] 🧹 CLEANING UP GLOBAL SOCKET LISTENERS');
-      console.log('[GLOBAL_SOCKET]    User ID:', user.id);
+      console.log('[GLOBAL_SOCKET]    User ID:', user?.id);
       console.log('[GLOBAL_SOCKET] ========================================');
+
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
 
       const currentSocket = getSocket();
       if (currentSocket) {
         currentSocket.off('ride:payment_completed', handlePaymentCompleted);
         currentSocket.off('ride:cancelled', handleRideCancelled);
         currentSocket.off('ride:request_created', handleRideRequest);
+        if (disconnectHandlerRef.current) {
+          currentSocket.off('disconnect', disconnectHandlerRef.current);
+        }
         currentSocket.offAny();
         console.log('[GLOBAL_SOCKET] ✅ Listeners removed');
       } else {
@@ -291,7 +361,7 @@ export const useGlobalSocketListeners = ({
       
       // Reset flag on cleanup
       listenersRegisteredRef.current = false;
-    };
+    }
   }, [isAuthenticated, user?.id, user?.role, handlePaymentCompleted, handleRideCancelled, handleRideRequest]);
 
   // No return value needed - this hook only manages side effects

@@ -69,7 +69,14 @@ let socket: Socket | null = null;
 let isConnected = false;
 let isConnecting = false;
 let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 5; // Aumentado de 3 a 5
+let lastTransport: string | null = null;
+let lastError: string | null = null;
+
+// Auto-reconnect flag: set to true when socket should auto-retry indefinitely
+let shouldAutoReconnect = true;
+
+// No hard limit on reconnection attempts — keep trying indefinitely
+// Socket.IO client handles its own retry with built-in reconnection
 
 // Token refresh state
 let isRefreshingToken = false;
@@ -77,6 +84,21 @@ let tokenRefreshPromise: Promise<string | null> | null = null;
 
 // Connection state listeners
 const connectionListeners: Set<(connected: boolean) => void> = new Set();
+
+// Detailed state export for diagnostics
+export const getSocketDiagnostics = () => ({
+  isConnected,
+  isConnecting,
+  reconnectAttempts,
+  lastTransport,
+  lastError,
+  socketExists: socket !== null,
+  socketConnected: socket?.connected ?? false,
+  socketId: socket?.id ?? null,
+  shouldAutoReconnect,
+  baseUrl: SOCKET_BASE_URL,
+  path: SOCKET_PATH,
+});
 
 /**
  * Add connection state listener
@@ -276,9 +298,16 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
 
     // Disconnect existing socket if any
     if (socket) {
+      console.log('[SOCKET] Disconnecting existing socket before new connection');
+      socket.removeAllListeners();
       socket.disconnect();
       socket = null;
     }
+
+    // Reset state for fresh connection
+    reconnectAttempts = 0;
+    lastError = null;
+    shouldAutoReconnect = true;
 
     // Detectar si estamos usando localtunnel (no soporta WebSocket)
     const isLocaltunnel = SOCKET_URL.includes('.loca.lt');
@@ -290,7 +319,7 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
       console.log('[SOCKET] localtunnel detected, forcing polling transport only');
     }
 
-    // Create socket connection
+    // Create socket connection — with INFINITE reconnection
     socket = io(SOCKET_BASE_URL, {
       path: SOCKET_PATH,
       auth: {
@@ -298,9 +327,9 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
       },
       transports: socketTransports,
       reconnection: true,
-      reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+      reconnectionAttempts: Infinity,  // Keep trying forever
       reconnectionDelay: 2000,
-      reconnectionDelayMax: 10000,
+      reconnectionDelayMax: 30000,     // Max 30s between retries
       timeout: 60000,
       upgrade: !isLocaltunnel,
       forceNew: true,
@@ -309,102 +338,96 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
 
     // Connection event handlers
     socket.on('connect', () => {
+      lastTransport = socket?.io.engine.transport.name ?? null;
+      lastError = null;
+      isConnecting = false;
+      reconnectAttempts = 0;
       console.log('[SOCKET] ========================================');
       console.log('[SOCKET] ✅ CONNECTED SUCCESSFULLY!');
       console.log('[SOCKET]    Socket ID:', socket?.id);
-      console.log('[SOCKET]    Transport:', socket?.io.engine.transport.name);
+      console.log('[SOCKET]    Transport:', lastTransport);
       console.log('[SOCKET]    URL:', SOCKET_URL);
       console.log('[SOCKET]    Token present:', !!token);
       console.log('[SOCKET] ========================================');
-      isConnecting = false;
-      reconnectAttempts = 0;
-      notifyConnectionChange(true); // Notificar cambio de estado
+      notifyConnectionChange(true);
     });
 
     socket.on('disconnect', reason => {
       console.log('[SOCKET] ❌ Disconnected:', reason);
-      notifyConnectionChange(false); // Notificar cambio de estado
+      notifyConnectionChange(false);
 
-      // Don't try to reconnect if disconnected intentionally
+      // Don't try to reconnect if disconnected intentionally by us
       if (reason === 'io client disconnect' || reason === 'io server disconnect') {
-        console.log('[SOCKET] Intentional disconnect, not reconnecting');
+        console.log('[SOCKET] Intentional disconnect, setting auto-reconnect = false');
+        shouldAutoReconnect = false;
         return;
       }
+
+      // For transport errors / ping timeout, keep auto-reconnect on
+      shouldAutoReconnect = true;
     });
 
     socket.on('connect_error', async error => {
+      isConnecting = false;
+      reconnectAttempts++;
+      lastError = error.message;
+
       console.error('[SOCKET] ========================================');
-      console.error('[SOCKET] ❌ CONNECTION ERROR');
+      console.error('[SOCKET] ❌ CONNECTION ERROR (Attempt', reconnectAttempts + ')');
       console.error('[SOCKET]    Error:', error.message);
-      console.error('[SOCKET]    Attempt:', reconnectAttempts + 1, '/', MAX_RECONNECT_ATTEMPTS);
       console.error('[SOCKET]    URL:', SOCKET_URL);
       console.error('[SOCKET] ========================================');
 
-      isConnecting = false;
-      reconnectAttempts++;
-
-      // If we've tried multiple times, try refreshing the token
-      if (reconnectAttempts >= 2 && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-        console.log('[SOCKET] Attempting token refresh...');
+      // Periodically refresh token (every 5 attempts) to handle expired tokens
+      if (reconnectAttempts % 5 === 0) {
+        console.log('[SOCKET] Periodic token refresh (attempt', reconnectAttempts + ')...');
         const newToken = await refreshAuthToken();
-
         if (newToken && socket) {
-          // Update socket auth with new token
           socket.auth = { token: newToken };
-          console.log('[SOCKET] ✅ Token refreshed, will retry connection');
+          console.log('[SOCKET] ✅ Token refreshed for next attempt');
         } else {
           console.error('[SOCKET] ❌ Token refresh failed');
         }
       }
 
-      // If max attempts reached, give up silently
-      if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-        console.error('[SOCKET] ❌ Max reconnection attempts reached, giving up');
-        disconnectSocket();
-      }
+      // NEVER call disconnectSocket() here — let Socket.IO keep retrying forever
+      // Only log the error and continue
+      console.log('[SOCKET] Socket.IO will retry automatically (delay increasing up to 30s)');
     });
 
     socket.on('error', error => {
+      lastError = typeof error === 'string' ? error : error.message || 'Unknown socket error';
       console.error('[SOCKET] ========================================');
       console.error('[SOCKET] ❌ SOCKET ERROR');
-      console.error('[SOCKET]    Error:', error);
+      console.error('[SOCKET]    Error:', typeof error === 'object' ? JSON.stringify(error) : error);
       console.error('[SOCKET]    Socket ID:', socket?.id);
       console.error('[SOCKET]    Connected:', socket?.connected);
       console.error('[SOCKET] ========================================');
     });
 
-    // Wait for connection with increased timeout - but don't fail if timeout
+    // Wait for connection with a shorter initial timeout — returns quickly to not block UI
     try {
-      await new Promise<void>((resolve, reject) => {
+      await new Promise<void>((resolve) => {
         const timeout = setTimeout(() => {
-          console.warn('[SOCKET] ⚠️ Connection timeout after 60 seconds');
-          console.warn('[SOCKET] Socket will continue trying to connect in background');
-          console.warn('[SOCKET] Verifique que:');
-          console.warn('[SOCKET]   1. El backend esté corriendo en:', SOCKET_URL);
-          console.warn('[SOCKET]   2. La IP sea correcta y accesible desde el dispositivo');
-          console.warn('[SOCKET]   3. No haya firewall bloqueando el puerto 3000');
-          // Don't reject, just resolve - let socket keep trying in background
+          console.warn('[SOCKET] ⚠️ Initial connection not yet established after 15s');
+          console.warn('[SOCKET] Socket will continue trying in background...');
           resolve();
-        }, 60000);
+        }, 15000);
 
         socket!.once('connect', () => {
           clearTimeout(timeout);
-          console.log('[SOCKET] ✅ Connection established successfully');
+          console.log('[SOCKET] ✅ Initial connection established');
           resolve();
         });
 
-        socket!.once('connect_error', error => {
+        socket!.once('connect_error', () => {
           clearTimeout(timeout);
-          console.error('[SOCKET] ❌ Connection failed:', error.message);
-          console.error('[SOCKET] URL intentada:', SOCKET_URL);
-          console.error('[SOCKET] Tipo de error:', (error as any).type || 'unknown');
-          // Don't reject on first error, let it retry
+          // Don't reject on first error — Socket.IO will keep retrying
           resolve();
         });
       });
     } catch (timeoutError) {
-      // Even if timeout, return the socket - it will keep trying to connect
-      console.warn('[SOCKET] Returning socket despite timeout - will connect in background');
+      console.warn('[SOCKET] Returning socket despite error — will connect in background');
     }
 
     console.log('[SOCKET] ========== CONNECT SOCKET COMPLETE ==========');
@@ -421,37 +444,45 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
  * Disconnect from WebSocket server
  */
 export const disconnectSocket = (): void => {
+  console.log('[SOCKET] 🔌 disconnectSocket() called — will auto-reconnect:', shouldAutoReconnect);
   if (socket) {
-    socket.disconnect();
     socket.removeAllListeners();
+    socket.disconnect();
     socket = null;
     reconnectAttempts = 0;
-    notifyConnectionChange(false); // Notificar cambio de estado
+    lastTransport = null;
+    lastError = null;
+    shouldAutoReconnect = false;
+    notifyConnectionChange(false);
+    console.log('[SOCKET] ✅ Socket disconnected and cleaned up');
   }
 };
 
 /**
- * Reconnect with a fresh token (useful after app resume)
+ * Reconnect with a fresh token (useful after app resume or manual tap)
  */
 export const reconnectSocket = async (): Promise<Socket | null> => {
-  console.log('[SOCKET] Reconnecting with fresh token...');
+  console.log('[SOCKET] 🔄 reconnectSocket() called — getting fresh token...');
 
-  // Disconnect existing socket
+  // Disconnect existing socket — this clears shouldAutoReconnect
   disconnectSocket();
+
+  // Small delay to ensure cleanup is complete
+  await new Promise(resolve => setTimeout(resolve, 300));
 
   try {
     // Get fresh token
     const token = await getValidToken();
 
     if (!token) {
-      console.error('[SOCKET] Cannot reconnect: No valid token');
+      console.error('[SOCKET] ❌ Cannot reconnect: No valid token');
       return null;
     }
 
-    // Connect with fresh token
+    console.log('[SOCKET] ✅ Fresh token obtained, connecting...');
     return await connectSocket(token);
   } catch (error) {
-    console.error('[SOCKET] Reconnection failed:', error);
+    console.error('[SOCKET] ❌ Reconnection failed:', error);
     return null;
   }
 };
@@ -994,6 +1025,7 @@ export default {
   reconnectSocket,
   getSocket,
   isSocketConnected,
+  getSocketDiagnostics,
   addConnectionListener,
   removeConnectionListener,
   joinRide,
