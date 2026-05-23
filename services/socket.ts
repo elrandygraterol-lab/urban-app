@@ -8,6 +8,56 @@ import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
 
 const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'; // definido en eas.json por perfil
+
+// Extraer host y path de la URL para Socket.IO
+// Ej: SOCKET_URL=https://rifaslsv.com/urbantaxis → baseUrl=https://rifaslsv.com, path=/urbantaxis/socket.io
+let SOCKET_BASE_URL = SOCKET_URL;
+let SOCKET_PATH = '/socket.io';
+
+try {
+  const _parsedUrl = new URL(SOCKET_URL);
+  SOCKET_BASE_URL = `${_parsedUrl.protocol}//${_parsedUrl.host}`;
+  SOCKET_PATH = _parsedUrl.pathname !== '/' ? `${_parsedUrl.pathname}/socket.io` : '/socket.io';
+} catch (_e) {
+  // Fallback: extraer base y path con regex por si new URL() falla en Hermes
+  console.warn('[SOCKET] ⚠️ new URL() failed, using regex fallback:', _e);
+  try {
+    const match = SOCKET_URL.match(/^(https?:\/\/[^\/]+)(\/.*)?$/);
+    if (match) {
+      SOCKET_BASE_URL = match[1];
+      const pathname = match[2] || '';
+      SOCKET_PATH = pathname && pathname !== '/' ? `${pathname}/socket.io` : '/socket.io';
+    }
+  } catch (_e2) {
+    console.error('[SOCKET] ❌ URL parsing fallback also failed:', _e2);
+  }
+}
+
+// Log inmediato de la configuración de URL (aparece al cargar el módulo)
+console.log('[SOCKET] 📋 URL Config:', {
+  raw: SOCKET_URL,
+  baseUrl: SOCKET_BASE_URL,
+  path: SOCKET_PATH,
+});
+
+// Hacer un ping de diagnóstico al backend para confirmar conectividad
+// Esto ayuda a diagnosticar si la app está usando la URL correcta
+const runDiagnosticPing = async (): Promise<void> => {
+  try {
+    const diagnosticUrl = `${SOCKET_URL}/api/diagnostics/ping`;
+    console.log('[SOCKET] 🔍 Diagnostic ping to:', diagnosticUrl);
+    const response = await axios.get(diagnosticUrl, { timeout: 10000 });
+    console.log('[SOCKET] ✅ Diagnostic ping OK:', response.data?.data?.ip || 'no ip');
+  } catch (error: any) {
+    console.error('[SOCKET] ❌ Diagnostic ping FAILED:', error.message);
+    console.error('[SOCKET]    URL intentada:', `${SOCKET_URL}/api/diagnostics/ping`);
+    console.error('[SOCKET]    ¿EXPO_PUBLIC_API_URL está correcto?');
+  }
+};
+
+// Ejecutar diagnóstico inmediatamente (fire-and-forget, no bloquea)
+runDiagnosticPing();
+
 const TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_KEY = 'auth_user';
@@ -222,7 +272,7 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
     }
 
     console.log('[SOCKET] ✅ Valid token obtained');
-    console.log('[SOCKET] Connecting to:', SOCKET_URL);
+    console.log('[SOCKET] Connecting to:', SOCKET_BASE_URL, 'path:', SOCKET_PATH);
 
     // Disconnect existing socket if any
     if (socket) {
@@ -241,7 +291,8 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
     }
 
     // Create socket connection
-    socket = io(SOCKET_URL, {
+    socket = io(SOCKET_BASE_URL, {
+      path: SOCKET_PATH,
       auth: {
         token,
       },

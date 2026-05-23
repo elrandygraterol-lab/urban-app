@@ -21,7 +21,7 @@ import { useDriverStore } from '../../store/driverStore';
 import { useLanguage } from '../../hooks/useLanguage';
 import { translations } from '../../i18n/translations';
 import { userAPI, notificationAPI, driverAPI } from '../../services/api';
-import { getSocket } from '@/services/socket';
+import { getSocket, addConnectionListener, removeConnectionListener } from '@/services/socket';
 import { resolveFileUrl } from '@/services/fileUrl';
 
 interface NotificationPreferences {
@@ -80,15 +80,18 @@ export default function DriverProfileScreen() {
   useEffect(() => {
     loadUserData();
     
-    // Monitor socket connection status
+    // Usar addConnectionListener en lugar de getSocket() directo
+    // Esto funciona aunque el socket aún no se haya inicializado
+    const connectionListener = (connected: boolean) => {
+      console.log('[DRIVER PROFILE] 🔌 Socket connection state:', connected ? 'Conectado' : 'Desconectado');
+      setIsSocketConnected(connected);
+    };
+    addConnectionListener(connectionListener);
+    
+    // Listen for availability changes from other sources (e.g., home screen toggle)
+    // Solo si el socket ya está disponible; si no, se escuchará tras reconexión
     const socket = getSocket();
     if (socket) {
-      setIsSocketConnected(socket.connected);
-      
-      const handleConnect = () => setIsSocketConnected(true);
-      const handleDisconnect = () => setIsSocketConnected(false);
-      
-      // Listen for availability changes from other sources (e.g., home screen toggle)
       const handleAvailabilityChanged = (data: { driverId: string; isAvailable: boolean; timestamp: string }) => {
         console.log('[DRIVER PROFILE] ========================================');
         console.log('[DRIVER PROFILE] Availability changed event received');
@@ -100,17 +103,17 @@ export default function DriverProfileScreen() {
         // Update the availability state
         setIsAvailable(data.isAvailable);
       };
-      
-      socket.on('connect', handleConnect);
-      socket.on('disconnect', handleDisconnect);
       socket.on('driver:availability_changed', handleAvailabilityChanged);
       
       return () => {
-        socket.off('connect', handleConnect);
-        socket.off('disconnect', handleDisconnect);
+        removeConnectionListener(connectionListener);
         socket.off('driver:availability_changed', handleAvailabilityChanged);
       };
     }
+    
+    return () => {
+      removeConnectionListener(connectionListener);
+    };
   }, []);
 
   const loadUserData = async () => {
