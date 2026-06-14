@@ -368,7 +368,7 @@ const RideRequestCard: React.FC<{
           onPress={() => onReject(data.id)}
           activeOpacity={0.8}
         >
-          <Ionicons name="close" size={20} color="#dc2626" />
+          <Ionicons name="close" size={16} color="#dc2626" />
           <Text style={styles.rideRejectText}>Rechazar</Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -376,7 +376,7 @@ const RideRequestCard: React.FC<{
           onPress={() => onAccept(data.id)}
           activeOpacity={0.8}
         >
-          <Ionicons name="checkmark" size={20} color="#fff" />
+          <Ionicons name="checkmark" size={16} color="#fff" />
           <Text style={styles.rideAcceptText}>Aceptar</Text>
         </TouchableOpacity>
       </View>
@@ -1012,8 +1012,9 @@ const styles = StyleSheet.create({
   },
   rideCardActions: {
     flexDirection: 'row',
-    gap: 12,
-    paddingVertical: 16,
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 2,
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
   },
@@ -1022,9 +1023,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 14,
-    gap: 8,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 6,
   },
   rideRejectBtn: {
     backgroundColor: '#fef2f2',
@@ -1032,15 +1033,20 @@ const styles = StyleSheet.create({
     borderColor: '#fecaca',
   },
   rideRejectText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: '#dc2626',
   },
   rideAcceptBtn: {
     backgroundColor: '#16a34a',
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
   },
   rideAcceptText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: '#fff',
   },

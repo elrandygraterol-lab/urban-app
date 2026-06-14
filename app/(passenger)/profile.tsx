@@ -12,10 +12,9 @@ import {
   StatusBar,
   Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-// import { useCopilot, walkthroughable, CopilotStep } from 'react-native-copilot';
 import { Colors, Spacing } from '../../constants/theme';
 import { useAuthStore } from '../../store/authStore';
 import { useLanguage } from '../../hooks/useLanguage';
@@ -38,17 +37,16 @@ interface NotificationPreferences {
 
 export default function PassengerProfileScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user, logout } = useAuthStore();
   const { language, setLanguage } = useLanguage();
   const t = translations[language].profile;
-  // const { start: startTour } = useCopilot();
   const { isActive: needsTutorial } = useSmartTutorial('passenger_profile');
   const { showToast, showStatus } = useUnifiedNotifications();
 
   useEffect(() => {
     if (needsTutorial) {
       setActiveTutorialScreen('passenger_profile');
-      // setTimeout(() => { startTour(); }, 800);
     }
   }, [needsTutorial]);
 
@@ -56,12 +54,10 @@ export default function PassengerProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // User data
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [email, setEmail] = useState(user?.email || '');
 
-  // Notification preferences
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>({
     driverArrival: true,
     rideUpdates: true,
@@ -73,12 +69,8 @@ export default function PassengerProfileScreen() {
     const loadUserData = async () => {
       try {
         setIsLoading(true);
-
-        // Load user info
         const userResponse = await userAPI.getMe();
 
-        // Defensive programming: validate response structure
-        // API returns: {success: true, data: {user data}}
         if (!userResponse || !userResponse.data || !userResponse.data.data) {
           console.warn('User API returned invalid response:', userResponse);
           showToast(t.loadError, 'error');
@@ -87,7 +79,6 @@ export default function PassengerProfileScreen() {
 
         const userData = userResponse.data.data;
 
-        // Update auth store with fresh data (including profilePhotoUrl)
         if (user) {
           useAuthStore.getState().setUser({
             ...user,
@@ -102,7 +93,6 @@ export default function PassengerProfileScreen() {
         setPhone(userData.phone || '');
         setEmail(userData.email || '');
 
-        // Load notification preferences
         try {
           const prefsResponse = await notificationAPI.getPreferences();
           if (prefsResponse.data && prefsResponse.data.preferences) {
@@ -255,92 +245,97 @@ export default function PassengerProfileScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f0f9ff" />
+      <View style={[styles.safeArea, { paddingTop: insets.top }]}>
+        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0f9ff" />
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* Personal Information Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t.personalInfo}</Text>
-            {!isEditing && (
-              <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editButton}>
-                <Ionicons name="pencil" size={20} color={Colors.primary} />
-                <Text style={styles.editButtonText}>{t.edit}</Text>
-              </TouchableOpacity>
+    <View style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: insets.bottom + 24 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+          <Text style={styles.headerTitle}>Perfil</Text>
+          {!isEditing && (
+            <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.headerEditBtn}>
+              <Ionicons name="pencil-outline" size={18} color="#fff" />
+              <Text style={styles.headerEditText}>{t.edit}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Avatar Card */}
+        <View style={styles.avatarCard}>
+          <TouchableOpacity onPress={handleChangePhoto} style={styles.avatarWrapper}>
+            {resolveFileUrl(user?.profilePhotoUrl) ? (
+              <Image
+                source={{ uri: resolveFileUrl(user?.profilePhotoUrl) }}
+                style={styles.avatarImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Ionicons name="person" size={36} color={Colors.primary} />
+              </View>
             )}
-          </View>
+            <View style={styles.cameraBadge}>
+              <Ionicons name="camera" size={13} color="#fff" />
+            </View>
+          </TouchableOpacity>
+          <Text style={styles.avatarName}>{user?.name || ''}</Text>
+          <Text style={styles.avatarRole}>Pasajero</Text>
+        </View>
+
+        {/* Personal Information */}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionTitle}>{t.personalInfo}</Text>
 
           <View style={styles.card}>
-            {/* Profile Photo */}
-            <View style={styles.avatarSection}>
-              <TouchableOpacity onPress={handleChangePhoto} style={styles.avatarContainer}>
-                {resolveFileUrl(user?.profilePhotoUrl) ? (
-                  <Image
-                    source={{ uri: resolveFileUrl(user?.profilePhotoUrl) }}
-                    style={styles.avatarImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={styles.avatarPlaceholder}>
-                    <Ionicons name="person" size={40} color={Colors.primary} />
-                  </View>
-                )}
-                <View style={styles.avatarBadge}>
-                  <Ionicons name="camera" size={14} color={Colors.white} />
-                </View>
-              </TouchableOpacity>
-              <Text style={styles.avatarName}>{user?.name || ''}</Text>
-              <Text style={styles.avatarRole}>Pasajero</Text>
-              <TouchableOpacity onPress={handleChangePhoto} style={styles.changePhotoButton}>
-                <Ionicons name="camera-outline" size={16} color={Colors.primary} />
-                <Text style={styles.changePhotoText}>Cambiar foto</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.avatarDivider} />
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t.name}</Text>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>{t.name}</Text>
               <TextInput
-                style={[styles.input, !isEditing && styles.inputDisabled]}
+                style={[styles.fieldInput, !isEditing && styles.fieldInputDisabled]}
                 value={name}
                 onChangeText={setName}
                 editable={isEditing}
                 placeholder={t.name}
-                placeholderTextColor={Colors.placeholder}
+                placeholderTextColor="#94a3b8"
               />
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t.email}</Text>
+            <View style={styles.fieldDivider} />
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>{t.email}</Text>
               <TextInput
-                style={[styles.input, styles.inputDisabled]}
+                style={[styles.fieldInput, styles.fieldInputDisabled]}
                 value={email}
                 editable={false}
                 placeholder={t.email}
-                placeholderTextColor={Colors.placeholder}
+                placeholderTextColor="#94a3b8"
               />
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t.phone}</Text>
+            <View style={styles.fieldDivider} />
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>{t.phone}</Text>
               <TextInput
-                style={[styles.input, !isEditing && styles.inputDisabled]}
+                style={[styles.fieldInput, !isEditing && styles.fieldInputDisabled]}
                 value={phone}
                 onChangeText={setPhone}
                 editable={isEditing}
                 placeholder={t.phone}
-                placeholderTextColor={Colors.placeholder}
+                placeholderTextColor="#94a3b8"
                 keyboardType="phone-pad"
               />
             </View>
@@ -348,24 +343,24 @@ export default function PassengerProfileScreen() {
             {isEditing && (
               <View style={styles.editActions}>
                 <TouchableOpacity
-                  style={[styles.button, styles.cancelButton]}
+                  style={styles.cancelBtn}
                   onPress={() => {
                     setIsEditing(false);
                     setName(user?.name || '');
                     setPhone(user?.phone || '');
                   }}
                 >
-                  <Text style={styles.cancelButtonText}>{t.cancel}</Text>
+                  <Text style={styles.cancelBtnText}>{t.cancel}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.button, styles.saveButton]}
+                  style={styles.saveBtn}
                   onPress={handleSaveProfile}
                   disabled={isSaving}
                 >
                   {isSaving ? (
-                    <ActivityIndicator color={Colors.white} />
+                    <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.saveButtonText}>{t.save}</Text>
+                    <Text style={styles.saveBtnText}>{t.save}</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -373,42 +368,32 @@ export default function PassengerProfileScreen() {
           </View>
         </View>
 
-        {/* Settings Section */}
-        <View style={styles.section}>
+        {/* Settings */}
+        <View style={styles.sectionBlock}>
           <Text style={styles.sectionTitle}>{t.settings}</Text>
 
           <View style={styles.card}>
-            <View style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <View style={styles.iconContainer}>
-                  <Ionicons name="language" size={22} color={Colors.primary} />
+            <View style={styles.rowItem}>
+              <View style={styles.rowLeft}>
+                <View style={styles.iconBox}>
+                  <Ionicons name="language-outline" size={20} color={Colors.primary} />
                 </View>
-                <Text style={styles.settingLabel}>{t.language}</Text>
+                <Text style={styles.rowLabel}>{t.language}</Text>
               </View>
-              <View style={styles.languageButtons}>
+              <View style={styles.langGroup}>
                 <TouchableOpacity
-                  style={[styles.languageButton, language === 'es' && styles.languageButtonActive]}
+                  style={[styles.langBtn, language === 'es' && styles.langBtnActive]}
                   onPress={() => handleLanguageChange('es')}
                 >
-                  <Text
-                    style={[
-                      styles.languageButtonText,
-                      language === 'es' && styles.languageButtonTextActive,
-                    ]}
-                  >
+                  <Text style={[styles.langBtnText, language === 'es' && styles.langBtnTextActive]}>
                     {t.spanish}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.languageButton, language === 'en' && styles.languageButtonActive]}
+                  style={[styles.langBtn, language === 'en' && styles.langBtnActive]}
                   onPress={() => handleLanguageChange('en')}
                 >
-                  <Text
-                    style={[
-                      styles.languageButtonText,
-                      language === 'en' && styles.languageButtonTextActive,
-                    ]}
-                  >
+                  <Text style={[styles.langBtnText, language === 'en' && styles.langBtnTextActive]}>
                     {t.english}
                   </Text>
                 </TouchableOpacity>
@@ -417,291 +402,302 @@ export default function PassengerProfileScreen() {
           </View>
         </View>
 
-        {/* Notifications Section */}
-        <View style={styles.section}>
+        {/* Notifications */}
+        <View style={styles.sectionBlock}>
           <Text style={styles.sectionTitle}>{t.notifications}</Text>
 
           <View style={styles.card}>
-            <View style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <View style={styles.iconContainer}>
-                  <Ionicons name="car-sport" size={22} color={Colors.primary} />
-                </View>
-                <Text style={styles.settingLabel}>Llegada del conductor</Text>
-              </View>
-              <Switch
-                value={notificationPrefs.driverArrival}
-                onValueChange={value => handleUpdateNotificationPref('driverArrival', value)}
-                trackColor={{ false: Colors.lightGray, true: Colors.light }}
-                thumbColor={notificationPrefs.driverArrival ? Colors.primary : Colors.white}
-              />
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <View style={styles.iconContainer}>
-                  <Ionicons name="notifications" size={22} color={Colors.primary} />
-                </View>
-                <Text style={styles.settingLabel}>Actualizaciones de viaje</Text>
-              </View>
-              <Switch
-                value={notificationPrefs.rideUpdates}
-                onValueChange={value => handleUpdateNotificationPref('rideUpdates', value)}
-                trackColor={{ false: Colors.lightGray, true: Colors.light }}
-                thumbColor={notificationPrefs.rideUpdates ? Colors.primary : Colors.white}
-              />
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <View style={styles.iconContainer}>
-                  <Ionicons name="time" size={22} color={Colors.primary} />
-                </View>
-                <Text style={styles.settingLabel}>Recordatorios de viaje</Text>
-              </View>
-              <Switch
-                value={notificationPrefs.tripReminders}
-                onValueChange={value => handleUpdateNotificationPref('tripReminders', value)}
-                trackColor={{ false: Colors.lightGray, true: Colors.light }}
-                thumbColor={notificationPrefs.tripReminders ? Colors.primary : Colors.white}
-              />
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <View style={styles.iconContainer}>
-                  <Ionicons name="megaphone" size={22} color={Colors.primary} />
-                </View>
-                <Text style={styles.settingLabel}>Promociones</Text>
-              </View>
-              <Switch
-                value={notificationPrefs.promotions}
-                onValueChange={value => handleUpdateNotificationPref('promotions', value)}
-                trackColor={{ false: Colors.lightGray, true: Colors.light }}
-                thumbColor={notificationPrefs.promotions ? Colors.primary : Colors.white}
-              />
-            </View>
+            <SwitchRow
+              icon="car-sport-outline"
+              label="Llegada del conductor"
+              value={notificationPrefs.driverArrival}
+              onToggle={(v) => handleUpdateNotificationPref('driverArrival', v)}
+            />
+            <View style={styles.switchDivider} />
+            <SwitchRow
+              icon="notifications-outline"
+              label="Actualizaciones de viaje"
+              value={notificationPrefs.rideUpdates}
+              onToggle={(v) => handleUpdateNotificationPref('rideUpdates', v)}
+            />
+            <View style={styles.switchDivider} />
+            <SwitchRow
+              icon="time-outline"
+              label="Recordatorios de viaje"
+              value={notificationPrefs.tripReminders}
+              onToggle={(v) => handleUpdateNotificationPref('tripReminders', v)}
+            />
+            <View style={styles.switchDivider} />
+            <SwitchRow
+              icon="megaphone-outline"
+              label="Promociones"
+              value={notificationPrefs.promotions}
+              onToggle={(v) => handleUpdateNotificationPref('promotions', v)}
+            />
           </View>
         </View>
 
-        {/* Account Section */}
-        <View style={styles.section}>
+        {/* Account */}
+        <View style={styles.sectionBlock}>
           <Text style={styles.sectionTitle}>{t.account}</Text>
 
           <View style={styles.card}>
-            <TouchableOpacity style={styles.actionItem} onPress={handleLogout}>
-              <View style={styles.settingLeft}>
-                <View style={styles.iconContainer}>
-                  <Ionicons name="log-out-outline" size={22} color={Colors.primary} />
+            <TouchableOpacity style={styles.rowItem} onPress={handleLogout}>
+              <View style={styles.rowLeft}>
+                <View style={styles.iconBox}>
+                  <Ionicons name="log-out-outline" size={20} color={Colors.primary} />
                 </View>
-                <Text style={styles.actionLabel}>{t.logout}</Text>
+                <Text style={styles.rowLabel}>{t.logout}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+              <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
             </TouchableOpacity>
 
-            <View style={styles.divider} />
+            <View style={styles.actionDivider} />
 
-            <TouchableOpacity style={styles.actionItem} onPress={handleDeleteAccount}>
-              <View style={styles.settingLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: '#fef2f2' }]}>
-                  <Ionicons name="trash-outline" size={22} color={Colors.error} />
+            <TouchableOpacity style={styles.rowItem} onPress={handleDeleteAccount}>
+              <View style={styles.rowLeft}>
+                <View style={[styles.iconBox, { backgroundColor: '#fef2f2' }]}>
+                  <Ionicons name="trash-outline" size={20} color={Colors.error} />
                 </View>
-                <Text style={[styles.actionLabel, styles.dangerText]}>{t.deleteAccount}</Text>
+                <Text style={[styles.rowLabel, { color: Colors.error }]}>{t.deleteAccount}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+              <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
             </TouchableOpacity>
           </View>
         </View>
-
-        <View style={styles.bottomSpacer} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
+  );
+}
+
+function SwitchRow({
+  icon,
+  label,
+  value,
+  onToggle,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value?: boolean;
+  onToggle: (v: boolean) => void;
+}) {
+  return (
+    <View style={styles.switchRow}>
+      <View style={styles.switchLeft}>
+        <View style={styles.iconBox}>
+          <Ionicons name={icon} size={20} color={Colors.primary} />
+        </View>
+        <Text style={styles.switchLabel}>{label}</Text>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onToggle}
+        trackColor={{ false: '#e2e8f0', true: '#bbf7d0' }}
+        thumbColor={value ? Colors.primary : '#fff'}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f0f9ff',
+    backgroundColor: '#fff',
   },
-  container: {
+  scroll: {
     flex: 1,
-    backgroundColor: '#f0f9ff',
+    backgroundColor: '#f8fafc',
   },
   contentContainer: {
-    padding: Spacing.md,
+    paddingHorizontal: 20,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f0f9ff',
+    backgroundColor: '#fff',
   },
-  avatarSection: {
+
+  /* Header */
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Spacing.md,
+    paddingBottom: 20,
+    paddingHorizontal: 4,
+    backgroundColor: '#f8fafc',
   },
-  avatarContainer: {
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  headerEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 100,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  headerEditText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  /* Avatar Card */
+  avatarCard: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    marginBottom: 24,
+  },
+  avatarWrapper: {
     position: 'relative',
-    marginBottom: Spacing.sm,
+    marginBottom: 12,
   },
   avatarImage: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     borderWidth: 3,
-    borderColor: Colors.primary,
+    borderColor: '#e2e8f0',
   },
   avatarPlaceholder: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: '#f0fdf4',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: Colors.primary,
+    borderColor: '#e2e8f0',
   },
-  avatarBadge: {
+  cameraBadge: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    bottom: 0,
+    right: 0,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.white,
+    borderWidth: 3,
+    borderColor: '#f8fafc',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 3,
   },
   avatarName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    color: Colors.darkGray,
+    color: '#0f172a',
     marginBottom: 2,
   },
   avatarRole: {
     fontSize: 14,
-    color: Colors.mediumGray || '#9ca3af',
-    marginBottom: Spacing.sm,
+    color: '#94a3b8',
+    fontWeight: '500',
   },
-  changePhotoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#f0fdf4',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-  },
-  changePhotoText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  avatarDivider: {
-    height: 1,
-    backgroundColor: '#f3f4f6',
-    marginBottom: Spacing.md,
-  },
-  section: {
-    marginBottom: Spacing.lg,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
+
+  /* Section */
+  sectionBlock: {
+    marginBottom: 28,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#1f2937',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 12,
+    marginLeft: 4,
   },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#f0fdf4',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-  },
-  editButtonText: {
-    color: Colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
+
+  /* Card */
   card: {
-    backgroundColor: Colors.white,
+    backgroundColor: '#fff',
     borderRadius: 16,
-    padding: Spacing.lg,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
   },
-  inputGroup: {
-    marginBottom: Spacing.md,
+
+  /* Fields */
+  fieldGroup: {
+    paddingVertical: 14,
   },
-  label: {
-    fontSize: 13,
+  fieldLabel: {
+    fontSize: 12,
     fontWeight: '600',
-    marginBottom: 8,
-    color: '#6b7280',
+    color: '#94a3b8',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
+    marginBottom: 6,
   },
-  input: {
-    height: 52,
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
+  fieldInput: {
+    height: 46,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
     borderRadius: 12,
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: 14,
     fontSize: 16,
-    color: Colors.darkGray,
-    backgroundColor: Colors.white,
+    color: '#0f172a',
+    backgroundColor: '#fff',
   },
-  inputDisabled: {
-    backgroundColor: '#f9fafb',
-    borderColor: '#e5e7eb',
-    color: '#9ca3af',
+  fieldInputDisabled: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#e2e8f0',
+    color: '#94a3b8',
   },
+  fieldDivider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
+  },
+
+  /* Edit Actions */
   editActions: {
     flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
+    gap: 10,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
-  button: {
+  cancelBtn: {
     flex: 1,
-    height: 52,
+    height: 48,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
   },
-  cancelButton: {
-    backgroundColor: Colors.white,
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-  },
-  cancelButtonText: {
-    color: '#6b7280',
-    fontSize: 16,
+  cancelBtnText: {
+    color: '#64748b',
+    fontSize: 15,
     fontWeight: '600',
   },
-  saveButton: {
+  saveBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: Colors.primary,
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
@@ -709,81 +705,93 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  saveButtonText: {
-    color: Colors.white,
-    fontSize: 16,
+  saveBtnText: {
+    color: '#fff',
+    fontSize: 15,
     fontWeight: '600',
   },
-  settingItem: {
+
+  /* Row (shared by settings, notifications, account) */
+  rowItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Spacing.md,
+    paddingVertical: 14,
   },
-  settingLeft: {
+  rowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
+    gap: 12,
     flex: 1,
   },
-  iconContainer: {
-    width: 40,
-    height: 40,
+  iconBox: {
+    width: 38,
+    height: 38,
     borderRadius: 10,
     backgroundColor: '#f0fdf4',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  settingLabel: {
-    fontSize: 16,
-    color: '#1f2937',
+  rowLabel: {
+    fontSize: 15,
+    color: '#1e293b',
     fontWeight: '500',
     flex: 1,
   },
-  languageButtons: {
+
+  /* Language */
+  langGroup: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
-  languageButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  langBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    backgroundColor: Colors.white,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#fff',
   },
-  languageButtonActive: {
+  langBtnActive: {
     borderColor: Colors.primary,
     backgroundColor: '#f0fdf4',
   },
-  languageButtonText: {
-    color: '#9ca3af',
-    fontSize: 14,
+  langBtnText: {
+    color: '#94a3b8',
+    fontSize: 13,
     fontWeight: '600',
   },
-  languageButtonTextActive: {
+  langBtnTextActive: {
     color: Colors.primary,
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#f3f4f6',
-    marginVertical: Spacing.xs,
-  },
-  actionItem: {
+
+  /* Switch Row */
+  switchRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Spacing.md,
+    paddingVertical: 14,
   },
-  actionLabel: {
-    fontSize: 16,
+  switchLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  switchLabel: {
+    fontSize: 15,
+    color: '#1e293b',
     fontWeight: '500',
-    color: '#1f2937',
+    flex: 1,
   },
-  dangerText: {
-    color: Colors.error,
+  switchDivider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
   },
-  bottomSpacer: {
-    height: Spacing.xxl,
+
+  /* Action Divider */
+  actionDivider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
   },
 });

@@ -3155,7 +3155,7 @@ export default function PassengerHomeScreen() {
                     >
                       <Ionicons
                         name="car"
-                        size={22}
+                        size={20}
                         color={vehicleType === 'taxi' ? '#fff' : '#6B7280'}
                       />
                       <Text
@@ -3179,7 +3179,7 @@ export default function PassengerHomeScreen() {
                       {/* Moto SVG icon */}
                       <MotoIcon
                         color={vehicleType === 'moto_taxi' ? '#fff' : '#6B7280'}
-                        size={22}
+                        size={20}
                       />
                       <Text
                         style={[
@@ -4567,19 +4567,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     borderWidth: 2,
     borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
   },
   vehicleButtonActive: {
     backgroundColor: '#22c55e',
     borderColor: '#22c55e',
   },
   vehicleButtonText: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#6B7280',
     fontWeight: '600',
   },
@@ -4598,12 +4598,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     borderWidth: 2,
     borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
   },
   motoQuantityButtonActive: {
     backgroundColor: '#22c55e',
@@ -4971,22 +4971,22 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   requestButton: {
-    height: 52,
+    height: 44,
     backgroundColor: '#9CA3AF',
-    borderRadius: 14,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   requestButtonEnabled: {
-    backgroundColor: '#22c55e',
-    shadowColor: '#22c55e',
-    shadowOpacity: 0.35,
+    backgroundColor: '#16a34a',
+    shadowColor: '#16a34a',
+    shadowOpacity: 0.3,
   },
   requestButtonDisabled: {
     backgroundColor: '#D1D5DB',
@@ -4995,9 +4995,9 @@ const styles = StyleSheet.create({
   },
   requestButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   searchingContainer: {
     marginTop: 16,

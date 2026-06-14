@@ -396,57 +396,71 @@ export default function RegisterScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f0f9ff' }} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.screenSafe} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+          contentContainerStyle={{ flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
-          <Text style={{ fontSize: 24, fontWeight: '800', color: '#111827', marginBottom: 6 }}>
-            Crear Cuenta
-          </Text>
-          <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 24 }}>
-            Completa el formulario para registrarte
-          </Text>
+          {/* --- ILLUSTRATION --- */}
+          <View style={styles.illustrationContainer}>
+            <View style={styles.illustrationBg}>
+              <View style={styles.sunGlow} />
+              <View style={styles.sun} />
+
+              <View style={styles.cloudGroup1}>
+                <View style={[styles.cloudCircle, { width: 60, height: 60, left: 0 }]} />
+                <View style={[styles.cloudCircle, { width: 80, height: 50, left: 40, top: 10 }]} />
+                <View style={[styles.cloudCircle, { width: 50, height: 50, left: 95, top: 5 }]} />
+              </View>
+
+              <View style={styles.mountainBase} />
+              <View style={styles.mountain1} />
+              <View style={styles.mountain2} />
+              <View style={styles.mountain3} />
+
+              <View style={styles.foregroundHill} />
+            </View>
+
+            <View style={styles.logoContainer}>
+              <Image
+                source={require('@/assets/images/logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+              <Text style={styles.tagline}>¿Listo para tu siguiente destino?</Text>
+            </View>
+          </View>
+
+          {/* --- CARD --- */}
+          <View style={styles.cardContainer}>
+            <View style={styles.formContainer}>
+              {/* Header */}
+              <View style={styles.formHeader}>
+                <Text style={styles.formTitle}>Crear cuenta</Text>
+                <Text style={styles.formSubtitle}>Completa el formulario para registrarte</Text>
+              </View>
 
           {/* Role Selector */}
-          <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 }}>
-            Tipo de cuenta
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+          <Text style={styles.roleLabel}>Tipo de cuenta</Text>
+          <View style={styles.roleRow}>
             {(['passenger', 'driver'] as UserRole[]).map(r => (
               <TouchableOpacity
                 key={r}
                 onPress={() => setRole(r)}
-                style={{
-                  flex: 1,
-                  paddingVertical: 12,
-                  borderRadius: 12,
-                  borderWidth: 2,
-                  alignItems: 'center',
-                  backgroundColor: role === r ? '#f0fdf4' : '#fff',
-                  borderColor: role === r ? '#22c55e' : '#e5e7eb',
-                }}
+                style={[styles.roleBtn, role === r && styles.roleBtnActive]}
               >
                 <Ionicons
-                  name={r === 'passenger' ? 'person' : 'car'}
-                  size={20}
-                  color={role === r ? '#22c55e' : '#9ca3af'}
+                  name={r === 'passenger' ? 'person-outline' : 'car-outline'}
+                  size={18}
+                  color={role === r ? '#22c55e' : '#94a3b8'}
                 />
-                <Text
-                  style={{
-                    fontSize: 14,
-                    fontWeight: '600',
-                    color: role === r ? '#22c55e' : '#9ca3af',
-                    marginTop: 4,
-                  }}
-                >
+                <Text style={[styles.roleBtnText, role === r && styles.roleBtnTextActive]}>
                   {r === 'passenger' ? 'Pasajero' : 'Conductor'}
                 </Text>
               </TouchableOpacity>
@@ -653,32 +667,46 @@ export default function RegisterScreen() {
 
           {/* Submit */}
           <TouchableOpacity
-            style={{
-              marginTop: 24,
-              backgroundColor: '#22c55e',
-              paddingVertical: 16,
-              borderRadius: 12,
-              alignItems: 'center',
-            }}
+            style={styles.primaryBtn}
             onPress={handleRegister}
             disabled={isLoading}
           >
             {isLoading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={{ color: '#fff', fontSize: 17, fontWeight: '700' }}>Crear Cuenta</Text>
+              <Text style={styles.primaryBtnText}>Crear cuenta</Text>
             )}
           </TouchableOpacity>
 
           {/* Login link */}
-          <TouchableOpacity
-            style={{ marginTop: 16, alignItems: 'center' }}
-            onPress={() => router.push('/(auth)/login' as any)}
-          >
-            <Text style={{ color: '#22c55e', fontSize: 14, fontWeight: '600' }}>
-              ¿Ya tienes cuenta? Inicia sesión
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.linkRow}>
+            <Text style={styles.linkRowText}>¿Ya tienes cuenta? </Text>
+            <TouchableOpacity onPress={() => router.push('/(auth)/login' as any)}>
+              <Text style={styles.linkRowAction}>Inicia sesión</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Divider */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>o continúa con</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Social */}
+          <View style={styles.socialRow}>
+            <TouchableOpacity style={styles.socialBtn}>
+              <Ionicons name="logo-google" size={22} color="#4285f4" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.socialBtn}>
+              <Ionicons name="logo-apple" size={22} color="#000" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.socialBtn}>
+              <Ionicons name="logo-facebook" size={22} color="#1877f2" />
+            </TouchableOpacity>
+          </View>
+          </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -686,22 +714,179 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
+  screenSafe: {
+    flex: 1,
+    backgroundColor: '#e8f5e9',
+  },
+  /* Illustration */
+  illustrationContainer: {
+    height: 220,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  illustrationBg: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#dcedc8',
+  },
+  sunGlow: {
+    position: 'absolute',
+    top: 20,
+    right: 40,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,235,59,0.15)',
+  },
+  sun: {
+    position: 'absolute',
+    top: 30,
+    right: 52,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#fff9c4',
+    shadowColor: '#fdd835',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  cloudGroup1: {
+    position: 'absolute',
+    top: 20,
+    left: 16,
+    width: 140,
+    height: 50,
+  },
+  cloudCircle: {
+    position: 'absolute',
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderRadius: 100,
+  },
+  mountainBase: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 60,
+    backgroundColor: '#81c784',
+    borderTopLeftRadius: 140,
+    borderTopRightRadius: 140,
+  },
+  mountain1: {
+    position: 'absolute',
+    bottom: 0,
+    left: -20,
+    width: 160,
+    height: 130,
+    backgroundColor: '#66bb6a',
+    borderTopLeftRadius: 100,
+    borderTopRightRadius: 100,
+    transform: [{ scaleX: 1.2 }],
+  },
+  mountain2: {
+    position: 'absolute',
+    bottom: 0,
+    left: '18%',
+    width: 150,
+    height: 160,
+    backgroundColor: '#4caf50',
+    borderTopLeftRadius: 90,
+    borderTopRightRadius: 90,
+    transform: [{ scaleX: 1.3 }],
+  },
+  mountain3: {
+    position: 'absolute',
+    bottom: 0,
+    right: -10,
+    width: 130,
+    height: 120,
+    backgroundColor: '#43a047',
+    borderTopLeftRadius: 80,
+    borderTopRightRadius: 80,
+    transform: [{ scaleX: 1.4 }],
+  },
+  foregroundHill: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 30,
+    backgroundColor: '#2e7d32',
+    borderTopLeftRadius: 160,
+    borderTopRightRadius: 160,
+    opacity: 0.4,
+  },
+  logoContainer: {
+    position: 'absolute',
+    top: 6,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  logoImage: {
+    width: 200,
+    height: 58,
+    marginBottom: 2,
+  },
+  tagline: {
+    fontSize: 12,
+    color: '#fff',
+    fontStyle: 'italic',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 3,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  /* Card */
+  cardContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    marginTop: -18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  formHeader: {
+    marginBottom: 20,
+  },
+  formTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  formSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  formContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 32,
+  },
   label: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#374151',
+    color: '#475569',
     marginBottom: 6,
-    marginTop: 14,
+    marginTop: 16,
   },
   input: {
-    height: 48,
+    height: 50,
     borderWidth: 1.5,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
     paddingHorizontal: 14,
     fontSize: 15,
-    color: '#111827',
-    backgroundColor: '#fff',
+    color: '#0f172a',
+    backgroundColor: '#f8fafc',
   },
   inputError: {
     borderColor: '#ef4444',
@@ -713,18 +898,120 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   uploadBtn: {
-    height: 48,
+    height: 50,
     borderWidth: 1.5,
-    borderColor: '#e5e7eb',
+    borderColor: '#e2e8f0',
     borderStyle: 'dashed',
-    borderRadius: 12,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#f8fafc',
   },
   photoPreviewContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
+  },
+  /* Primary btn */
+  primaryBtn: {
+    marginTop: 24,
+    height: 54,
+    backgroundColor: '#22c55e',
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: '#22c55e',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  primaryBtnText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  linkRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  linkRowText: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  linkRowAction: {
+    fontSize: 14,
+    color: '#22c55e',
+    fontWeight: '700',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e2e8f0',
+  },
+  dividerText: {
+    marginHorizontal: 14,
+    fontSize: 13,
+    color: '#94a3b8',
+    fontWeight: '500',
+  },
+  socialRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  socialBtn: {
+    flex: 1,
+    height: 50,
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  /* Role selector */
+  roleLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 8,
+  },
+  roleRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 4,
+  },
+  roleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#fff',
+  },
+  roleBtnActive: {
+    borderColor: '#22c55e',
+    backgroundColor: '#f0fdf4',
+  },
+  roleBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+  roleBtnTextActive: {
+    color: '#22c55e',
   },
 });

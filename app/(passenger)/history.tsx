@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // import { useCopilot, walkthroughable, CopilotStep } from 'react-native-copilot';
 import { rideAPI } from '../../services/api';
 import { Ride } from '../../src/types';
@@ -33,6 +34,7 @@ interface RideHistoryItem extends Ride {
 }
 
 export default function PassengerHistoryScreen() {
+  const insets = useSafeAreaInsets();
   // const { start: startTour } = useCopilot();
   const { isActive: needsTutorial } = useSmartTutorial('passenger_history');
 
@@ -192,7 +194,7 @@ export default function PassengerHistoryScreen() {
           <View style={styles.iconContainer}>
             <Ionicons
               name={ride.vehicleType === 'taxi' ? 'car' : 'bicycle'}
-              size={22}
+              size={20}
               color={Colors.primary}
             />
           </View>
@@ -239,7 +241,7 @@ export default function PassengerHistoryScreen() {
           <Text style={styles.driverName}>{ride.driver.name}</Text>
           <View style={styles.driverRating}>
             <Ionicons name="star" size={12} color="#f59e0b" />
-            <Text style={styles.driverRatingText}>{ride.driver.rating.toFixed(1)}</Text>
+            <Text style={styles.driverRatingText}>{(ride.driver.rating ?? 0).toFixed(1)}</Text>
           </View>
         </View>
       )}
@@ -261,7 +263,7 @@ export default function PassengerHistoryScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Detalles del Viaje</Text>
               <TouchableOpacity onPress={() => setSelectedRide(null)}>
-                <Ionicons name="close" size={28} color={Colors.darkGray} />
+                <Ionicons name="close" size={24} color={Colors.darkGray} />
               </TouchableOpacity>
             </View>
 
@@ -271,7 +273,7 @@ export default function PassengerHistoryScreen() {
                 <View style={styles.detailSection}>
                   <View style={styles.delegatedInfoBox}>
                     <View style={styles.delegatedInfoHeader}>
-                      <Ionicons name="gift" size={20} color={Colors.orange} />
+                       <Ionicons name="gift" size={18} color={Colors.orange} />
                       <Text style={styles.delegatedInfoTitle}>Viaje Delegado</Text>
                     </View>
                     <Text style={styles.delegatedInfoText}>
@@ -345,9 +347,9 @@ export default function PassengerHistoryScreen() {
                   <View style={styles.detailSection}>
                     <Text style={styles.detailLabel}>Calificación del Conductor</Text>
                     <View style={styles.detailRating}>
-                      <Ionicons name="star" size={20} color={Colors.orange} />
+                      <Ionicons name="star" size={18} color={Colors.orange} />
                       <Text style={styles.detailRatingText}>
-                        {selectedRide.driver.rating.toFixed(1)}
+                        {(selectedRide.driver.rating ?? 0).toFixed(1)}
                       </Text>
                     </View>
                   </View>
@@ -359,7 +361,7 @@ export default function PassengerHistoryScreen() {
                 <View style={styles.detailSection}>
                   <Text style={styles.detailLabel}>Distancia</Text>
                   <Text style={styles.detailValue}>
-                    {selectedRide.actualDistance.toFixed(2)} km
+                    {(selectedRide.actualDistance ?? 0).toFixed(2)} km
                   </Text>
                 </View>
               )}
@@ -385,11 +387,11 @@ export default function PassengerHistoryScreen() {
       onRequestClose={() => setShowFilters(false)}
     >
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+        <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Filtrar por Fecha</Text>
             <TouchableOpacity onPress={() => setShowFilters(false)}>
-              <Ionicons name="close" size={28} color={Colors.darkGray} />
+              <Ionicons name="close" size={24} color={Colors.darkGray} />
             </TouchableOpacity>
           </View>
 
@@ -399,7 +401,7 @@ export default function PassengerHistoryScreen() {
               style={styles.dateButton}
               onPress={() => setShowStartDatePicker(true)}
             >
-              <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
+              <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
               <Text style={styles.dateButtonText}>
                 {startDate ? formatDate(startDate.toISOString()) : 'Seleccionar fecha'}
               </Text>
@@ -422,7 +424,7 @@ export default function PassengerHistoryScreen() {
           <View style={styles.filterSection}>
             <Text style={styles.filterLabel}>Fecha de Fin</Text>
             <TouchableOpacity style={styles.dateButton} onPress={() => setShowEndDatePicker(true)}>
-              <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
+              <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
               <Text style={styles.dateButtonText}>
                 {endDate ? formatDate(endDate.toISOString()) : 'Seleccionar fecha'}
               </Text>
@@ -567,13 +569,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f9ff',
   },
   loadingText: {
-    marginTop: Spacing.md,
-    fontSize: 16,
+    marginTop: 12,
+    fontSize: 14,
     color: '#6b7280',
   },
   header: {
-    padding: Spacing.lg,
-    paddingTop: 60,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingTop: 56,
     backgroundColor: Colors.white,
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
@@ -584,18 +587,18 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: '#1f2937',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#9ca3af',
   },
   filterIconButton: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     borderRadius: 10,
     backgroundColor: '#f0fdf4',
     justifyContent: 'center',
@@ -604,15 +607,15 @@ const styles = StyleSheet.create({
   activeFilters: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Spacing.md,
-    padding: 12,
+    marginTop: 10,
+    padding: 10,
     backgroundColor: '#f0fdf4',
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#86efac',
   },
   activeFiltersText: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.primary,
     marginLeft: 8,
     flex: 1,
@@ -622,24 +625,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   ridesList: {
-    padding: Spacing.lg,
+    padding: 12,
   },
   rideCard: {
     backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   rideHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: Spacing.md,
+    marginBottom: 8,
   },
   rideHeaderLeft: {
     flexDirection: 'row',
@@ -647,126 +650,126 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     backgroundColor: '#f0fdf4',
     justifyContent: 'center',
     alignItems: 'center',
   },
   rideHeaderInfo: {
-    marginLeft: Spacing.md,
+    marginLeft: 10,
   },
   rideDate: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#1f2937',
   },
   rideTime: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#9ca3af',
-    marginTop: 2,
+    marginTop: 1,
   },
   rideFare: {
     alignItems: 'flex-end',
   },
   rideFareAmount: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '700',
     color: Colors.primary,
   },
   rideVehicleType: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#9ca3af',
-    marginTop: 2,
+    marginTop: 1,
   },
   delegatedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff7ed',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginBottom: Spacing.md,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#fed7aa',
   },
   delegatedBadgeText: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.orange,
     marginLeft: 6,
     fontWeight: '600',
   },
   rideLocations: {
-    marginBottom: Spacing.md,
+    marginBottom: 10,
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   locationDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: Colors.primary,
-    marginRight: 12,
+    marginRight: 10,
   },
   locationLine: {
     width: 2,
-    height: 16,
+    height: 14,
     backgroundColor: '#e5e7eb',
-    marginLeft: 4,
-    marginVertical: 4,
+    marginLeft: 3,
+    marginVertical: 3,
   },
   locationText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6b7280',
     flex: 1,
   },
   driverInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: Spacing.md,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
   },
   driverName: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6b7280',
-    marginLeft: 8,
+    marginLeft: 6,
     flex: 1,
   },
   driverRating: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fef3c7',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   driverRatingText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#92400e',
-    marginLeft: 4,
+    marginLeft: 3,
     fontWeight: '600',
   },
   emptyStateContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: 32,
   },
   emptyStateText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#1f2937',
-    marginTop: Spacing.lg,
+    marginTop: 16,
     textAlign: 'center',
   },
   emptyStateSubtext: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#9ca3af',
-    marginTop: 8,
+    marginTop: 6,
     textAlign: 'center',
   },
   modalOverlay: {
@@ -776,42 +779,42 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: Colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: Spacing.lg,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
     maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.lg,
-    paddingBottom: Spacing.md,
+    marginBottom: 12,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: '#1f2937',
   },
   detailSection: {
-    marginBottom: Spacing.lg,
+    marginBottom: 14,
   },
   detailLabel: {
-    fontSize: 13,
+    fontSize: 11,
     color: '#9ca3af',
-    marginBottom: 6,
+    marginBottom: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     fontWeight: '600',
   },
   detailValue: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#1f2937',
   },
   detailValueLarge: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: Colors.primary,
   },
@@ -824,54 +827,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   detailRatingText: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
     color: '#1f2937',
-    marginLeft: 8,
+    marginLeft: 6,
   },
   filterSection: {
-    marginBottom: Spacing.lg,
+    marginBottom: 14,
   },
   filterLabel: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
     color: '#1f2937',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   dateButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.md,
+    padding: 12,
     borderWidth: 2,
     borderColor: '#e5e7eb',
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: Colors.white,
   },
   dateButtonText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#6b7280',
-    marginLeft: 12,
+    marginLeft: 10,
   },
   filterButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: Spacing.lg,
-    gap: 12,
+    marginTop: 14,
+    gap: 10,
   },
   filterButton: {
     flex: 1,
-    height: 52,
-    borderRadius: 12,
+    height: 44,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   filterButtonPrimary: {
     backgroundColor: Colors.primary,
     shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
   },
   filterButtonSecondary: {
     backgroundColor: Colors.white,
@@ -879,40 +882,40 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
   },
   filterButtonTextPrimary: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: Colors.white,
   },
   filterButtonTextSecondary: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#6b7280',
   },
   delegatedInfoBox: {
     backgroundColor: '#fff7ed',
-    padding: Spacing.md,
-    borderRadius: 12,
+    padding: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#fed7aa',
   },
   delegatedInfoHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   delegatedInfoTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: Colors.orange,
-    marginLeft: 8,
+    marginLeft: 6,
   },
   delegatedInfoText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#92400e',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   delegatedInfoPhone: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#92400e',
     fontWeight: '500',
   },

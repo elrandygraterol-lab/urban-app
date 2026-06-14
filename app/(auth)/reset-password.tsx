@@ -9,8 +9,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { authAPI } from '@/services/api';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -143,79 +145,126 @@ export default function ResetPasswordScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <View style={styles.header}>
-            <Text style={styles.logo}>UrbanTaxi</Text>
-            <Text style={styles.tagline}>¿Listo para tu siguiente destino?</Text>
-            <Text style={styles.title}>Restablecer contraseña</Text>
-            <Text style={styles.subtitle}>
-              Ingresa el token de recuperación que recibiste y tu nueva contraseña
-            </Text>
+          {/* Illustration */}
+          <View style={styles.illustrationContainer}>
+            <View style={styles.illustrationBg}>
+              <View style={styles.sunGlow} />
+              <View style={styles.sun} />
+              <View style={styles.cloudGroup1}>
+                <View style={[styles.cloudCircle, { width: 60, height: 60, left: 0 }]} />
+                <View style={[styles.cloudCircle, { width: 80, height: 50, left: 40, top: 10 }]} />
+                <View style={[styles.cloudCircle, { width: 50, height: 50, left: 95, top: 5 }]} />
+              </View>
+
+              <View style={styles.mountainBase} />
+              <View style={styles.mountain1} />
+              <View style={styles.mountain2} />
+              <View style={styles.mountain3} />
+
+              <View style={styles.foregroundHill} />
+            </View>
+            <View style={styles.logoContainer}>
+              <Image
+                source={require('@/assets/images/logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+              <Text style={styles.tagline}>¿Listo para tu siguiente destino?</Text>
+            </View>
           </View>
 
-          <View style={styles.form}>
-            {/* Token field */}
-            <TextInput
-              style={[styles.input, tokenError ? styles.inputError : null]}
-              placeholder="Token de recuperación"
-              placeholderTextColor="#A9A9A9"
-              value={token}
-              onChangeText={validateTokenField}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!isLoading}
-            />
-            {tokenError ? <Text style={styles.errorText}>{tokenError}</Text> : null}
+          {/* Card */}
+          <View style={styles.cardContainer}>
+            <View style={styles.formContainer}>
+              {/* Header */}
+              <View style={styles.formHeader}>
+                <Text style={styles.formTitle}>Restablecer contraseña</Text>
+                <Text style={styles.formSubtitle}>Ingresa el token y tu nueva contraseña</Text>
+              </View>
+              {/* Token */}
+              <View style={styles.inputWrapper}>
+                <Text style={styles.inputLabel}>Token de recuperación</Text>
+                <View style={styles.inputBox}>
+                  <Ionicons name="key-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Ingresa tu token"
+                    placeholderTextColor="#cbd5e1"
+                    value={token}
+                    onChangeText={validateTokenField}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!isLoading}
+                  />
+                </View>
+                {tokenError ? <Text style={styles.fieldError}>{tokenError}</Text> : null}
+              </View>
 
-            {/* New password field */}
-            <TextInput
-              style={[styles.input, newPasswordError ? styles.inputError : null]}
-              placeholder="Nueva contraseña"
-              placeholderTextColor="#A9A9A9"
-              value={newPassword}
-              onChangeText={validateNewPasswordField}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!isLoading}
-            />
-            {newPasswordError ? <Text style={styles.errorText}>{newPasswordError}</Text> : null}
+              {/* New password */}
+              <View style={styles.inputWrapper}>
+                <Text style={styles.inputLabel}>Nueva contraseña</Text>
+                <View style={styles.inputBox}>
+                  <Ionicons name="lock-closed-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Mínimo 8 caracteres"
+                    placeholderTextColor="#cbd5e1"
+                    value={newPassword}
+                    onChangeText={validateNewPasswordField}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!isLoading}
+                  />
+                </View>
+                {newPasswordError ? <Text style={styles.fieldError}>{newPasswordError}</Text> : null}
+              </View>
 
-            {/* Confirm password field */}
-            <TextInput
-              style={[styles.input, confirmPasswordError ? styles.inputError : null]}
-              placeholder="Confirmar nueva contraseña"
-              placeholderTextColor="#A9A9A9"
-              value={confirmPassword}
-              onChangeText={validateConfirmPasswordField}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!isLoading}
-            />
-            {confirmPasswordError ? (
-              <Text style={styles.errorText}>{confirmPasswordError}</Text>
-            ) : null}
+              {/* Confirm password */}
+              <View style={styles.inputWrapper}>
+                <Text style={styles.inputLabel}>Confirmar contraseña</Text>
+                <View style={styles.inputBox}>
+                  <Ionicons name="lock-closed-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Repite tu contraseña"
+                    placeholderTextColor="#cbd5e1"
+                    value={confirmPassword}
+                    onChangeText={validateConfirmPasswordField}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!isLoading}
+                  />
+                </View>
+                {confirmPasswordError ? (
+                  <Text style={styles.fieldError}>{confirmPasswordError}</Text>
+                ) : null}
+              </View>
 
-            <TouchableOpacity
-              style={[styles.resetButton, isLoading && styles.resetButtonDisabled]}
-              onPress={handleResetPassword}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.resetButtonText}>Restablecer contraseña</Text>
-              )}
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.primaryBtn, isLoading && styles.primaryBtnDisabled]}
+                onPress={handleResetPassword}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.primaryBtnText}>Restablecer contraseña</Text>
+                )}
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.push('/(auth)/login' as any)}
-              disabled={isLoading}
-            >
-              <Text style={styles.backButtonText}>Volver al login</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.linkBtn}
+                onPress={() => router.push('/(auth)/login' as any)}
+                disabled={isLoading}
+              >
+                <Ionicons name="arrow-back-outline" size={16} color="#22c55e" />
+                <Text style={styles.linkBtnText}>Volver al inicio de sesión</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -226,87 +275,238 @@ export default function ResetPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#e8f5e9',
   },
   scrollContent: {
     flexGrow: 1,
-    padding: 24,
   },
-  header: {
+
+  /* Illustration */
+  illustrationContainer: {
+    height: 220,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  illustrationBg: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#dcedc8',
+  },
+  sunGlow: {
+    position: 'absolute',
+    top: 20,
+    right: 40,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,235,59,0.15)',
+  },
+  sun: {
+    position: 'absolute',
+    top: 30,
+    right: 52,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#fff9c4',
+    shadowColor: '#fdd835',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  cloudGroup1: {
+    position: 'absolute',
+    top: 20,
+    left: 16,
+    width: 140,
+    height: 50,
+  },
+  cloudCircle: {
+    position: 'absolute',
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderRadius: 100,
+  },
+  mountainBase: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 60,
+    backgroundColor: '#81c784',
+    borderTopLeftRadius: 140,
+    borderTopRightRadius: 140,
+  },
+  mountain1: {
+    position: 'absolute',
+    bottom: 0,
+    left: -20,
+    width: 160,
+    height: 130,
+    backgroundColor: '#66bb6a',
+    borderTopLeftRadius: 100,
+    borderTopRightRadius: 100,
+    transform: [{ scaleX: 1.2 }],
+  },
+  mountain2: {
+    position: 'absolute',
+    bottom: 0,
+    left: '18%',
+    width: 150,
+    height: 160,
+    backgroundColor: '#4caf50',
+    borderTopLeftRadius: 90,
+    borderTopRightRadius: 90,
+    transform: [{ scaleX: 1.3 }],
+  },
+  mountain3: {
+    position: 'absolute',
+    bottom: 0,
+    right: -10,
+    width: 130,
+    height: 120,
+    backgroundColor: '#43a047',
+    borderTopLeftRadius: 80,
+    borderTopRightRadius: 80,
+    transform: [{ scaleX: 1.4 }],
+  },
+  foregroundHill: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 30,
+    backgroundColor: '#2e7d32',
+    borderTopLeftRadius: 160,
+    borderTopRightRadius: 160,
+    opacity: 0.4,
+  },
+  logoContainer: {
+    position: 'absolute',
+    top: 6,
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    marginTop: 60,
-    marginBottom: 40,
+    zIndex: 10,
   },
-  logo: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#22c55e',
-    marginBottom: 8,
+  logoImage: {
+    width: 200,
+    height: 58,
+    marginBottom: 2,
   },
   tagline: {
-    fontSize: 16,
-    color: '#505050',
-    marginBottom: 16,
+    fontSize: 12,
+    color: '#fff',
+    fontStyle: 'italic',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 3,
+    borderRadius: 10,
+    overflow: 'hidden',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#505050',
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#A9A9A9',
-    textAlign: 'center',
-    paddingHorizontal: 20,
-    lineHeight: 20,
-  },
-  form: {
+
+  /* Card */
+  cardContainer: {
     flex: 1,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    marginTop: -18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  formHeader: {
+    marginBottom: 20,
+  },
+  formTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  formSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+
+  /* Form */
+  formContainer: {
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 32,
+  },
+  inputWrapper: {
+    marginBottom: 18,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 6,
+    marginLeft: 2,
+  },
+  inputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 52,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 14,
+  },
+  inputIcon: {
+    marginRight: 10,
   },
   input: {
-    height: 50,
-    borderWidth: 2,
-    borderColor: '#22c55e',
-    borderRadius: 24,
-    paddingHorizontal: 20,
-    fontSize: 16,
-    marginBottom: 4,
-    backgroundColor: '#fff',
-    color: '#505050',
+    flex: 1,
+    height: '100%',
+    fontSize: 15,
+    color: '#0f172a',
   },
-  inputError: {
-    borderColor: '#ef4444',
-  },
-  errorText: {
+  fieldError: {
     color: '#ef4444',
     fontSize: 12,
-    marginBottom: 16,
-    marginLeft: 20,
+    marginTop: 4,
+    marginLeft: 2,
   },
-  resetButton: {
-    height: 50,
+
+  /* Primary btn */
+  primaryBtn: {
+    height: 54,
     backgroundColor: '#22c55e',
-    borderRadius: 24,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
-    marginBottom: 16,
+    marginBottom: 18,
+    shadowColor: '#22c55e',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  resetButtonDisabled: {
-    opacity: 0.6,
+  primaryBtnDisabled: {
+    opacity: 0.5,
   },
-  resetButtonText: {
+  primaryBtnText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
-  backButton: {
-    height: 50,
-    justifyContent: 'center',
+
+  /* Link btn */
+  linkBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
   },
-  backButtonText: {
+  linkBtnText: {
     color: '#22c55e',
     fontSize: 14,
     fontWeight: '600',

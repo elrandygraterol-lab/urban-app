@@ -168,17 +168,33 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Illustration Background */}
+          {/* --- ILLUSTRATION --- */}
           <View style={styles.illustrationContainer}>
             <View style={styles.illustrationBg}>
-              {/* Mountains/Hills */}
+
+              {/* Sun */}
+              <View style={styles.sunGlow} />
+              <View style={styles.sun} />
+
+              {/* Clouds */}
+              <View style={styles.cloudGroup1}>
+                <View style={[styles.cloudCircle, { width: 60, height: 60, left: 0 }]} />
+                <View style={[styles.cloudCircle, { width: 80, height: 50, left: 40, top: 10 }]} />
+                <View style={[styles.cloudCircle, { width: 50, height: 50, left: 95, top: 5 }]} />
+              </View>
+              <View style={styles.cloudGroup2}>
+                <View style={[styles.cloudCircle, { width: 50, height: 50, left: 0 }]} />
+                <View style={[styles.cloudCircle, { width: 70, height: 40, left: 35, top: 8 }]} />
+                <View style={[styles.cloudCircle, { width: 40, height: 40, left: 80, top: 3 }]} />
+              </View>
+
+              {/* Mountains */}
+              <View style={styles.mountainBase} />
               <View style={styles.mountain1} />
               <View style={styles.mountain2} />
               <View style={styles.mountain3} />
-              {/* Clouds */}
-              <View style={styles.cloud1} />
-              <View style={styles.cloud2} />
-              <View style={styles.cloud3} />
+
+              <View style={styles.foregroundHill} />
             </View>
 
             {/* Logo */}
@@ -192,65 +208,66 @@ export default function LoginScreen() {
             </View>
           </View>
 
-          {/* White Card Container */}
+          {/* --- CARD --- */}
           <View style={styles.cardContainer}>
-            {/* Welcome Badge */}
-            <View style={styles.welcomeBadge}>
-              <Text style={styles.welcomeText}>
-                <Text style={styles.welcomeBold}>Bienvenido </Text>
-                <Text style={styles.welcomeNormal}>de vuelta</Text>
-              </Text>
-              <View style={styles.decorativeCircles}>
-                <View style={styles.decorCircle} />
-                <View style={styles.decorCircle} />
-                <View style={styles.decorCircle} />
-              </View>
-            </View>
 
-            {/* Form Container */}
+            {/* Form */}
             <View style={styles.formContainer}>
-              {/* Email Input */}
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ingresa tu email o teléfono"
-                  placeholderTextColor="#9ca3af"
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!isLoading}
-                />
+              {/* Welcome header */}
+              <View style={styles.formHeader}>
+                <Text style={styles.formTitle}>Bienvenido de vuelta</Text>
+                <Text style={styles.formSubtitle}>Inicia sesión para continuar</Text>
               </View>
-
-              {/* Password Input */}
+              {/* Email */}
               <View style={styles.inputWrapper}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ingresa tu contraseña"
-                  placeholderTextColor="#9ca3af"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!isLoading}
-                />
-                <TouchableOpacity
-                  style={styles.eyeIcon}
-                  onPress={() => setShowPassword(!showPassword)}
-                  disabled={isLoading}
-                >
-                  <Ionicons
-                    name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                    size={22}
-                    color="#9ca3af"
+                <Text style={styles.inputLabel}>Email o teléfono</Text>
+                <View style={styles.inputBox}>
+                  <Ionicons name="mail-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="ejemplo@correo.com"
+                    placeholderTextColor="#cbd5e1"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!isLoading}
                   />
-                </TouchableOpacity>
+                </View>
               </View>
 
-              {/* Remember Me & Forgot Password */}
+              {/* Password */}
+              <View style={styles.inputWrapper}>
+                <Text style={styles.inputLabel}>Contraseña</Text>
+                <View style={styles.inputBox}>
+                  <Ionicons name="lock-closed-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
+                  <TextInput
+                    style={[styles.input, { paddingRight: 46 }]}
+                    placeholder="Ingresa tu contraseña"
+                    placeholderTextColor="#cbd5e1"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!isLoading}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeIcon}
+                    onPress={() => setShowPassword(!showPassword)}
+                    disabled={isLoading}
+                  >
+                    <Ionicons
+                      name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+                      size={20}
+                      color="#94a3b8"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Remember & Forgot */}
               <View style={styles.optionsRow}>
                 <TouchableOpacity
                   style={styles.rememberRow}
@@ -258,7 +275,7 @@ export default function LoginScreen() {
                   disabled={isLoading}
                 >
                   <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-                    {rememberMe && <View style={styles.checkboxInner} />}
+                    {rememberMe && <Ionicons name="checkmark" size={14} color="#fff" />}
                   </View>
                   <Text style={styles.rememberText}>Recuérdame</Text>
                 </TouchableOpacity>
@@ -267,47 +284,53 @@ export default function LoginScreen() {
                   onPress={() => router.push('/(auth)/forgot-password' as any)}
                   disabled={isLoading}
                 >
-                  <Text style={styles.forgotText}>¿Olvidaste tu Contraseña?</Text>
+                  <Text style={styles.forgotText}>¿Olvidaste tu contraseña?</Text>
                 </TouchableOpacity>
               </View>
 
               {/* Login Button */}
               <TouchableOpacity
-                style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+                style={[styles.primaryBtn, isLoading && styles.primaryBtnDisabled]}
                 onPress={handleLogin}
                 disabled={isLoading}
               >
                 {isLoading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.loginButtonText}>Empezar a viajar</Text>
+                  <Text style={styles.primaryBtnText}>Iniciar sesión</Text>
                 )}
               </TouchableOpacity>
 
               {/* Register Link */}
-              <View style={styles.registerRow}>
-                <Text style={styles.registerText}>¿Aún no tienes una cuenta? </Text>
+              <View style={styles.linkRow}>
+                <Text style={styles.linkRowText}>¿Aún no tienes una cuenta? </Text>
                 <TouchableOpacity
                   onPress={() => router.push('/(auth)/register' as any)}
                   disabled={isLoading}
                 >
-                  <Text style={styles.registerLink}>Regístrate aquí.</Text>
+                  <Text style={styles.linkRowAction}>Regístrate</Text>
                 </TouchableOpacity>
               </View>
 
               {/* Divider */}
-              <Text style={styles.dividerText}>o</Text>
+              <View style={styles.dividerRow}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>o continúa con</Text>
+                <View style={styles.dividerLine} />
+              </View>
 
               {/* Social Buttons */}
-              <TouchableOpacity style={styles.socialButton} disabled={isLoading}>
-                <Ionicons name="logo-google" size={22} color="#4285f4" />
-                <Text style={styles.socialButtonText}>Continuar con Google</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.socialButton} disabled={isLoading}>
-                <Ionicons name="logo-apple" size={22} color="#000" />
-                <Text style={styles.socialButtonText}>Continuar con Apple</Text>
-              </TouchableOpacity>
+              <View style={styles.socialRow}>
+                <TouchableOpacity style={styles.socialBtn} disabled={isLoading}>
+                  <Ionicons name="logo-google" size={22} color="#4285f4" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.socialBtn} disabled={isLoading}>
+                  <Ionicons name="logo-apple" size={22} color="#000" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.socialBtn} disabled={isLoading}>
+                  <Ionicons name="logo-facebook" size={22} color="#1877f2" />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </ScrollView>
@@ -319,195 +342,224 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f0f4f0',
+    backgroundColor: '#e8f5e9',
   },
   scrollContent: {
     flexGrow: 1,
   },
+
+  /* --- ILLUSTRATION --- */
   illustrationContainer: {
-    height: 300,
+    height: 260,
     position: 'relative',
     overflow: 'hidden',
   },
   illustrationBg: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#dcedc8',
+  },
+
+  /* Sun */
+  sunGlow: {
     position: 'absolute',
-    top: 0,
+    top: 40,
+    right: 50,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255,235,59,0.15)',
+  },
+  sun: {
+    position: 'absolute',
+    top: 55,
+    right: 65,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#fff9c4',
+    shadowColor: '#fdd835',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+
+  /* Clouds */
+  cloudGroup1: {
+    position: 'absolute',
+    top: 30,
+    left: 16,
+    width: 150,
+    height: 55,
+  },
+  cloudGroup2: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    width: 130,
+    height: 50,
+  },
+  cloudCircle: {
+    position: 'absolute',
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderRadius: 100,
+  },
+
+  /* Mountains */
+  mountainBase: {
+    position: 'absolute',
+    bottom: 0,
     left: 0,
     right: 0,
-    bottom: 0,
-    backgroundColor: '#d4e8d4',
+    height: 80,
+    backgroundColor: '#81c784',
+    borderTopLeftRadius: 180,
+    borderTopRightRadius: 180,
   },
-  // Mountains/Hills
   mountain1: {
     position: 'absolute',
     bottom: 0,
-    left: -20,
+    left: -30,
     width: 200,
-    height: 220,
-    backgroundColor: '#a8d5a8',
+    height: 160,
+    backgroundColor: '#66bb6a',
     borderTopLeftRadius: 120,
     borderTopRightRadius: 120,
-    transform: [{ scaleX: 1.3 }],
+    transform: [{ scaleX: 1.2 }],
   },
   mountain2: {
     position: 'absolute',
     bottom: 0,
-    left: '25%',
+    left: '20%',
     width: 180,
-    height: 200,
-    backgroundColor: '#8bc88b',
+    height: 195,
+    backgroundColor: '#4caf50',
     borderTopLeftRadius: 100,
     borderTopRightRadius: 100,
-    transform: [{ scaleX: 1.4 }],
+    transform: [{ scaleX: 1.3 }],
   },
   mountain3: {
     position: 'absolute',
     bottom: 0,
-    right: -30,
+    right: -10,
     width: 160,
-    height: 180,
-    backgroundColor: '#9ed09e',
+    height: 145,
+    backgroundColor: '#43a047',
     borderTopLeftRadius: 90,
     borderTopRightRadius: 90,
-    transform: [{ scaleX: 1.5 }],
+    transform: [{ scaleX: 1.4 }],
   },
-  // Clouds
-  cloud1: {
+  foregroundHill: {
     position: 'absolute',
-    top: 30,
-    right: 20,
-    width: 100,
-    height: 35,
-    backgroundColor: '#f5e6d3',
-    borderRadius: 20,
-    opacity: 0.8,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 40,
+    backgroundColor: '#2e7d32',
+    borderTopLeftRadius: 200,
+    borderTopRightRadius: 200,
+    opacity: 0.4,
   },
-  cloud2: {
-    position: 'absolute',
-    top: 70,
-    left: 30,
-    width: 80,
-    height: 28,
-    backgroundColor: '#f5e6d3',
-    borderRadius: 15,
-    opacity: 0.7,
-  },
-  cloud3: {
-    position: 'absolute',
-    top: 50,
-    left: '45%',
-    width: 90,
-    height: 32,
-    backgroundColor: '#f5e6d3',
-    borderRadius: 18,
-    opacity: 0.75,
-  },
+
+  /* Logo */
   logoContainer: {
     position: 'absolute',
-    top: 50,
+    top: 12,
     left: 0,
     right: 0,
     alignItems: 'center',
     zIndex: 10,
   },
   logoImage: {
-    width: 280,
-    height: 80,
-    marginBottom: 4,
+    width: 220,
+    height: 64,
+    marginBottom: 2,
   },
   tagline: {
-    fontSize: 15,
+    fontSize: 13,
     color: '#fff',
     fontStyle: 'italic',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
+
+  /* --- CARD --- */
   cardContainer: {
     flex: 1,
     backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    marginTop: -40,
-    paddingTop: 0,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    marginTop: -24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  welcomeBadge: {
-    backgroundColor: '#22c55e',
-    marginHorizontal: 40,
-    marginTop: -28,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#22c55e',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.06,
     shadowRadius: 16,
-    elevation: 12,
-    zIndex: 20,
+    elevation: 10,
   },
-  welcomeText: {
-    fontSize: 18,
+
+  /* Form header */
+  formHeader: {
+    marginBottom: 24,
   },
-  welcomeBold: {
-    color: '#fff',
-    fontWeight: '700',
-    letterSpacing: 0.3,
+  formTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 4,
   },
-  welcomeNormal: {
-    color: '#1f2937',
-    fontWeight: '700',
-    letterSpacing: 0.3,
+  formSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
   },
-  decorativeCircles: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  decorCircle: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#fbbf24',
-  },
+  /* Form */
   formContainer: {
-    flex: 1,
-    paddingHorizontal: 28,
-    paddingTop: 40,
+    paddingHorizontal: 24,
+    paddingTop: 24,
     paddingBottom: 32,
   },
   inputWrapper: {
     marginBottom: 18,
-    position: 'relative',
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 6,
+    marginLeft: 2,
+  },
+  inputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 52,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 14,
+  },
+  inputIcon: {
+    marginRight: 10,
   },
   input: {
-    height: 56,
-    borderWidth: 1.5,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    paddingHorizontal: 20,
-    paddingRight: 50,
+    flex: 1,
+    height: '100%',
     fontSize: 15,
-    color: '#1f2937',
-    backgroundColor: '#fafafa',
+    color: '#0f172a',
   },
   eyeIcon: {
-    position: 'absolute',
-    right: 18,
-    top: 16,
+    padding: 6,
   },
+
+  /* Options */
   optionsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 24,
-    marginTop: 4,
+    marginTop: 2,
   },
   rememberRow: {
     flexDirection: 'row',
@@ -517,25 +569,20 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderWidth: 1.5,
-    borderColor: '#d1d5db',
-    borderRadius: 5,
-    marginRight: 8,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    marginRight: 9,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#fff',
   },
   checkboxChecked: {
     borderColor: '#22c55e',
     backgroundColor: '#22c55e',
   },
-  checkboxInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 2,
-    backgroundColor: '#fff',
-  },
   rememberText: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#64748b',
     fontWeight: '500',
   },
   forgotText: {
@@ -543,68 +590,78 @@ const styles = StyleSheet.create({
     color: '#22c55e',
     fontWeight: '600',
   },
-  loginButton: {
-    height: 56,
+
+  /* Primary Button */
+  primaryBtn: {
+    height: 54,
     backgroundColor: '#22c55e',
-    borderRadius: 12,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 18,
     shadowColor: '#22c55e',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
-    elevation: 10,
+    elevation: 8,
   },
-  loginButtonDisabled: {
+  primaryBtnDisabled: {
     opacity: 0.5,
   },
-  loginButtonText: {
+  primaryBtnText: {
     color: '#fff',
     fontSize: 17,
     fontWeight: '700',
     letterSpacing: 0.3,
   },
-  registerRow: {
+
+  /* Link Row */
+  linkRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: 22,
   },
-  registerText: {
+  linkRowText: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#64748b',
   },
-  registerLink: {
+  linkRowAction: {
     fontSize: 14,
     color: '#22c55e',
     fontWeight: '700',
   },
-  dividerText: {
-    textAlign: 'center',
-    fontSize: 14,
-    color: '#9ca3af',
+
+  /* Divider */
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 20,
   },
-  socialButton: {
-    height: 56,
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e2e8f0',
+  },
+  dividerText: {
+    marginHorizontal: 14,
+    fontSize: 13,
+    color: '#94a3b8',
+    fontWeight: '500',
+  },
+
+  /* Social */
+  socialRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  socialBtn: {
+    flex: 1,
+    height: 52,
     backgroundColor: '#fff',
     borderWidth: 1.5,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    flexDirection: 'row',
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  socialButtonText: {
-    fontSize: 15,
-    color: '#374151',
-    fontWeight: '600',
   },
 });

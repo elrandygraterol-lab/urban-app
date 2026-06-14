@@ -64,10 +64,12 @@ export const useGlobalSocketListeners = ({
       // Show ride request modal via notification manager (deduplication handled by context)
       // Backend socket only sends a subset of RideRequestData fields;
       // supply defaults for fields not included in the event payload
+      const avgSpeedKmh = 25;
+      const calcDuration = Math.round((data.distance / avgSpeedKmh) * 60);
       showRideRequest({
         ...data,
         passengerRating: 0,
-        estimatedDuration: 0,
+        estimatedDuration: calcDuration,
         vehicleType: 'taxi',
       });
     },
