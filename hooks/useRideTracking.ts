@@ -7,8 +7,10 @@ export function useRideTracking(rideId: string | null, rideStatus: string) {
   const [isTracking, setIsTracking] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
 
+  const isActive = rideStatus === 'accepted' || rideStatus === 'arrived' || rideStatus === 'in_progress';
+
   useEffect(() => {
-    if (!rideId || rideStatus !== 'in_progress') {
+    if (!rideId || !isActive) {
       subscriptionRef.current?.remove();
       subscriptionRef.current = null;
       setIsTracking(false);

@@ -28,6 +28,7 @@ export const DriverTaxiIcon: React.FC = () => {
           borderRadius: 22,
           borderWidth: 3,
           borderColor: MARKER_BORDER,
+          transform: [{ rotate: '0deg' }], // Taxi icon points up by default (no rotation needed)
         },
       ]}
     >
@@ -42,7 +43,7 @@ export const PassengerIcon: React.FC<{ size?: number }> = ({ size = 44 }) => {
       style={[
         styles.base,
         {
-          backgroundColor: '#22c55e',
+          backgroundColor: '#FF8C00',
           width: size,
           height: size,
           borderRadius: size / 2,
@@ -62,7 +63,7 @@ export const PickupIcon: React.FC<{ size?: number }> = ({ size = 36 }) => {
       style={[
         styles.base,
         {
-          backgroundColor: '#22c55e',
+          backgroundColor: '#FF8C00',
           width: size,
           height: size,
           borderRadius: size / 2,
@@ -78,7 +79,7 @@ export const PickupIcon: React.FC<{ size?: number }> = ({ size = 36 }) => {
 
 export const SecondPickupIcon: React.FC<{ size?: number; color?: string }> = ({
   size = 20,
-  color = '#22c55e',
+  color = '#FF8C00',
 }) => {
   return (
     <View
@@ -99,20 +100,22 @@ export const SecondPickupIcon: React.FC<{ size?: number; color?: string }> = ({
 };
 
 export const DropoffIcon: React.FC<{ size?: number }> = ({ size = 20 }) => {
+  const baseSize = size >= 36 ? size : size + 16;
   return (
     <View
       style={[
         styles.base,
         {
-          backgroundColor: '#DC2626',
-          padding: 8,
-          borderRadius: 20,
+          backgroundColor: '#22c55e',
+          width: baseSize,
+          height: baseSize,
+          borderRadius: baseSize / 2,
           borderWidth: 3,
           borderColor: MARKER_BORDER,
         },
       ]}
     >
-      <Ionicons name="flag" size={size} color="#FFFFFF" />
+      <Ionicons name="location" size={baseSize * 0.5} color="#FFFFFF" />
     </View>
   );
 };

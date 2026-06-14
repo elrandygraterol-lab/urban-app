@@ -5,7 +5,7 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { useNotificationStore } from '@/store/notificationStore';
-import { useNotificationManager } from '@/hooks/useNotificationManager';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import { rideAPI } from '@/services/api';
 
 // Configure how notifications are handled when app is in foreground
@@ -67,7 +67,7 @@ export const useNotifications = () => {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
   const { incrementUnreadCount } = useNotificationStore();
-  const { showToast } = useNotificationManager();
+  const { showStatus } = useUnifiedNotifications();
 
   // Check if running in Expo Go
   const isExpoGo = Constants.appOwnership === 'expo';
@@ -109,17 +109,36 @@ export const useNotifications = () => {
 
     // Listener for notifications received while app is in foreground
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Notification received in foreground:', notification);
+      console.log('[NOTIFICATIONS] 📩 Received in foreground:', notification.request.content.title);
       setNotification(notification);
 
-      // Increment unread count for store notifications
       const data = notification.request.content.data as NotificationData;
+      const title = notification.request.content.title ?? '';
+      const body = notification.request.content.body ?? '';
+
+      // Increment unread count for store notifications
       if (
         data.type === 'store_approved' ||
         data.type === 'store_rejected' ||
-        data.type === 'new_review'
+        data.type === 'new_review' ||
+        data.type === 'review_reply'
       ) {
         incrementUnreadCount();
+      }
+
+      // Show in-app status banner using unified notification system
+      // This prevents duplicate native alerts since the OS already shows the banner
+      if (data.type) {
+        const mappedType = data.type as Parameters<typeof showStatus>[0];
+        // Only show status banner for important events (not for every push)
+        const importantTypes = [
+          'ride_accepted', 'driver_arrived', 'ride_started', 'ride_completed',
+          'ride_cancelled', 'payment_completed', 'commission_credited',
+          'store_approved', 'store_rejected',
+        ];
+        if (importantTypes.includes(data.type)) {
+          showStatus(mappedType, body, title, data as Record<string, unknown>);
+        }
       }
     });
 
@@ -334,14 +353,14 @@ export const useNotifications = () => {
 
     console.log('[NOTIFICATIONS] Handling notification tap:', data, 'action:', actionIdentifier);
 
-    // Handle interactive notification actions
+    // Handle interactive notification actions (RIDE_REQUEST category with Accept/Reject buttons)
     if (actionIdentifier === 'ACCEPT_RIDE') {
       const rideId = data.rideId;
       if (rideId) {
         try {
           await rideAPI.acceptRide(rideId);
         } catch (error) {
-          showToast('La solicitud ya no está disponible', 'warning');
+          showStatus('warning', 'La solicitud ya no está disponible', '⚠️ Expirada');
         }
       }
       return;
@@ -358,88 +377,123 @@ export const useNotifications = () => {
     // Navigate to appropriate screen based on notification type
     if (data.type) {
       switch (data.type) {
-        // Store-related notifications
+        // ── STORE NOTIFICATIONS ──────────────────────────────────────────
         case 'store_approved':
         case 'store_rejected':
-          // Navigate to store details screen
           if (data.storeId) {
-            console.log('[NOTIFICATIONS] Navigating to store details:', data.storeId);
             router.push(`/(tabs)/stores/${data.storeId}` as any);
           } else {
-            // Navigate to my stores list if no specific store ID
             router.push('/(tabs)/stores/my-stores' as any);
           }
           break;
 
         case 'new_review':
-          // Navigate to store details screen where reviews are displayed
+        case 'review_reply':
           if (data.storeId) {
-            console.log('[NOTIFICATIONS] Navigating to store details for review:', data.storeId);
             router.push(`/(tabs)/stores/${data.storeId}` as any);
           }
           break;
 
-        case 'payment_completed':
-          // Navigate to earnings screen for driver
-          console.log('[NOTIFICATIONS] Navigating to earnings screen');
-          router.push('/(driver)/earnings' as any);
+        // ── DRIVER NOTIFICATIONS ─────────────────────────────────────────
+        case 'ride_request':
+        case 'ride_request_created':
+        case 'new_ride_request':
+          // Navigate to driver home where ride request card shows
+          router.push('/(driver)/index' as any);
           break;
 
         case 'ride_cancelled':
-          // Navigate to driver home screen
-          console.log('[NOTIFICATIONS] Navigating to driver home screen');
-          router.push('/(driver)/index' as any);
-          break;
-
-        case 'ride_request_created':
-        case 'new_ride_request':
-        case 'ride_request':
-          // Navigate to driver home screen where ride requests are displayed
-          console.log('[NOTIFICATIONS] Navigating to driver home screen for ride request');
-          router.push('/(driver)/index' as any);
-          break;
-
-        case 'ride_accepted':
-          // Navigate to passenger home screen
-          console.log('[NOTIFICATIONS] Navigating to passenger home screen');
-          router.push('/(passenger)/index' as any);
-          break;
-
-        case 'shared_ride_invitation':
-          // Navigate to passenger home screen where invitation modal will be shown
-          console.log('[NOTIFICATIONS] Navigating to passenger home screen for shared ride invitation');
-          router.push('/(passenger)/index' as any);
-          break;
-
-        // Legacy notification types - preserve existing behavior
-        case 'driver_arrived':
-        case 'ride_started':
-        case 'ride_completed':
-          // Navigate to active ride screen for passenger
+          // Navigate to driver home (ride was cancelled, show updated state)
           if (data.rideId) {
-            router.push(`/(passenger)/ride/${data.rideId}` as any);
+            router.push('/(driver)/index' as any);
           }
+          break;
+
+        case 'payment_completed':
+          // Navigate to driver earnings
+          router.push('/(driver)/earnings' as any);
+          break;
+
+        case 'commission_credited':
+          // Navigate to driver wallet
+          router.push('/(driver)/wallet' as any);
           break;
 
         case 'driver_verified':
         case 'driver_rejected':
-          // Navigate to driver profile/verification screen
-          router.push('/(driver)/profile' as any);
+        case 'verification_status':
+          // Navigate to driver verification status
+          router.push('/(driver)/verification-status' as any);
           break;
 
-        case 'payment_processed':
-          // Navigate to earnings screen for driver or receipt for passenger
-          if (data.driverEarnings) {
-            // Driver notification
-            router.push('/(driver)/earnings' as any);
-          } else if (data.rideId) {
-            // Passenger notification
-            router.push(`/(passenger)/receipt/${data.rideId}` as any);
+        // ── PASSENGER NOTIFICATIONS ──────────────────────────────────────
+        case 'ride_accepted':
+          // Navigate to passenger home where ride tracking starts
+          if (data.rideId) {
+            router.push({
+              pathname: '/(passenger)/index' as any,
+              params: { activeRideId: data.rideId },
+            });
           }
           break;
 
+        case 'driver_arrived':
+          // Navigate to passenger active ride tracking
+          if (data.rideId) {
+            router.push({
+              pathname: '/(passenger)/index' as any,
+              params: { activeRideId: data.rideId },
+            });
+          }
+          break;
+
+        case 'ride_started':
+          // Navigate to passenger active ride tracking
+          if (data.rideId) {
+            router.push({
+              pathname: '/(passenger)/index' as any,
+              params: { activeRideId: data.rideId },
+            });
+          }
+          break;
+
+        case 'ride_completed':
+          // Navigate to passenger ride history or receipt
+          if (data.rideId) {
+            router.push(`/(passenger)/history` as any);
+          }
+          break;
+
+        case 'payment_processed':
+          // Navigate based on role
+          if (data.driverEarnings) {
+            router.push('/(driver)/earnings' as any);
+          } else if (data.rideId) {
+            router.push(`/(passenger)/history` as any);
+          }
+          break;
+
+        // ── SHARED RIDE ──────────────────────────────────────────────────
+        case 'shared_ride_invitation':
+          router.push('/(passenger)/index' as any);
+          break;
+
+        // ── PROMOTIONS ───────────────────────────────────────────────────
+        case 'promotions':
+        case 'promotions_notification':
+          // Navigate to explore/home
+          router.push('/(tabs)/explore' as any);
+          break;
+
         default:
-          console.log('[NOTIFICATIONS] Unknown notification type:', data.type);
+          console.log('[NOTIFICATIONS] Unknown notification type, navigating home:', data.type);
+          // Default: navigate to appropriate home based on role
+          const { user } = useAuthStore.getState();
+          if (user?.role === 'driver') {
+            router.push('/(driver)/index' as any);
+          } else {
+            router.push('/(tabs)/index' as any);
+          }
       }
     }
   };

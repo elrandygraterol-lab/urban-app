@@ -13,9 +13,12 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { authAPI } from '@/services/api';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
+  const { showToast, showStatus } = useUnifiedNotifications();
   const [token, setToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -114,24 +117,26 @@ export default function ResetPasswordScreen() {
     setIsLoading(true);
     try {
       await authAPI.resetPassword(trimmedToken, newPassword);
-      Alert.alert('Éxito', 'Contraseña actualizada', [
-        {
-          text: 'OK',
-          onPress: () => router.replace('/(auth)/login' as any),
-        },
-      ]);
+      showStatus(
+        'success',
+        'Tu contraseña ha sido actualizada correctamente.',
+        'Contraseña actualizada',
+        undefined,
+        { label: 'Ir a Login', onPress: () => router.replace('/(auth)/login' as any) }
+      );
     } catch (error: any) {
       const errorMessage =
         error?.response?.data?.error?.message ||
         error?.message ||
         'No se pudo restablecer la contraseña. Por favor intenta de nuevo.';
-      Alert.alert('Error', errorMessage);
+      showToast(errorMessage, 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -212,6 +217,7 @@ export default function ResetPasswordScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

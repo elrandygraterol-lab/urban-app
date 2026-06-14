@@ -12,10 +12,12 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { Colors as COLORS, Fonts as FONTS } from '@/constants/theme';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 
 export default function DriverRegistrationScreen() {
   const router = useRouter();
   const { register, isLoading } = useAuthStore();
+  const { showToast, showStatus } = useUnifiedNotifications();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -74,20 +76,12 @@ export default function DriverRegistrationScreen() {
         vehicleModel: formData.vehicleModel,
       });
 
-      // Show success message and navigate to login
-      Alert.alert(
-        '✅ Registro exitoso',
-        'Tu cuenta ha sido creada correctamente. Ahora puedes iniciar sesión.',
-        [
-          {
-            text: 'Ir a Login',
-            onPress: () => router.replace('/(auth)/login'),
-          },
-        ],
-        { cancelable: false }
-      );
+      showStatus('success', 'Tu cuenta ha sido creada correctamente. Ahora puedes iniciar sesión.', 'Registro exitoso', undefined, {
+        label: 'Ir a Login',
+        onPress: () => router.replace('/(auth)/login'),
+      });
     } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Registro fallido');
+      showToast(error instanceof Error ? error.message : 'Registro fallido', 'error');
     }
   };
 

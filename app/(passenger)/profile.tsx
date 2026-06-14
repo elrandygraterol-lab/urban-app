@@ -295,7 +295,7 @@ export default function PassengerProfileScreen() {
           <View style={styles.avatarSection}>
             <TouchableOpacity onPress={handleChangePhoto} style={styles.avatarContainer}>
               {resolveFileUrl(user?.profilePhotoUrl) ? (
-                <Image source={{ uri: resolveFileUrl(user?.profilePhotoUrl) }} style={styles.avatarImage} />
+                <Image source={{ uri: resolveFileUrl(user?.profilePhotoUrl) }} style={styles.avatarImage} resizeMode="cover" />
               ) : (
                 <View style={styles.avatarPlaceholder}>
                   <Ionicons name="person" size={40} color={Colors.primary} />

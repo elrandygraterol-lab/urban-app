@@ -17,6 +17,8 @@ import { useAuthStore } from '@/store/authStore';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as SecureStore from 'expo-secure-store';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const REMEMBER_EMAIL_KEY = 'remember_email';
 const REMEMBER_PASSWORD_KEY = 'remember_password';
@@ -25,6 +27,7 @@ const REMEMBER_ME_KEY = 'remember_me';
 export default function LoginScreen() {
   const router = useRouter();
   const { login, isLoading } = useAuthStore();
+  const { showToast, showStatus } = useUnifiedNotifications();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -79,17 +82,17 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Por favor ingresa tu email/teléfono y contraseña');
+      showToast('Por favor ingresa tu email/teléfono y contraseña', 'error');
       return;
     }
 
     if (!validateEmail(email.trim())) {
-      Alert.alert('Error', 'Por favor ingresa un email o teléfono válido');
+      showToast('Por favor ingresa un email o teléfono válido', 'error');
       return;
     }
 
     if (password.length < 8) {
-      Alert.alert('Error', 'La contraseña debe tener al menos 8 caracteres');
+      showToast('La contraseña debe tener al menos 8 caracteres', 'error');
       return;
     }
 
@@ -115,10 +118,10 @@ export default function LoginScreen() {
         rawMessage.toLowerCase().includes('awaiting');
 
       if (isPendingApproval) {
-        Alert.alert(
-          '⏳ Cuenta en revisión',
+        showStatus(
+          'warning',
           'Tu cuenta de conductor aún no ha sido aprobada por un administrador. Por favor espera a que sea revisada y aprobada antes de iniciar sesión.',
-          [{ text: 'Entendido' }]
+          'Cuenta en revisión'
         );
         return;
       }
@@ -133,25 +136,26 @@ export default function LoginScreen() {
         rawMessage.toLowerCase().includes('not found') ||
         rawMessage.toLowerCase().includes('no encontrado')
       ) {
-        Alert.alert('Credenciales incorrectas', 'El email/teléfono o la contraseña son incorrectos. Por favor intenta de nuevo.');
+        showToast('El email/teléfono o la contraseña son incorrectos.', 'error');
         return;
       }
 
       // Generic fallback — never show raw technical errors
-      Alert.alert('Error al iniciar sesión', 'No se pudo iniciar sesión. Verifica tu conexión a internet e intenta de nuevo.');
+      showToast('No se pudo iniciar sesión. Verifica tu conexión a internet e intenta de nuevo.', 'error');
     }
   };
 
   // Show loading indicator while loading saved credentials
   if (isLoadingCredentials) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]} edges={['top', 'bottom']}>
         <ActivityIndicator size="large" color="#22c55e" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -305,6 +309,7 @@ export default function LoginScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

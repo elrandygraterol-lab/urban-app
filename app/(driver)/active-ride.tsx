@@ -1866,52 +1866,50 @@ export default function ActiveRideScreen() {
               </View>
             </View>
 
-            {/* External Navigation Button */}
-            {(ride.status === 'accepted' || ride.status === 'in_progress') && (
-              <TouchableOpacity
-                onPress={handleOpenExternalNav}
-                style={{
-                  backgroundColor: '#F3F4F6',
-                  paddingVertical: 12,
-                  borderRadius: 12,
-                  flexDirection: 'row',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  gap: 8,
-                  marginBottom: 12,
-                }}
-              >
-                <Ionicons name="navigate-outline" size={18} color={colors.darkGray} />
-                <Text style={{ color: colors.darkGray, fontSize: 15, fontWeight: '600' }}>
-                  Abrir en app de navegación
-                </Text>
-              </TouchableOpacity>
-            )}
-
             {/* Action Button */}
             {ride.status === 'accepted' && (
-              <TouchableOpacity
-                onPress={() => updateRideStatus('arrived')}
-                style={{
-                  backgroundColor: colors.primary,
-                  paddingVertical: 16,
-                  borderRadius: 12,
-                  alignItems: 'center',
-                  shadowColor: colors.primary,
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
-                  elevation: 4,
-                  flexDirection: 'row',
-                  justifyContent: 'center',
-                  gap: 8,
-                }}
-              >
-                <Ionicons name="location" size={20} color="#fff" />
-                <Text style={{ color: '#fff', fontSize: 17, fontWeight: 'bold' }}>
-                  He Llegado al Punto de Recogida
-                </Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                <TouchableOpacity
+                  onPress={() => updateRideStatus('arrived')}
+                  style={{
+                    flex: 2,
+                    backgroundColor: colors.primary,
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                    shadowColor: colors.primary,
+                    shadowOffset: { width: 0, height: 3 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 6,
+                    elevation: 3,
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>
+                    He Llegado
+                  </Text>
+                </TouchableOpacity>
+                {(ride.status === 'accepted' || ride.status === 'in_progress' ||
+                  (ride.status === 'arrived' && isPaymentConfirmed)) && (
+                  <TouchableOpacity
+                    onPress={handleOpenExternalNav}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#F3F4F6',
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      flexDirection: 'row',
+                      gap: 6,
+                    }}
+                  >
+                    <Ionicons name="navigate-outline" size={16} color={colors.darkGray} />
+                    <Text style={{ color: colors.darkGray, fontSize: 13, fontWeight: '600' }}>
+                      Waze
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
 
             {ride.status === 'arrived' && (
@@ -1949,60 +1947,88 @@ export default function ActiveRideScreen() {
                 )}
 
                 {/* Start Ride button */}
-                <TouchableOpacity
-                  onPress={() => updateRideStatus('in_progress')}
-                  disabled={!isPaymentConfirmed}
-                  style={{
-                    backgroundColor: isPaymentConfirmed ? colors.primary : '#D1D5DB',
-                    paddingVertical: 16,
-                    borderRadius: 12,
-                    alignItems: 'center',
-                    shadowColor: isPaymentConfirmed ? colors.primary : '#000',
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: isPaymentConfirmed ? 0.3 : 0.1,
-                    shadowRadius: 8,
-                    elevation: 4,
-                    opacity: isPaymentConfirmed ? 1 : 0.6,
-                    flexDirection: 'row',
-                    justifyContent: 'center',
-                    gap: 8,
-                  }}
-                >
-                  <Ionicons
-                    name={isPaymentConfirmed ? 'play-circle' : 'time-outline'}
-                    size={20}
-                    color="#fff"
-                  />
-                  <Text style={{ color: '#fff', fontSize: 17, fontWeight: 'bold' }}>
-                    {isPaymentConfirmed ? 'Iniciar Viaje' : 'Esperando Pago'}
-                  </Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => updateRideStatus('in_progress')}
+                    disabled={!isPaymentConfirmed}
+                    style={{
+                      flex: 2,
+                      backgroundColor: isPaymentConfirmed ? colors.primary : '#D1D5DB',
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      alignItems: 'center',
+                      opacity: isPaymentConfirmed ? 1 : 0.6,
+                      flexDirection: 'row',
+                      justifyContent: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <Ionicons
+                      name={isPaymentConfirmed ? 'play-circle' : 'time-outline'}
+                      size={18}
+                      color="#fff"
+                    />
+                    <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>
+                      {isPaymentConfirmed ? 'Iniciar' : 'Esperando Pago'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleOpenExternalNav}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#F3F4F6',
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      flexDirection: 'row',
+                      gap: 6,
+                    }}
+                  >
+                    <Ionicons name="navigate-outline" size={16} color={colors.darkGray} />
+                    <Text style={{ color: colors.darkGray, fontSize: 13, fontWeight: '600' }}>Waze</Text>
+                  </TouchableOpacity>
+                </View>
               </>
             )}
 
             {ride.status === 'in_progress' && (
-              <TouchableOpacity
-                onPress={() => updateRideStatus('completed')}
-                style={{
-                  backgroundColor: colors.primary,
-                  paddingVertical: 16,
-                  borderRadius: 12,
-                  alignItems: 'center',
-                  shadowColor: colors.primary,
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
-                  elevation: 4,
-                  flexDirection: 'row',
-                  justifyContent: 'center',
-                  gap: 8,
-                }}
-              >
-                <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                <Text style={{ color: '#fff', fontSize: 17, fontWeight: 'bold' }}>
-                  He Llegado al Destino
-                </Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={() => updateRideStatus('completed')}
+                  style={{
+                    flex: 2,
+                    backgroundColor: colors.primary,
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                  <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>
+                    He Llegado
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleOpenExternalNav}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#F3F4F6',
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    flexDirection: 'row',
+                    gap: 6,
+                  }}
+                >
+                  <Ionicons name="navigate-outline" size={16} color={colors.darkGray} />
+                  <Text style={{ color: colors.darkGray, fontSize: 13, fontWeight: '600' }}>Waze</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </ScrollView>
         )}

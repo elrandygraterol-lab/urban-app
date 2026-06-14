@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, Modal, ScrollView } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/authStore';
 import { useDriverStore } from '@/store/driverStore';
@@ -19,9 +19,10 @@ import { useSocketReconnect } from '@/hooks/useSocketReconnect';
 import { useSound } from '@/hooks/useSound';
 import { Ionicons } from '@expo/vector-icons';
 import { logError } from '@/utils/errorLogger';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import type { Socket } from 'socket.io-client';
 import { DriverTaxiIcon } from '@/src/components/map/markers';
-// import { useSmartTutorial } from '@/hooks/useSmartTutorial';
+import { rideAPI } from '@/services/api';
 // import { setActiveTutorialScreen } from '@/utils/tutorialState';
 // import { useCopilot, walkthroughable, CopilotStep } from 'react-native-copilot';
 import CenterLocationButton from '@/components/CenterLocationButton';
@@ -35,6 +36,7 @@ export default function DriverHomeScreen() {
   const { isAvailable, isUpdatingAvailability, setIsAvailable, toggleAvailability, balanceVES, balanceUSD, transactions } =
     useDriverStore();
   const { playNotificationSound } = useSound();
+  const { showToast, showError } = useUnifiedNotifications();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
@@ -64,21 +66,48 @@ export default function DriverHomeScreen() {
   // const { isActive: needsTutorial } = useSmartTutorial('driver_home');
   // const tutorialStartedRef = useRef(false);
 
-  useEffect(() => {
-    if (false && !loading && location) {
-      // Tutorial disabled for first release
-    }
-  }, [loading, location]);
+  // Redirect to active-ride whenever driver tabs to Inicio with an ongoing ride
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      const checkActiveRide = async () => {
+        try {
+          const res = await rideAPI.getActiveRides();
+          const rides = res.data?.data;
+          const activeRides = Array.isArray(rides) ? rides : [];
+          if (!cancelled && activeRides.length > 0) {
+            const rideId = activeRides[0].id;
+            if (rideId) {
+              console.log('[DRIVER] Active ride found, pushing to active-ride:', rideId);
+              router.push(`/(driver)/active-ride?rideId=${rideId}` as any);
+            }
+          }
+        } catch {}
+      };
+      checkActiveRide();
+      return () => { cancelled = true; };
+    }, [])
+  );
 
-  // Function to toggle driver availability - now uses the store
+  // Function to toggle driver availability - now uses custom toast notifications
   const handleToggleAvailability = async () => {
-    await toggleAvailability();
+    const result = await toggleAvailability();
+    if (result.success) {
+      showToast(
+        result.newAvailability
+          ? 'Estás en línea — recibirás solicitudes de viaje'
+          : 'Estás fuera de línea — no recibirás solicitudes',
+        result.newAvailability ? 'success' : 'info'
+      );
+    } else if (result.error !== 'already_updating') {
+      showError('No se pudo actualizar la disponibilidad');
+    }
   };
 
   // Function to center map on driver's current location
   const handleCenterOnUserLocation = () => {
     if (!location) {
-      Alert.alert('Error', 'No se pudo obtener tu ubicación actual');
+      showError('No se pudo obtener tu ubicación actual');
       return;
     }
 
@@ -660,7 +689,8 @@ export default function DriverHomeScreen() {
           title="Mi ubicación"
           anchor={{ x: 0.5, y: 0.5 }}
           flat={false}
-          rotation={heading || 0}
+          rotation={0}
+          tracksViewChanges={true}
         >
           <DriverTaxiIcon />
         </Marker>

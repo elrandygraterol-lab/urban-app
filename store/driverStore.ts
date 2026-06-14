@@ -21,7 +21,7 @@ interface DriverState {
   // Actions
   setIsAvailable: (isAvailable: boolean) => void;
   setIsUpdatingAvailability: (isUpdating: boolean) => void;
-  toggleAvailability: () => Promise<void>;
+  toggleAvailability: () => Promise<{ success: boolean; newAvailability: boolean; error?: string }>;
   // Wallet Actions
   addEarning: (amount: number, currency: Currency, rideId?: string, description?: string) => void;
   fetchWalletData: () => Promise<void>;
@@ -76,12 +76,12 @@ export const useDriverStore = create<DriverState>((set, get) => ({
     console.log('[DRIVER STORE] Fetching wallet data...');
   },
   
-  toggleAvailability: async () => {
+  toggleAvailability: async (): Promise<{ success: boolean; newAvailability: boolean; error?: string }> => {
     const { isAvailable, isUpdatingAvailability } = get();
     
     if (isUpdatingAvailability) {
       console.log('[DRIVER STORE] Already updating, skipping...');
-      return;
+      return { success: false, newAvailability: isAvailable, error: 'already_updating' };
     }
     
     set({ isUpdatingAvailability: true });
@@ -119,18 +119,10 @@ export const useDriverStore = create<DriverState>((set, get) => ({
       
       console.log('[DRIVER STORE] Availability updated successfully:', newAvailability);
       
-      // Show alert
-      const { Alert } = await import('react-native');
-      Alert.alert(
-        newAvailability ? 'En Línea' : 'Fuera de Línea',
-        newAvailability
-          ? 'Ahora estás disponible para recibir solicitudes de viaje'
-          : 'Ya no recibirás solicitudes de viaje'
-      );
+      return { success: true, newAvailability };
     } catch (error) {
       console.error('[DRIVER STORE] Error updating availability:', error);
-      const { Alert } = await import('react-native');
-      Alert.alert('Error', 'No se pudo actualizar la disponibilidad');
+      return { success: false, newAvailability: isAvailable, error: 'update_failed' };
     } finally {
       set({ isUpdatingAvailability: false });
     }

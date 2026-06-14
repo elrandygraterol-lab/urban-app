@@ -308,9 +308,22 @@ export default function MobilePaymentModal({
         return;
       }
 
-      // Validar referencia de 6 dígitos
+      // Validar referencia de 6 dígitos (formato requerido por el banco)
       if (referencia.length !== 6 || !/^\d{6}$/.test(referencia)) {
         Alert.alert('Error', 'La referencia debe tener exactamente 6 dígitos numéricos');
+        return;
+      }
+
+      // Validar fecha en formato DD/MM/YYYY
+      if (!/^\d{2}\/\d{2}\/\d{4}$/.test(fecha)) {
+        Alert.alert('Error', 'La fecha debe estar en formato DD/MM/YYYY (ej: 15/12/2024)');
+        return;
+      }
+      // Validar que la fecha sea real
+      const [day, month, year] = fecha.split('/').map(Number);
+      const dateObj = new Date(year, month - 1, day);
+      if (dateObj.getFullYear() !== year || dateObj.getMonth() !== month - 1 || dateObj.getDate() !== day) {
+        Alert.alert('Error', 'La fecha ingresada no es válida');
         return;
       }
 
@@ -685,7 +698,7 @@ export default function MobilePaymentModal({
                   </View>
                 </View>
 
-                {/* Fecha */}
+                {/* Fecha - formato DD/MM/YYYY requerido por el banco */}
                 <View style={styles.section}>
                   <Text style={styles.label}>Fecha (DD/MM/YYYY)</Text>
                   <View style={styles.inputContainer}>
@@ -694,16 +707,23 @@ export default function MobilePaymentModal({
                       style={styles.input}
                       placeholder="15/12/2024"
                       value={fecha}
-                      onChangeText={setFecha}
-                      keyboardType="numeric"
+                      onChangeText={(text) => {
+                        // Auto-format: insert slashes automatically
+                        let formatted = text.replace(/[^0-9]/g, '');
+                        if (formatted.length > 2) formatted = formatted.slice(0, 2) + '/' + formatted.slice(2);
+                        if (formatted.length > 5) formatted = formatted.slice(0, 5) + '/' + formatted.slice(5);
+                        setFecha(formatted.slice(0, 10));
+                      }}
+                      keyboardType="number-pad"
                       maxLength={10}
+                      placeholderTextColor="#9ca3af"
                     />
                   </View>
                 </View>
 
-                {/* Teléfono */}
+                {/* Teléfono (formato internacional requerido por el banco) */}
                 <View style={styles.section}>
-                  <Text style={styles.label}>Teléfono</Text>
+                  <Text style={styles.label}>Teléfono (58XXXXXXXXXX)</Text>
                   <View style={styles.inputContainer}>
                     <Ionicons name="call-outline" size={20} color={Colors.mediumGray} />
                     <TextInput
@@ -713,6 +733,7 @@ export default function MobilePaymentModal({
                       onChangeText={setTelefonoP}
                       keyboardType="phone-pad"
                       maxLength={15}
+                      placeholderTextColor="#9ca3af"
                     />
                   </View>
                 </View>

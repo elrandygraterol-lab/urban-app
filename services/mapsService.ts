@@ -160,7 +160,6 @@ export async function searchPlaces(
     hasLocation: !!(latitude && longitude),
   });
 
-  // Intentar primero el endpoint híbrido /api/search/places
   try {
     const params: any = { q: query };
     if (latitude !== undefined) params.lat = latitude;
@@ -171,41 +170,22 @@ export async function searchPlaces(
     if (hybridResponse.data && Array.isArray(hybridResponse.data.results)) {
       const results = hybridResponse.data.results as HybridSearchResult[];
       console.log('[mapsService] hybridSearch response:', results.length, 'results');
-
-      // Si no hay resultados en Guárico, retornar vacío — NO hacer fallback al legacy
-      // para evitar mostrar lugares fuera de la zona de servicio
-      if (results.length === 0) {
-        console.log('[mapsService] No results found in Guarico for query:', query);
-        return [];
-      }
-
+      if (results.length === 0) return [];
       return results.map(mapHybridResultToPlace);
     }
   } catch (hybridError) {
-    // El endpoint híbrido no está disponible — usar fallback solo si es error de red
     console.warn('[mapsService] Hybrid search unavailable, falling back to legacy endpoint:', hybridError);
   }
 
-  // Fallback: endpoint legacy /maps/search-places (solo si el híbrido falló por error de red)
+  // Fallback: legacy endpoint
   try {
     const params: any = { query };
     if (latitude) params.latitude = latitude;
     if (longitude) params.longitude = longitude;
-
     const response = await api.get('/maps/search-places', { params });
-    const legacyResults = response.data.data || [];
-
-    // Filtrar resultados fuera de Guárico también en el fallback
-    const GUARICO = { latMin: 7.8, latMax: 10.7, lonMin: -68.5, lonMax: -65.5 };
-    const filtered = legacyResults.filter((r: any) => {
-      const lat = r.latitude ?? r.lat;
-      const lon = r.longitude ?? r.lon;
-      return lat >= GUARICO.latMin && lat <= GUARICO.latMax &&
-             lon >= GUARICO.lonMin && lon <= GUARICO.lonMax;
-    });
-
-    console.log('[mapsService] searchPlaces (legacy) response:', filtered.length, 'results in Guarico');
-    return filtered;
+    const results = response.data.data || [];
+    console.log('[mapsService] searchPlaces (legacy) response:', results.length, 'results');
+    return results;
   } catch (error) {
     console.error('Error buscando lugares:', error);
     throw error;

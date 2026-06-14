@@ -3,10 +3,14 @@ import React, { createContext, useState, useContext } from 'react';
 export interface RideRequestData {
   id: string;
   passengerName: string;
+  passengerRating: number;
+  passengerProfilePhoto?: string;
   pickupAddress: string;
   destinationAddress: string;
   estimatedFare: number;
   distance: number;
+  estimatedDuration: number;
+  vehicleType: string;
   expiresAt: string; // ISO 8601
 }
 

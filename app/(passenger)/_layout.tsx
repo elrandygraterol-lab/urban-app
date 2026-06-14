@@ -1,6 +1,5 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import GlobalNotificationModal from '@/components/GlobalNotificationModal';
 import { View } from 'react-native';
 
 export default function PassengerLayout() {
@@ -52,9 +51,6 @@ export default function PassengerLayout() {
           }}
         />
       </Tabs>
-
-      {/* Global Notification Modal */}
-      <GlobalNotificationModal />
     </View>
   );
 }

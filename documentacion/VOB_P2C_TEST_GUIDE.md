@@ -75,7 +75,7 @@ Authorization: Bearer <TOKEN_DEL_PASO_1>
 ```json
 {
   "rideId":         "<RIDE_ID_DEL_SEED>",
-  "referencia":     "123456789012",
+  "referencia":     "123456",
   "fecha":          "15/12/2024",
   "banco":          "0102",
   "telefonoP":      "5844122144339",

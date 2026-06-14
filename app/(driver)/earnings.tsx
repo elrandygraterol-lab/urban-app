@@ -246,20 +246,32 @@ function DriverEarningsScreenContent() {
             end={{ x: 1, y: 1 }}
           >
             <Text style={styles.balanceLabel}>Balance Actual</Text>
-            <Text style={styles.balanceAmount}>
-              {formatCurrency(wallet?.balance ?? 0, currency)}
-            </Text>
-            {bcvRate > 0 && (
-              <Text style={styles.balanceAmountSecondary}>
-                ≈ {formatCurrency(balanceOtherCurrency, otherCurrency)}
-              </Text>
-            )}
+            <View style={styles.dualAmountRow}>
+              <View style={styles.dualAmountItem}>
+                <Text style={styles.dualAmountValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+                  {formatCurrency(wallet?.balance ?? 0, currency)}
+                </Text>
+                <Text style={styles.dualAmountCurrency}>
+                  {currency === 'USD' ? 'USD' : 'VES'}
+                </Text>
+              </View>
+              {bcvRate > 0 && (
+                <View style={styles.dualAmountItem}>
+                  <View style={styles.dualAmountDivider} />
+                  <Text style={styles.dualAmountValueSecondary} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+                    {formatCurrency(balanceOtherCurrency, otherCurrency)}
+                  </Text>
+                  <Text style={styles.dualAmountCurrencySecondary}>
+                    {otherCurrency === 'USD' ? 'USD' : 'VES'}
+                  </Text>
+                </View>
+              )}
+            </View>
             {isEmpty && (
               <Text style={styles.noEarningsText}>Sin ganancias aún</Text>
             )}
             <Text style={styles.currencyLabel}>
-              {currency === 'USD' ? 'Dólares (USD)' : 'Bolívares (VES)'}
-              {bcvRate > 0 && `  •  Tasa: Bs. ${bcvRate.toFixed(2)}`}
+              Tasa BCV: {bcvRate > 0 ? `Bs. ${bcvRate.toFixed(2)}` : 'No disponible'}
             </Text>
             <View style={styles.balanceIconOverlay}>
               <Ionicons name="wallet-outline" size={80} color="rgba(255,255,255,0.1)" />
@@ -270,12 +282,16 @@ function DriverEarningsScreenContent() {
           <View style={styles.summaryGrid}>
             <View style={styles.summaryCard}>
               <Ionicons name="cash-outline" size={20} color={colors.primary} />
-              <Text style={styles.summaryValue}>{formatCurrency(todayEarnings, currency)}</Text>
-              {bcvRate > 0 && (
-                <Text style={styles.summaryValueSecondary}>
-                  ≈ {formatCurrency(todayEarningsOther, otherCurrency)}
+              <View style={styles.dualSummaryRow}>
+                <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                  {formatCurrency(todayEarnings, currency)}
                 </Text>
-              )}
+                {bcvRate > 0 && (
+                  <Text style={styles.summaryValueSecondary}>
+                    {formatCurrency(todayEarningsOther, otherCurrency)}
+                  </Text>
+                )}
+              </View>
               <Text style={styles.summaryLabel}>Ganado Hoy</Text>
             </View>
             <View style={styles.summaryCard}>
@@ -286,14 +302,16 @@ function DriverEarningsScreenContent() {
             </View>
             <View style={styles.summaryCard}>
               <Ionicons name="trending-up-outline" size={20} color={colors.primary} />
-              <Text style={styles.summaryValue}>
-                {totalTransactions > 0 ? formatCurrency(avgPerRide, currency) : formatCurrency(0, currency)}
-              </Text>
-              {bcvRate > 0 && (
-                <Text style={styles.summaryValueSecondary}>
-                  ≈ {formatCurrency(avgPerRideOther, otherCurrency)}
+              <View style={styles.dualSummaryRow}>
+                <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                  {totalTransactions > 0 ? formatCurrency(avgPerRide, currency) : formatCurrency(0, currency)}
                 </Text>
-              )}
+                {bcvRate > 0 && (
+                  <Text style={styles.summaryValueSecondary}>
+                    {formatCurrency(avgPerRideOther, otherCurrency)}
+                  </Text>
+                )}
+              </View>
               <Text style={styles.summaryLabel}>Promedio por Viaje</Text>
             </View>
             <View style={styles.summaryCard}>
@@ -333,7 +351,12 @@ function DriverEarningsScreenContent() {
         </>
       }
       renderItem={({ item }) => (
-        <TransactionItem transaction={item} currency={currency} />
+        <TransactionItem
+          transaction={item}
+          currency={currency}
+          exchangeRate={bcvRate}
+          otherCurrency={otherCurrency}
+        />
       )}
       ItemSeparatorComponent={() => <View style={styles.separator} />}
       ListEmptyComponent={
@@ -410,9 +433,13 @@ class EarningsErrorBoundary extends Component<{ children: ReactNode }, { hasErro
 function TransactionItem({
   transaction,
   currency,
+  exchangeRate,
+  otherCurrency,
 }: {
   transaction: WalletTransactionDto;
   currency: 'VES' | 'USD';
+  exchangeRate: number;
+  otherCurrency: Currency;
 }) {
   const isEarning = transaction.type === 'EARNING';
   const amountColor = isEarning ? colors.primary : colors.warning;
@@ -440,6 +467,18 @@ function TransactionItem({
     dateStr = '';
   }
 
+  const txCurrency = (transaction.currency || currency) as Currency;
+  const hasDual = exchangeRate > 0;
+  const otherAmount = hasDual
+    ? txCurrency === 'USD'
+      ? transaction.amount * exchangeRate
+      : transaction.amount / exchangeRate
+    : 0;
+  const wasConverted = !!(transaction.originalCurrency && transaction.originalCurrency !== txCurrency);
+  const conversionLabel = wasConverted
+    ? `${transaction.originalCurrency} → ${txCurrency}`
+    : null;
+
   return (
     <View style={styles.transactionItem}>
       <View style={styles.transactionDetails}>
@@ -451,26 +490,36 @@ function TransactionItem({
               color={amountColor}
               style={styles.transactionIcon}
             />
-            <Text style={styles.transactionType}>{typeLabel}</Text>
+            <View>
+              <Text style={styles.transactionType}>{typeLabel}</Text>
+              {conversionLabel && (
+                <Text style={{ fontSize: 9, color: '#92400e', fontWeight: '600', marginTop: 1 }}>
+                  {conversionLabel}
+                </Text>
+              )}
+            </View>
           </View>
-          <Text style={[styles.transactionAmount, { color: amountColor }]}>
-            {isEarning ? '+' : '-'}{formatCurrency(transaction.amount, currency)}
-          </Text>
+          <View style={{ alignItems: 'flex-end', maxWidth: '55%' }}>
+            <Text style={[styles.transactionAmount, { color: amountColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              {isEarning ? '+' : '-'}{formatCurrency(transaction.amount, txCurrency)}
+            </Text>
+            <Text style={[styles.transactionCurrencyLabel]}>
+              {txCurrency}
+            </Text>
+            {hasDual && (
+              <>
+                <View style={{ height: 3 }} />
+                <Text style={[styles.transactionAmountSecondary, { color: amountColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {formatCurrency(otherAmount, otherCurrency)}
+                </Text>
+                <Text style={[styles.transactionCurrencyLabelSecondary]}>
+                  {otherCurrency}
+                </Text>
+              </>
+            )}
+          </View>
         </View>
         <Text style={styles.transactionDate}>{dateStr}</Text>
-        {transaction.rideDetails && (
-          <View style={styles.rideDetails}>
-            <Text style={styles.rideDetailText} numberOfLines={1}>
-              {transaction.rideDetails.pickup}
-            </Text>
-            <Text style={styles.rideDetailText} numberOfLines={1}>
-              {transaction.rideDetails.destination}
-            </Text>
-          </View>
-        )}
-        {transaction.description ? (
-          <Text style={styles.transactionDescription}>{transaction.description}</Text>
-        ) : null}
       </View>
     </View>
   );
@@ -561,6 +610,49 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.8)',
     marginTop: 4,
   },
+  dualAmountRow: {
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  dualAmountItem: {
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  dualAmountDivider: {
+    width: 40,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    marginVertical: 4,
+    alignSelf: 'center',
+  },
+  dualAmountValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  dualAmountValueSecondary: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.85)',
+    letterSpacing: 0.5,
+  },
+  dualAmountCurrency: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginTop: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  dualAmountCurrencySecondary: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginTop: 1,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
   noEarningsText: {
     fontSize: 13,
     color: 'rgba(255, 255, 255, 0.75)',
@@ -603,18 +695,22 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   summaryValue: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '800',
     color: colors.darkGray,
     marginTop: 4,
     textAlign: 'center',
   },
   summaryValueSecondary: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
-    color: colors.lightGray,
-    marginTop: 1,
+    color: colors.mediumGray,
     textAlign: 'center',
+  },
+  dualSummaryRow: {
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 2,
   },
   summaryLabel: {
     fontSize: 11,
@@ -676,13 +772,15 @@ const styles = StyleSheet.create({
   transactionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 2,
   },
   transactionTypeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
+    marginRight: 8,
   },
   transactionIcon: {
     marginRight: 4,
@@ -696,24 +794,31 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
+  transactionAmountSecondary: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.mediumGray,
+  },
+  transactionCurrencyLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#9ca3af',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 1,
+  },
+  transactionCurrencyLabelSecondary: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#b0b7c3',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 1,
+  },
   transactionDate: {
     fontSize: 12,
     color: colors.lightGray,
     marginBottom: 4,
-  },
-  rideDetails: {
-    gap: 2,
-    marginTop: 4,
-  },
-  rideDetailText: {
-    fontSize: 12,
-    color: colors.mediumGray,
-  },
-  transactionDescription: {
-    fontSize: 12,
-    color: colors.mediumGray,
-    marginTop: 4,
-    fontStyle: 'italic',
   },
   separator: {
     height: 1,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -23,9 +23,7 @@ import { translations } from '../../i18n/translations';
 import { userAPI, notificationAPI, driverAPI } from '../../services/api';
 import { getSocket, addConnectionListener, removeConnectionListener, reconnectSocket, getSocketDiagnostics } from '@/services/socket';
 import { resolveFileUrl } from '@/services/fileUrl';
-import { subscribeToLogs, getAllLogs, clearLogs, getLogsAsText } from '@/services/logCapture';
-import type { LogEntry, LogLevel } from '@/services/logCapture';
-import * as Clipboard from 'expo-clipboard';
+
 
 interface NotificationPreferences {
   rideRequests?: boolean;
@@ -60,25 +58,6 @@ export default function DriverProfileScreen() {
   const [socketLastError, setSocketLastError] = useState<string | null>(null);
   const [isPaymentSectionExpanded, setIsPaymentSectionExpanded] = useState(false);
   const [isSavingPayment, setIsSavingPayment] = useState(false);
-  const [isSystemSectionExpanded, setIsSystemSectionExpanded] = useState(false);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [logFilter, setLogFilter] = useState<'all' | LogLevel>('all');
-  const [isCopied, setIsCopied] = useState(false);
-  const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
-  const logScrollRef = React.useRef<ScrollView>(null);
-
-  // Computed filtered logs and counts
-  const logLevelCounts = useMemo(() => ({
-    all: logs.length,
-    log: logs.filter(l => l.level === 'log').length,
-    warn: logs.filter(l => l.level === 'warn').length,
-    error: logs.filter(l => l.level === 'error').length,
-  }), [logs]);
-
-  const filteredLogs = useMemo(() => {
-    if (logFilter === 'all') return logs;
-    return logs.filter(l => l.level === logFilter);
-  }, [logs, logFilter]);
 
   // User data
   const [name, setName] = useState(user?.name || '');
@@ -147,37 +126,6 @@ export default function DriverProfileScreen() {
       removeConnectionListener(connectionListener);
     };
   }, []);
-
-  // Subscribe to global log capture for the Sistema section
-  useEffect(() => {
-    // Load existing logs
-    setLogs(getAllLogs());
-
-    // Subscribe to new logs
-    const unsubscribe = subscribeToLogs((entry) => {
-      setLogs(prev => {
-        const next = [...prev, entry];
-        // Keep only last 1000 locally too
-        if (next.length > 1000) {
-          return next.slice(next.length - 1000);
-        }
-        return next;
-      });
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, []);
-
-  // Auto-scroll log view when new entries arrive (only if auto-scroll is enabled)
-  useEffect(() => {
-    if (isSystemSectionExpanded && autoScrollEnabled && logScrollRef.current && logs.length > 0) {
-      requestAnimationFrame(() => {
-        logScrollRef.current?.scrollToEnd({ animated: true });
-      });
-    }
-  }, [logs.length, isSystemSectionExpanded, autoScrollEnabled]);
 
   const loadUserData = async () => {
     try {
@@ -313,18 +261,6 @@ export default function DriverProfileScreen() {
     }
   };
 
-  const handleCopyAllLogs = async () => {
-    try {
-      const text = getLogsAsText(logFilter === 'all' ? undefined : { level: logFilter });
-      await Clipboard.setStringAsync(text);
-      setIsCopied(true);
-      Alert.alert('Copiado', `${filteredLogs.length} líneas copiadas al portapapeles`);
-      setTimeout(() => setIsCopied(false), 2000);
-    } catch (error) {
-      Alert.alert('Error', 'No se pudo copiar al portapapeles');
-    }
-  };
-
   const handleLogout = () => {
     Alert.alert(t.logoutConfirmTitle, t.logoutConfirmMessage, [
       { text: t.cancel, style: 'cancel' },
@@ -452,8 +388,7 @@ export default function DriverProfileScreen() {
         <Text style={styles.sectionTitle}>Disponibilidad</Text>
 
         <View style={styles.card}>
-          {/* Socket Connection Status - Tappable to reconnect */}
-          {/* Socket Connection Status - Tappable to reconnect */}
+          {/* Servidor — estado de conexión, toca para reconectar */}
           <TouchableOpacity
             style={styles.settingItem}
             activeOpacity={isSocketConnected ? 1 : 0.6}
@@ -481,7 +416,7 @@ export default function DriverProfileScreen() {
               </View>
               <View style={styles.availabilityTextContainer}>
                 <Text style={styles.settingLabel}>
-                  {isReconnectingSocket ? 'Reconectando...' : 'Socket'}
+                  {isReconnectingSocket ? 'Reconectando...' : 'Servidor'}
                 </Text>
                 <Text style={styles.availabilitySubtext}>
                   {isReconnectingSocket
@@ -562,7 +497,7 @@ export default function DriverProfileScreen() {
           <View style={styles.avatarSection}>
             <TouchableOpacity onPress={handleChangePhoto} style={styles.avatarContainer}>
               {resolveFileUrl(user?.profilePhotoUrl) ? (
-                <Image source={{ uri: resolveFileUrl(user?.profilePhotoUrl) }} style={styles.avatarImage} />
+                <Image source={{ uri: resolveFileUrl(user?.profilePhotoUrl) }} style={styles.avatarImage} resizeMode="cover" />
               ) : (
                 <View style={styles.avatarPlaceholder}>
                   <Ionicons name="person" size={40} color={Colors.primary} />
@@ -944,6 +879,21 @@ export default function DriverProfileScreen() {
         <Text style={styles.sectionTitle}>{t.account}</Text>
 
         <View style={styles.card}>
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => router.push('/(driver)/manage-ride' as any)}
+          >
+            <View style={styles.settingLeft}>
+              <View style={styles.iconContainer}>
+                <Ionicons name="car-sport-outline" size={22} color={Colors.primary} />
+              </View>
+              <Text style={styles.actionLabel}>Gestionar Viaje</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
           <TouchableOpacity style={styles.actionItem} onPress={handleLogout}>
             <View style={styles.settingLeft}>
               <View style={styles.iconContainer}>
@@ -966,402 +916,6 @@ export default function DriverProfileScreen() {
             <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
           </TouchableOpacity>
         </View>
-      </View>
-
-      {/* Sistema Section — Log viewer profesional */}
-      <View style={styles.section}>
-        <TouchableOpacity
-          style={styles.sectionHeader}
-          onPress={() => setIsSystemSectionExpanded(!isSystemSectionExpanded)}
-          activeOpacity={0.7}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <View style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              backgroundColor: isSystemSectionExpanded ? '#1e293b' : '#f1f5f9',
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}>
-              <Ionicons
-                name="terminal-outline"
-                size={18}
-                color={isSystemSectionExpanded ? '#e2e8f0' : '#475569'}
-              />
-            </View>
-            <View>
-              <Text style={styles.sectionTitle}>Sistema</Text>
-              {!isSystemSectionExpanded && logs.length > 0 && (
-                <Text style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>
-                  {filteredLogs.length} logs{logFilter !== 'all' ? ` (${logFilter})` : ''}
-                </Text>
-              )}
-            </View>
-            {logs.length > 0 && (
-              <View style={{
-                backgroundColor: logFilter !== 'all'
-                  ? (logFilter === 'error' ? '#dc2626' : logFilter === 'warn' ? '#d97706' : Colors.primary)
-                  : Colors.primary,
-                borderRadius: 10,
-                paddingHorizontal: 8,
-                paddingVertical: 2,
-                minWidth: 22,
-                alignItems: 'center',
-              }}>
-                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>
-                  {filteredLogs.length}
-                </Text>
-              </View>
-            )}
-          </View>
-          <Ionicons
-            name={isSystemSectionExpanded ? 'chevron-up' : 'chevron-down'}
-            size={24}
-            color={Colors.primary}
-          />
-        </TouchableOpacity>
-
-        {isSystemSectionExpanded && (
-          <View style={styles.card}>
-            {/* Socket Diagnostics Summary - compact cards */}
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-              <View style={{
-                flex: 1,
-                backgroundColor: isSocketConnected ? '#f0fdf4' : '#fef2f2',
-                borderRadius: 10,
-                padding: 10,
-              }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-                  <View style={{
-                    width: 6, height: 6, borderRadius: 3,
-                    backgroundColor: isSocketConnected ? '#16a34a' : '#dc2626',
-                  }} />
-                  <Text style={{ fontSize: 10, color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Socket
-                  </Text>
-                </View>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: isSocketConnected ? '#16a34a' : '#dc2626' }}>
-                  {isSocketConnected ? 'Conectado' : 'Desconectado'}
-                </Text>
-                {socketTransport && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 }}>
-                    <Ionicons name="radio-outline" size={10} color="#9ca3af" />
-                    <Text style={{ fontSize: 10, color: '#9ca3af' }}>{socketTransport}</Text>
-                  </View>
-                )}
-              </View>
-              <View style={{
-                flex: 1,
-                backgroundColor: socketRetryCount > 3 ? '#fef2f2' : '#f9fafb',
-                borderRadius: 10,
-                padding: 10,
-              }}>
-                <Text style={{ fontSize: 10, color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
-                  Intentos
-                </Text>
-                <Text style={{ fontSize: 20, fontWeight: '700', color: socketRetryCount > 0 ? '#dc2626' : '#16a34a' }}>
-                  {socketRetryCount}
-                </Text>
-              </View>
-              <View style={{
-                flex: 1,
-                backgroundColor: '#f9fafb',
-                borderRadius: 10,
-                padding: 10,
-              }}>
-                <Text style={{ fontSize: 10, color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
-                  Logs
-                </Text>
-                <Text style={{ fontSize: 20, fontWeight: '700', color: '#1f2937' }}>
-                  {logs.length}
-                </Text>
-              </View>
-            </View>
-
-            {/* Log level filter tabs */}
-            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
-              {(['all', 'error', 'warn', 'log'] as const).map((level) => {
-                const isActive = logFilter === level;
-                const colors = level === 'error' ? { bg: '#fef2f2', activeBg: '#dc2626', text: '#dc2626', activeText: '#fff', count: logLevelCounts.error }
-                  : level === 'warn' ? { bg: '#fffbeb', activeBg: '#d97706', text: '#d97706', activeText: '#fff', count: logLevelCounts.warn }
-                  : level === 'log' ? { bg: '#f0fdf4', activeBg: '#16a34a', text: '#16a34a', activeText: '#fff', count: logLevelCounts.log }
-                  : { bg: '#f1f5f9', activeBg: '#334155', text: '#475569', activeText: '#fff', count: logLevelCounts.all };
-                return (
-                  <TouchableOpacity
-                    key={level}
-                    style={{
-                      flex: 1,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 4,
-                      backgroundColor: isActive ? colors.activeBg : colors.bg,
-                      borderRadius: 8,
-                      paddingVertical: 6,
-                      paddingHorizontal: 4,
-                    }}
-                    onPress={() => setLogFilter(level)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={{
-                      fontSize: 12,
-                      fontWeight: '700',
-                      color: isActive ? colors.activeText : colors.text,
-                      textTransform: 'capitalize',
-                    }}>
-                      {level === 'all' ? 'Todos' : level === 'log' ? 'Log' : level === 'warn' ? 'Warn' : 'Error'}
-                    </Text>
-                    <View style={{
-                      backgroundColor: isActive ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.08)',
-                      borderRadius: 6,
-                      paddingHorizontal: 5,
-                      paddingVertical: 1,
-                    }}>
-                      <Text style={{
-                        fontSize: 10,
-                        fontWeight: '600',
-                        color: isActive ? colors.activeText : colors.text,
-                      }}>
-                        {colors.count}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* Toolbar: actions */}
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
-              <TouchableOpacity
-                style={{
-                  flex: 1,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  backgroundColor: '#f9fafb',
-                  borderRadius: 8,
-                  paddingVertical: 8,
-                  borderWidth: 1,
-                  borderColor: '#e5e7eb',
-                }}
-                onPress={() => {
-                  clearLogs();
-                  setLogs([]);
-                }}
-              >
-                <Ionicons name="trash-outline" size={16} color="#6b7280" />
-                <Text style={{ fontSize: 12, color: '#6b7280', fontWeight: '600' }}>Limpiar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{
-                  flex: 1,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  backgroundColor: '#f9fafb',
-                  borderRadius: 8,
-                  paddingVertical: 8,
-                  borderWidth: 1,
-                  borderColor: '#e5e7eb',
-                }}
-                onPress={handleCopyAllLogs}
-              >
-                <Ionicons
-                  name={isCopied ? 'checkmark-circle' : 'copy-outline'}
-                  size={16}
-                  color={isCopied ? '#16a34a' : '#6b7280'}
-                />
-                <Text style={{ fontSize: 12, color: isCopied ? '#16a34a' : '#6b7280', fontWeight: '600' }}>
-                  {isCopied ? 'Copiado' : 'Copiar logs'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{
-                  flex: 1,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  backgroundColor: autoScrollEnabled ? '#e0f2fe' : '#f9fafb',
-                  borderRadius: 8,
-                  paddingVertical: 8,
-                  borderWidth: 1,
-                  borderColor: autoScrollEnabled ? '#7dd3fc' : '#e5e7eb',
-                }}
-                onPress={() => setAutoScrollEnabled(!autoScrollEnabled)}
-              >
-                <Ionicons
-                  name={autoScrollEnabled ? 'lock-closed' : 'lock-open'}
-                  size={14}
-                  color={autoScrollEnabled ? '#0284c7' : '#6b7280'}
-                />
-                <Text style={{ fontSize: 11, color: autoScrollEnabled ? '#0284c7' : '#6b7280', fontWeight: '600' }}>
-                  Auto
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Log terminal viewer */}
-            <View style={{
-              backgroundColor: '#0f172a',
-              borderRadius: 12,
-              overflow: 'hidden',
-              borderWidth: 1,
-              borderColor: '#1e293b',
-            }}>
-              {/* Terminal header bar */}
-              <View style={{
-                backgroundColor: '#1e293b',
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderBottomWidth: 1,
-                borderBottomColor: '#334155',
-              }}>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
-                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#ef4444' }} />
-                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#f59e0b' }} />
-                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#10b981' }} />
-                </View>
-                <Text style={{
-                  flex: 1,
-                  textAlign: 'center',
-                  fontSize: 10,
-                  color: '#64748b',
-                  fontWeight: '600',
-                  letterSpacing: 1,
-                  textTransform: 'uppercase',
-                }}>
-                  terminal — {filteredLogs.length} líneas
-                </Text>
-                <Ionicons name="terminal" size={14} color="#64748b" />
-              </View>
-
-              {/* Log content */}
-              <ScrollView
-                ref={logScrollRef}
-                style={{
-                  maxHeight: 400,
-                  padding: 10,
-                }}
-                nestedScrollEnabled
-              >
-                {filteredLogs.length === 0 ? (
-                  <View style={{ paddingVertical: 30, alignItems: 'center' }}>
-                    <Ionicons name="terminal-outline" size={32} color="#334155" />
-                    <Text style={{ color: '#475569', fontSize: 12, marginTop: 8, textAlign: 'center' }}>
-                      {logs.length === 0
-                        ? 'Esperando logs...\nLos logs aparecerán aquí automáticamente'
-                        : `No hay logs de nivel "${logFilter}"`}
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={{ gap: 1 }}>
-                    {filteredLogs.map((entry, index) => {
-                      const levelIcon = entry.level === 'error' ? '✕' : entry.level === 'warn' ? '⚠' : ' ';
-                      const levelColor = entry.level === 'error' ? '#ef4444'
-                        : entry.level === 'warn' ? '#f59e0b'
-                        : '#94a3b8';
-                      const sourceColors: Record<string, string> = {
-                        SOCKET: '#38bdf8',
-                        GLOBAL_SOCKET: '#818cf8',
-                        AUTH: '#34d399',
-                        DRIVER_PROFILE: '#f472b6',
-                        PROFILE: '#f472b6',
-                        APP: '#a78bfa',
-                        DIAG: '#fbbf24',
-                        API: '#2dd4bf',
-                      };
-                      const sourceColor = sourceColors[entry.source] || '#64748b';
-                      return (
-                        <View
-                          key={entry.id}
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'flex-start',
-                            paddingVertical: 2,
-                            paddingHorizontal: 2,
-                            borderRadius: 3,
-                          }}
-                        >
-                          {/* Line number */}
-                          <Text style={{
-                            color: '#334155',
-                            fontSize: 9,
-                            fontFamily: 'monospace',
-                            minWidth: 28,
-                            textAlign: 'right',
-                            marginRight: 6,
-                            lineHeight: 16,
-                          }}>
-                            {index + 1}
-                          </Text>
-                          {/* Level indicator */}
-                          <Text style={{
-                            color: levelColor,
-                            fontSize: 10,
-                            fontFamily: 'monospace',
-                            minWidth: 12,
-                            lineHeight: 16,
-                          }}>
-                            {levelIcon}
-                          </Text>
-                          {/* Timestamp */}
-                          <Text style={{
-                            color: '#475569',
-                            fontSize: 9,
-                            fontFamily: 'monospace',
-                            minWidth: 54,
-                            marginRight: 4,
-                            lineHeight: 16,
-                          }}>
-                            {entry.timestamp}
-                          </Text>
-                          {/* Source badge */}
-                          <View style={{
-                            backgroundColor: sourceColor + '20',
-                            borderRadius: 3,
-                            paddingHorizontal: 4,
-                            paddingVertical: 1,
-                            marginRight: 4,
-                            marginTop: 1,
-                          }}>
-                            <Text style={{
-                              color: sourceColor,
-                              fontSize: 8,
-                              fontFamily: 'monospace',
-                              fontWeight: '700',
-                              letterSpacing: 0.3,
-                            }}>
-                              {entry.source}
-                            </Text>
-                          </View>
-                          {/* Message */}
-                          <Text
-                            style={{
-                              color: levelColor,
-                              fontSize: 10,
-                              fontFamily: 'monospace',
-                              flex: 1,
-                              lineHeight: 16,
-                            }}
-                            numberOfLines={20}
-                          >
-                            {entry.message}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-              </ScrollView>
-            </View>
-          </View>
-        )}
       </View>
 
       <View style={styles.bottomSpacer} />
@@ -1459,7 +1013,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   section: {
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.xl,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1471,6 +1025,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#1f2937',
+    marginBottom: Spacing.sm,
   },
   paymentMethodSection: {
     marginBottom: Spacing.md,

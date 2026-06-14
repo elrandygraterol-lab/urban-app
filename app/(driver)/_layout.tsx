@@ -1,7 +1,6 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import GlobalNotificationModal from '@/components/GlobalNotificationModal';
 // import { walkthroughable, CopilotStep } from 'react-native-copilot';
 import { TouchableOpacity, Text, View, StyleSheet } from 'react-native';
 
@@ -66,10 +65,8 @@ export default function DriverLayout() {
         <Tabs.Screen name="verification-status" options={{ href: null }} />
         <Tabs.Screen name="active-ride" options={{ href: null }} />
         <Tabs.Screen name="payment-methods" options={{ href: null }} />
+        <Tabs.Screen name="manage-ride" options={{ href: null }} />
       </Tabs>
-
-      {/* Global notification modal for in-app notifications */}
-      <GlobalNotificationModal />
     </>
   );
 }

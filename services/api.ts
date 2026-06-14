@@ -283,7 +283,7 @@ export const rideAPI = {
 
   getActiveRides: () => api.get('/api/rides/active'),
 
-  getRideHistory: (params?: { startDate?: string; endDate?: string }) =>
+  getRideHistory: (params?: { startDate?: string; endDate?: string; page?: string; limit?: string }) =>
     api.get('/api/rides/history', { params }),
 
   updateLocation: (rideId: string, latitude: number, longitude: number, accuracy?: number) =>

@@ -13,9 +13,12 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { authAPI } from '@/services/api';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
+  const { showToast, showStatus } = useUnifiedNotifications();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -26,40 +29,38 @@ export default function ForgotPasswordScreen() {
 
   const handleResetPassword = async () => {
     if (!email.trim()) {
-      Alert.alert('Error', 'Por favor ingresa tu email');
+      showToast('Por favor ingresa tu email', 'error');
       return;
     }
 
     if (!validateEmail(email.trim())) {
-      Alert.alert('Error', 'Por favor ingresa un email válido');
+      showToast('Por favor ingresa un email válido', 'error');
       return;
     }
 
     setIsLoading(true);
     try {
       await authAPI.forgotPassword(email.trim());
-      Alert.alert(
-        'Éxito',
+      showStatus(
+        'success',
         'Se ha enviado un enlace de recuperación a tu email. Por favor revisa tu bandeja de entrada.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.push('/(auth)/login' as any),
-          },
-        ]
+        'Éxito',
+        undefined,
+        { label: 'OK', onPress: () => router.push('/(auth)/login' as any) }
       );
     } catch (error: any) {
       const errorMessage =
         error?.response?.data?.error?.message ||
         error?.message ||
         'No se pudo enviar el email de recuperación. Por favor intenta de nuevo.';
-      Alert.alert('Error', errorMessage);
+      showToast(errorMessage, 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -117,6 +118,7 @@ export default function ForgotPasswordScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

@@ -315,11 +315,18 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
         }
       }, 100);
 
+      // Extended timeout to 30s to account for slow initial connections (network latency, DNS, etc.)
       setTimeout(() => {
         clearInterval(checkInterval);
-        console.error('[SOCKET] Connection timeout after 10s waiting');
-        reject(new Error('Socket connection timeout'));
-      }, 10000);
+        // Don't reject if socket connected after timeout - just resolve it
+        if (socket && isConnected) {
+          console.log('[SOCKET] Connection succeeded after timeout period:', socket.id);
+          resolve(socket);
+        } else {
+          console.error('[SOCKET] Connection timeout after 30s waiting');
+          reject(new Error('Socket connection timeout'));
+        }
+      }, 30000);
     });
   }
 
@@ -911,13 +918,13 @@ export const onPaymentConfirmed = (
   }
 
   // Remove any existing listeners for this event to prevent duplicates
-  socket.off('ride:payment_confirmed');
-  socket.on('ride:payment_confirmed', callback);
+  socket.off('ride:payment_completed');
+  socket.on('ride:payment_completed', callback);
 
   // Return cleanup function
   return () => {
     if (socket) {
-      socket.off('ride:payment_confirmed', callback);
+      socket.off('ride:payment_completed', callback);
     }
   };
 };

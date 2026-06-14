@@ -64,9 +64,16 @@ export default function AddressAutocomplete({
   const containerRef = useRef<View>(null);
   const inputRef = useRef<TextInput>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const justSelectedRef = useRef(false);
 
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
+    // Skip search if a place was just selected (value changed by selection, not typing)
+    if (justSelectedRef.current) {
+      justSelectedRef.current = false;
+      return;
+    }
 
     if (value.length < 3) {
       setSuggestions([]);
@@ -122,6 +129,7 @@ export default function AddressAutocomplete({
   };
 
   const handleSelectPlace = (place: Place) => {
+    justSelectedRef.current = true;
     onChangeText(place.name);
     onSelectPlace(place);
     setSuggestions([]);

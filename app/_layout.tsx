@@ -19,8 +19,8 @@ import { logInfo, logError } from '@/utils/errorLogger';
 // Initialize log capture for the in-app Sistema log viewer
 // Must be imported early to intercept all console.log/warn/error
 import '@/services/logCapture';
-import { NotificationProvider } from '@/context/NotificationContext';
-import { GlobalNotificationOverlay } from '@/components/GlobalNotificationOverlay';
+import { UnifiedNotificationProvider } from '@/context/UnifiedNotificationContext';
+import { UnifiedNotificationOverlay } from '@/components/UnifiedNotificationOverlay';
 
 function AppContent() {
   useBadgeSync();
@@ -149,7 +149,7 @@ function AppContent() {
         <Stack.Screen name="(passenger)" />
         <Stack.Screen name="(driver)" />
       </Stack>
-      <GlobalNotificationOverlay />
+      <UnifiedNotificationOverlay />
       <ExpoStatusBar style="auto" />
     </>
   );
@@ -161,9 +161,9 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <NotificationProvider>
+        <UnifiedNotificationProvider>
             <AppContent />
-        </NotificationProvider>
+        </UnifiedNotificationProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

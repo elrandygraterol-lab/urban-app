@@ -38,7 +38,13 @@ export const bearingAlongRoute = (
   point: { latitude: number; longitude: number }
 ) => {
   if (coords.length < 2) return 0;
-  const nearest = computeNearestRouteIndex(coords, point);
+  let nearest = computeNearestRouteIndex(coords, point);
+
+  // If at the last point, use the segment before it for bearing
+  if (nearest >= coords.length - 1) {
+    nearest = Math.max(0, coords.length - 2);
+  }
+
   const nextIdx = Math.min(nearest + 1, coords.length - 1);
   const from = coords[nearest];
   const to = coords[nextIdx];
@@ -53,7 +59,8 @@ export const animateNavigationCamera = (
 ) => {
   const duration = options?.duration ?? 500;
   const zoom = options?.zoom ?? 17;
-  const pitch = options?.pitch ?? 50;
+  // pitch=0 keeps markers visually upright (no perspective distortion)
+  const pitch = options?.pitch ?? 0;
   if (mapRef.current) {
     mapRef.current.animateCamera(
       {

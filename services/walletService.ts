@@ -22,6 +22,9 @@ export interface WalletTransactionDto {
   rideId: string;
   paymentId: string;
   createdAt: string;
+  currency: string;
+  originalAmount?: number;
+  originalCurrency?: string;
   rideDetails?: {
     pickup: string;
     destination: string;
