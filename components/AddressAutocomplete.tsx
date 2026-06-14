@@ -19,7 +19,7 @@ import { Colors } from '@/constants/theme';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const TAB_BAR_HEIGHT = 60; // Altura aproximada del tab bar
-const SUGGESTION_ITEM_HEIGHT = 60; // Altura aproximada de cada sugerencia
+const SUGGESTION_ITEM_HEIGHT = 44; // Altura aproximada de cada sugerencia
 const MAX_VISIBLE_SUGGESTIONS = 4; // Máximo de sugerencias visibles sin scroll
 
 export interface Place {
@@ -54,6 +54,7 @@ export default function AddressAutocomplete({
   currentLocation,
   style,
   bare = false,
+  suggestionsStyle,
 }: AddressAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<Place[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -70,8 +71,17 @@ export default function AddressAutocomplete({
   const inputRef = useRef<TextInput>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const justSelectedRef = useRef(false);
+  const isInputFocusedRef = useRef(false);
+  const initialMountRef = useRef(true);
 
   useEffect(() => {
+    // Skip search on initial mount (prevents showing suggestions when
+    // component mounts with pre-existing text from address field)
+    if (initialMountRef.current) {
+      initialMountRef.current = false;
+      return;
+    }
+
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
     // Skip search if a place was just selected (value changed by selection, not typing)
@@ -111,6 +121,21 @@ export default function AddressAutocomplete({
     };
   }, [value, currentLocation]);
 
+  // Re-measure container when keyboard appears/disappears
+  // (KeyboardAwareScrollView scrolls the panel, changing input position)
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', () => {
+      setTimeout(measureContainer, 100);
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      setTimeout(measureContainer, 100);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   const measureContainer = () => {
     if (containerRef.current) {
       containerRef.current.measureInWindow((x, y, width, height) => {
@@ -149,27 +174,28 @@ export default function AddressAutocomplete({
 
   const handleInputFocus = () => {
     setIsInputFocused(true);
+    isInputFocusedRef.current = true;
     measureContainer();
   };
 
   const handleInputBlur = () => {
     setIsInputFocused(false);
-    // Delay más largo para permitir que los toques en sugerencias se procesen
+    isInputFocusedRef.current = false;
+    // Cerrar sugerencias con un pequeño delay para permitir que
+    // los toques en sugerencias se procesen antes de cerrar
     setTimeout(() => {
-      if (!isInputFocused) {
+      if (!isInputFocusedRef.current) {
         setShowSuggestions(false);
       }
-    }, 200);
+    }, 250);
   };
 
   // Función para cerrar sugerencias cuando se toca fuera (solo para modo modal)
   const handleModalBackdropPress = () => {
     if (bare) {
       setShowSuggestions(false);
-      // Mantener el foco en el input si estaba enfocado
-      if (isInputFocused && inputRef.current) {
-        inputRef.current.blur();
-      }
+      // Cerrar teclado al tocar fuera
+      Keyboard.dismiss();
     }
   };
 
@@ -279,6 +305,7 @@ export default function AddressAutocomplete({
                       width: dropdownLayout.width,
                       maxHeight: maxDropdownHeight,
                     },
+                    suggestionsStyle,
                   ]}
                 >
                   <FlatList
@@ -367,8 +394,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 12,
-    minHeight: 60,
+    paddingVertical: 10,
+    minHeight: 44,
   },
   suggestionIcon: {
     marginRight: 10,
@@ -378,14 +405,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   suggestionName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: Colors.textPrimary,
   },
   suggestionDescription: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.mediumGray,
-    marginTop: 2,
+    marginTop: 1,
+    lineHeight: 15,
   },
   separator: {
     height: 1,

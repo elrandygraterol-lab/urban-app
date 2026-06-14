@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import Svg, { Path, G } from 'react-native-svg';
-import Animated, { useSharedValue, withSpring, withTiming, Easing } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, withRepeat, withSequence, Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import MapView, { Marker, Polyline } from 'react-native-maps';
@@ -271,8 +271,134 @@ export default function PassengerHomeScreen() {
   const modalOpacity = useSharedValue(0);
   const modalTranslateY = useSharedValue(50);
 
+  // Timer ref for search timeout
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Elapsed search time (seconds)
+  const [searchDuration, setSearchDuration] = useState(0);
+  const searchDurationRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Animation values for searching driver indicator
+  const pulseScale = useSharedValue(1);
+  const pulseRingOpacity = useSharedValue(0.3);
+  const pulseScaleInner = useSharedValue(1);
+  const pulseRingOpacityInner = useSharedValue(0.5);
+  const loadingProgress = useSharedValue(0);
+
+  // Animated styles for pulse rings
+  const pulseRingStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+    opacity: pulseRingOpacity.value,
+  }));
+  const pulseRingInnerStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScaleInner.value }],
+    opacity: pulseRingOpacityInner.value,
+  }));
+  const loadingBarStyle = useAnimatedStyle(() => ({
+    width: `${loadingProgress.value * 100}%`,
+  }));
+
+
   // Safe area insets for modal
   const insets = useSafeAreaInsets();
+
+
+
+  /** Handle search timeout - auto-cancel after 60 seconds */
+  const handleSearchTimeout = useCallback(async () => {
+    if (!activeRide || !activeRide.id) {
+      setIsSearchingDriver(false);
+      setSearchDuration(0);
+      return;
+    }
+    try {
+      await rideAPI.cancelRide(activeRide.id, { reason: 'search_timeout' });
+      showToast(
+        'No encontramos conductores disponibles en tu zona en este momento. Por favor intenta nuevamente.',
+        'info'
+      );
+    } catch {
+      showToast('No se pudo cancelar la búsqueda automáticamente.', 'error');
+    } finally {
+      setActiveRide(null);
+      setIsSearchingDriver(false);
+      setDriverLocation(null);
+      setSearchDuration(0);
+    }
+  }, [activeRide, rideAPI, showToast]);
+
+// Start searching animations + timeout when isSearchingDriver changes
+  useEffect(() => {
+    if (isSearchingDriver) {
+      // Reset duration counter
+      setSearchDuration(0);
+
+      // Pulse ring animations
+      pulseScale.value = withRepeat(
+        withSequence(withTiming(1.3, { duration: 1200 }), withTiming(1, { duration: 1200 })), -1, true
+      );
+      pulseRingOpacity.value = withRepeat(
+        withSequence(withTiming(0.1, { duration: 1200 }), withTiming(0.3, { duration: 1200 })), -1, true
+      );
+      pulseScaleInner.value = withRepeat(
+        withSequence(withTiming(1.15, { duration: 1200 }), withTiming(1, { duration: 1200 })), -1, true
+      );
+      pulseRingOpacityInner.value = withRepeat(
+        withSequence(withTiming(0.2, { duration: 1200 }), withTiming(0.5, { duration: 1200 })), -1, true
+      );
+      loadingProgress.value = withRepeat(
+        withSequence(withTiming(1, { duration: 2000 }), withTiming(0, { duration: 2000 })), -1, true
+      );
+
+      // 60-second search timeout
+      searchTimeoutRef.current = setTimeout(() => {
+        handleSearchTimeout();
+      }, 60000);
+
+      // Elapsed time counter (updates every second)
+      let count = 0;
+      searchDurationRef.current = setInterval(() => {
+        count++;
+        setSearchDuration(count);
+      }, 1000);
+
+      return () => {
+        // Cleanup animations
+        pulseScale.value = 1;
+        pulseRingOpacity.value = 0.3;
+        pulseScaleInner.value = 1;
+        pulseRingOpacityInner.value = 0.5;
+        loadingProgress.value = 0;
+        // Cleanup timeout
+        if (searchTimeoutRef.current) {
+          clearTimeout(searchTimeoutRef.current);
+          searchTimeoutRef.current = null;
+        }
+        // Cleanup duration counter
+        if (searchDurationRef.current) {
+          clearInterval(searchDurationRef.current);
+          searchDurationRef.current = null;
+        }
+        setSearchDuration(0);
+      };
+    } else {
+      // Reset all when not searching
+      pulseScale.value = 1;
+      pulseRingOpacity.value = 0.3;
+      pulseScaleInner.value = 1;
+      pulseRingOpacityInner.value = 0.5;
+      loadingProgress.value = 0;
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+      if (searchDurationRef.current) {
+        clearInterval(searchDurationRef.current);
+        searchDurationRef.current = null;
+      }
+      setSearchDuration(0);
+    }
+  }, [isSearchingDriver]);
 
   // Smart Tutorial state
   // const { start: startTour } = useCopilot();
@@ -2316,6 +2442,9 @@ export default function PassengerHomeScreen() {
       setDriverLocation(null);
 
       console.log('✅ Ride search cancelled');
+
+  
+
     } catch (error: any) {
       console.error('Cancel search error:', error);
 
@@ -3134,6 +3263,94 @@ export default function PassengerHomeScreen() {
                         </TouchableOpacity>
                       )}
                   </View>
+                </View>
+              )}
+
+
+              {/* Searching for Driver - Professional Loading State */}
+              {isSearchingDriver && (
+                <View style={styles.searchingDriverContainer}>
+                  {/* Animated pulsing ring + car icon */}
+                  <View style={styles.searchingIconWrapper}>
+                    <Animated.View style={[styles.searchingPulseRing, pulseRingStyle]} />
+                    <Animated.View style={[styles.searchingPulseRingInner, pulseRingInnerStyle]} />
+                    <View style={styles.searchingIconCircle}>
+                      <Ionicons name="car-outline" size={40} color="#22c55e" />
+                    </View>
+                  </View>
+
+                  {/* Animated loading bar */}
+                  <View style={styles.searchingLoadingBar}>
+                    <Animated.View style={[styles.searchingLoadingFill, loadingBarStyle]} />
+                  </View>
+
+                  <Text style={styles.searchingTitle}>Buscando conductores</Text>
+                  <Text style={styles.searchingSubtitle}>
+                    Localizando profesionales cercanos a tu ubicación
+                  </Text>
+
+                  {/* Search timer */}
+                  {searchDuration > 0 && (
+                    <View style={styles.searchingTimerRow}>
+                      <Ionicons name="time-outline" size={14} color="#9CA3AF" />
+                      <Text style={styles.searchingTimerText}>
+                        {searchDuration < 60
+                          ? `Buscando... ${searchDuration}s`
+                          : `Tiempo agotado`}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Trip details card */}
+                  <View style={styles.searchingTripCard}>
+                    <View style={styles.searchingTripRow}>
+                      <View style={styles.searchingTripIconBg}>
+                        <Ionicons name="location-outline" size={16} color="#22c55e" />
+                      </View>
+                      <View style={styles.searchingTripContent}>
+                        <Text style={styles.searchingTripLabel}>Recogida</Text>
+                        <Text style={styles.searchingTripText} numberOfLines={1}>
+                          {pickupAddress || 'Ubicación actual'}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.searchingTripDivider} />
+                    <View style={styles.searchingTripRow}>
+                      <View style={[styles.searchingTripIconBg, { backgroundColor: '#FEF2F2' }]}>
+                        <Ionicons name="flag-outline" size={16} color="#EF4444" />
+                      </View>
+                      <View style={styles.searchingTripContent}>
+                        <Text style={styles.searchingTripLabel}>Destino</Text>
+                        <Text style={styles.searchingTripText} numberOfLines={1}>
+                          {destinationAddress || 'Destino'}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.searchingTripDivider} />
+                    <View style={styles.searchingTripRow}>
+                      <View style={[styles.searchingTripIconBg, { backgroundColor: '#EFF6FF' }]}>
+                        <Ionicons name="cash-outline" size={16} color="#3B82F6" />
+                      </View>
+                      <View style={styles.searchingTripContent}>
+                        <Text style={styles.searchingTripLabel}>Tarifa estimada</Text>
+                        <Text style={[styles.searchingTripText, { fontWeight: '600' }]}>
+                          {estimatedFare != null
+                            ? formatCurrency(estimatedFare, fareCurrency)
+                            : 'Calculando...'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Cancel button */}
+                  <TouchableOpacity
+                    style={styles.searchingCancelButton}
+                    onPress={handleCancelSearching}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close-outline" size={18} color="#EF4444" />
+                    <Text style={styles.searchingCancelText}>Cancelar búsqueda</Text>
+                  </TouchableOpacity>
                 </View>
               )}
 
@@ -4334,6 +4551,7 @@ export default function PassengerHomeScreen() {
           currency={fareCurrency}
           exchangeRate={fareBreakdown?.exchangeRate}
           rideId={activeRide?.id || ''}
+          passengerName={user?.name || ""}
           platformMethod={selectedPlatformMethod}
           onPaymentComplete={handleMobilePaymentComplete}
           onCancel={handleMobilePaymentCancel}
@@ -4999,26 +5217,154 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.3,
   },
-  searchingContainer: {
-    marginTop: 16,
-    padding: 20,
-    backgroundColor: '#F0FFF0',
-    borderRadius: 12,
+  searchingDriverContainer: {
+    flex: 1,
     alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 24,
+  },
+  searchingIconWrapper: {
+    width: 120,
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  searchingPulseRing: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     borderWidth: 2,
     borderColor: '#22c55e',
   },
-  searchingText: {
-    marginTop: 12,
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#22c55e',
+  searchingPulseRingInner: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 1.5,
+    borderColor: '#4ade80',
   },
-  searchingSubtext: {
-    marginTop: 4,
-    fontSize: 14,
-    color: '#505050',
+  searchingIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#F0FDF4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#22c55e',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  searchingLoadingBar: {
+    width: 160,
+    height: 3,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 1.5,
+    overflow: 'hidden',
+    marginBottom: 20,
+  },
+  searchingLoadingFill: {
+    height: '100%',
+    backgroundColor: '#22c55e',
+    borderRadius: 1.5,
+  },
+  searchingTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 6,
     textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  searchingSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 28,
+    lineHeight: 20,
+  },
+  searchingTimerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 20,
+  },
+  searchingTimerText: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  searchingTripCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 0,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+    marginBottom: 24,
+  },
+  searchingTripRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 12,
+  },
+  searchingTripIconBg: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#F0FDF4',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchingTripContent: {
+    flex: 1,
+  },
+  searchingTripLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#9CA3AF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  searchingTripText: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  searchingTripDivider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginHorizontal: 14,
+  },
+  searchingCancelButton: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FCA5A5',
+    width: '100%',
+    gap: 8,
+  },
+  searchingCancelText: {
+    color: '#EF4444',
+    fontSize: 15,
+    fontWeight: '600',
   },
   cancelSearchButton: {
     marginTop: 16,

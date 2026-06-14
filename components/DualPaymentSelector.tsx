@@ -14,7 +14,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 
@@ -43,15 +43,55 @@ interface DualPaymentSelectorProps {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Round to 2 decimal places to avoid floating-point drift */
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/** Parse a string to a non-negative number with 2 decimal precision */
 function parseAmount(raw: string): number {
   const n = parseFloat(raw);
   return isNaN(n) || n < 0 ? 0 : round2(n);
+}
+
+// ─── Sub-component: ModeButton ────────────────────────────────────────────────
+
+interface ModeButtonProps {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+  disabled?: boolean;
+  wide?: boolean;
+}
+
+function ModeButton({ icon, label, selected, onPress, disabled, wide }: ModeButtonProps) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.modeBtn,
+        wide && styles.modeBtnWide,
+        selected && styles.modeBtnSelected,
+        disabled && styles.modeBtnDisabled,
+      ]}
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="radio"
+      accessibilityState={{ selected, disabled }}
+      accessibilityLabel={label}
+    >
+      <View style={[styles.modeBtnIconWrap, selected && styles.modeBtnIconWrapSelected]}>
+        <Ionicons name={icon} size={18} color={selected ? Colors.primary : '#9ca3af'} />
+      </View>
+      <Text
+        style={[styles.modeBtnLabel, selected && styles.modeBtnLabelSelected]}
+        numberOfLines={2}
+      >
+        {label}
+      </Text>
+      {selected && (
+        <Ionicons name="checkmark-circle" size={14} color={Colors.primary} style={styles.modeBtnCheck} />
+      )}
+    </TouchableOpacity>
+  );
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -62,7 +102,6 @@ export default function DualPaymentSelector({
   onChange,
   disabled = false,
 }: DualPaymentSelectorProps) {
-  // Raw string state for the two inputs so the user can type freely
   const [cashRaw, setCashRaw] = useState<string>(
     value.cashAmount !== undefined ? String(value.cashAmount) : ''
   );
@@ -80,7 +119,6 @@ export default function DualPaymentSelector({
         setPagoMovilRaw('');
         onChange({ mode });
       } else {
-        // Pre-fill cash with full fare so the user can adjust
         const initialCash = round2(totalFare);
         setCashRaw(String(initialCash));
         setPagoMovilRaw('0');
@@ -173,25 +211,25 @@ export default function DualPaymentSelector({
 
       {/* Dual-mode amount inputs */}
       {value.mode === 'dual' && (
-        <View style={styles.dualContainer}>
+        <View style={styles.dualCard}>
           <Text style={styles.dualTitle}>
             Distribuye el pago total de{' '}
             <Text style={styles.dualFare}>Bs. {round2(totalFare).toFixed(2)}</Text>
           </Text>
 
           <View style={styles.amountRow}>
-            {/* Cash amount */}
+            {/* Cash */}
             <View style={styles.amountField}>
               <Text style={styles.amountLabel}>Efectivo (Bs.)</Text>
-              <View style={[styles.inputWrapper, showDualError && styles.inputWrapperError]}>
-                <Ionicons name="cash-outline" size={18} color={Colors.mediumGray} />
+              <View style={[styles.inputWrap, showDualError && styles.inputWrapError]}>
+                <Ionicons name="cash-outline" size={15} color="#9ca3af" />
                 <TextInput
                   style={styles.amountInput}
                   value={cashRaw}
                   onChangeText={handleCashChange}
                   keyboardType="decimal-pad"
                   placeholder="0.00"
-                  placeholderTextColor={Colors.lightGray}
+                  placeholderTextColor="#c4c4c4"
                   editable={!disabled}
                   accessibilityLabel="Monto en efectivo"
                 />
@@ -202,18 +240,18 @@ export default function DualPaymentSelector({
               <Text style={styles.plusText}>+</Text>
             </View>
 
-            {/* Pago móvil amount */}
+            {/* Pago Móvil */}
             <View style={styles.amountField}>
               <Text style={styles.amountLabel}>Pago Móvil (Bs.)</Text>
-              <View style={[styles.inputWrapper, showDualError && styles.inputWrapperError]}>
-                <Ionicons name="phone-portrait-outline" size={18} color={Colors.mediumGray} />
+              <View style={[styles.inputWrap, showDualError && styles.inputWrapError]}>
+                <Ionicons name="phone-portrait-outline" size={15} color="#9ca3af" />
                 <TextInput
                   style={styles.amountInput}
                   value={pagoMovilRaw}
                   onChangeText={handlePagoMovilChange}
                   keyboardType="decimal-pad"
                   placeholder="0.00"
-                  placeholderTextColor={Colors.lightGray}
+                  placeholderTextColor="#c4c4c4"
                   editable={!disabled}
                   accessibilityLabel="Monto en pago móvil"
                 />
@@ -223,21 +261,21 @@ export default function DualPaymentSelector({
 
           {/* Validation feedback */}
           {showDualError && dualDifference !== null && (
-            <View style={styles.errorBox}>
-              <Ionicons name="alert-circle" size={16} color={Colors.error} />
-              <Text style={styles.errorText}>
+            <View style={styles.feedbackBox}>
+              <Ionicons name="alert-circle" size={14} color={Colors.error} />
+              <Text style={styles.feedbackError}>
                 {dualDifference > 0
-                  ? `La suma excede la tarifa en Bs. ${dualDifference.toFixed(2)}`
-                  : `Faltan Bs. ${Math.abs(dualDifference).toFixed(2)} para completar la tarifa`}
+                  ? `Excede en Bs. ${dualDifference.toFixed(2)}`
+                  : `Faltan Bs. ${Math.abs(dualDifference).toFixed(2)}`}
               </Text>
             </View>
           )}
 
           {isDualValid && (
-            <View style={styles.successBox}>
-              <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
-              <Text style={styles.successText}>
-                Los montos suman exactamente Bs. {round2(totalFare).toFixed(2)}
+            <View style={[styles.feedbackBox, styles.feedbackBoxSuccess]}>
+              <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+              <Text style={styles.feedbackSuccess}>
+                Total exacto: Bs. {round2(totalFare).toFixed(2)}
               </Text>
             </View>
           )}
@@ -247,191 +285,174 @@ export default function DualPaymentSelector({
   );
 }
 
-// ─── Sub-component: ModeButton ────────────────────────────────────────────────
-
-interface ModeButtonProps {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-  disabled?: boolean;
-  wide?: boolean;
-}
-
-function ModeButton({ icon, label, selected, onPress, disabled, wide }: ModeButtonProps) {
-  return (
-    <TouchableOpacity
-      style={[
-        styles.modeButton,
-        wide && styles.modeButtonWide,
-        selected && styles.modeButtonSelected,
-        disabled && styles.modeButtonDisabled,
-      ]}
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="radio"
-      accessibilityState={{ selected, disabled }}
-      accessibilityLabel={label}
-    >
-      <Ionicons name={icon} size={22} color={selected ? Colors.primary : Colors.mediumGray} />
-      <Text
-        style={[styles.modeButtonLabel, selected && styles.modeButtonLabelSelected]}
-        numberOfLines={2}
-      >
-        {label}
-      </Text>
-      {selected && (
-        <Ionicons
-          name="checkmark-circle"
-          size={14}
-          color={Colors.primary}
-          style={styles.checkIcon}
-        />
-      )}
-    </TouchableOpacity>
-  );
-}
-
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
-    gap: 12,
+    gap: 10,
   },
   sectionLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: Colors.darkGray,
+    color: '#374151',
   },
+
+  // ── Mode buttons ──
   modeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
-  modeButton: {
+  modeBtn: {
     flex: 1,
     minWidth: 90,
     backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 2,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderWidth: 1.5,
     borderColor: '#e5e7eb',
     alignItems: 'center',
     gap: 6,
   },
-  modeButtonWide: {
+  modeBtnWide: {
     flexBasis: '100%',
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 8,
   },
-  modeButtonSelected: {
+  modeBtnSelected: {
     borderColor: Colors.primary,
     backgroundColor: '#f0fdf4',
   },
-  modeButtonDisabled: {
+  modeBtnDisabled: {
     opacity: 0.5,
   },
-  modeButtonLabel: {
-    fontSize: 12,
+  modeBtnIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 2,
+      },
+      android: { elevation: 1 },
+    }),
+  },
+  modeBtnIconWrapSelected: {
+    backgroundColor: '#f0fdf4',
+  },
+  modeBtnLabel: {
+    fontSize: 11,
     fontWeight: '600',
     color: '#374151',
     textAlign: 'center',
   },
-  modeButtonLabelSelected: {
+  modeBtnLabelSelected: {
     color: Colors.primary,
   },
-  checkIcon: {
+  modeBtnCheck: {
     position: 'absolute',
-    top: 6,
-    right: 6,
+    top: 5,
+    right: 5,
   },
-  // Dual mode
-  dualContainer: {
+
+  // ── Dual mode card ──
+  dualCard: {
     backgroundColor: '#f0fdf4',
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
+    borderRadius: 10,
+    padding: 14,
+    gap: 10,
     borderWidth: 1,
     borderColor: '#bbf7d0',
   },
   dualTitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#374151',
     fontWeight: '500',
     textAlign: 'center',
+    lineHeight: 18,
   },
   dualFare: {
     fontWeight: '700',
     color: Colors.primary,
   },
+
+  // ── Amount inputs ──
   amountRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 8,
+    gap: 6,
   },
   amountField: {
     flex: 1,
-    gap: 6,
+    gap: 4,
   },
   amountLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    color: '#374151',
+    color: '#6b7280',
   },
-  inputWrapper: {
+  inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 38,
     borderWidth: 1.5,
     borderColor: '#d1d5db',
-    gap: 8,
+    gap: 6,
   },
-  inputWrapperError: {
+  inputWrapError: {
     borderColor: Colors.error,
+    backgroundColor: '#fef2f2',
   },
   amountInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: Colors.darkGray,
+    color: '#1f2937',
+    padding: 0,
+    height: 38,
   },
   plusSign: {
-    paddingBottom: 10,
+    paddingBottom: 8,
   },
   plusText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.mediumGray,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#9ca3af',
   },
-  errorBox: {
+
+  // ── Feedback ──
+  feedbackBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#fef2f2',
-    borderRadius: 8,
-    padding: 10,
+    borderRadius: 7,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
   },
-  errorText: {
+  feedbackBoxSuccess: {
+    backgroundColor: '#f0fdf4',
+  },
+  feedbackError: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.error,
     fontWeight: '500',
   },
-  successBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#f0fdf4',
-    borderRadius: 8,
-    padding: 10,
-  },
-  successText: {
+  feedbackSuccess: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.success,
     fontWeight: '500',
   },

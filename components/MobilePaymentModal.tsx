@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,14 +7,19 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
-  Alert,
   ScrollView,
+  Animated,
+  Platform,
+  Dimensions,
+  FlatList,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { paymentAPI } from '@/services/api';
+import { paymentAPI, rideAPI } from '@/services/api';
 import { formatCurrency, Currency } from '@/utils/currency';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 
 interface PlatformPaymentMethod {
   id: string;
@@ -37,24 +42,23 @@ interface MobilePaymentModalProps {
   currency?: Currency;
   exchangeRate?: number;
   rideId: string;
+  passengerName?: string;
   platformMethod?: PlatformPaymentMethod;
   onPaymentComplete: (paymentData: {
     method: 'mobile_payment' | 'cash';
     referenceNumber?: string;
     phoneNumber?: string;
     bankName?: string;
-    // P2C specific fields
     referencia?: string;
     fecha?: string;
     banco?: string;
-    telefonoP?: string; // Usar telefonoP según documentación VOB
-    identificacion?: string; // Usar identificacion según documentación VOB
-    pagador?: string; // Usar pagador según documentación VOB
+    telefonoP?: string;
+    identificacion?: string;
+    pagador?: string;
   }) => void;
   onCancel: () => void;
 }
 
-// Datos de prueba para el pago móvil
 const TEST_PAYMENT_DATA = {
   mobile: {
     referencia: '123456',
@@ -68,9 +72,232 @@ const TEST_PAYMENT_DATA = {
 
 type PaymentMethod = 'mobile' | 'cash';
 
-const INITIAL_TIME = 5 * 60; // 5 minutos en segundos
-const EXTENSION_TIME = 3 * 60; // 3 minutos en segundos
+const INITIAL_TIME = 5 * 60;
+const EXTENSION_TIME = 3 * 60;
 const MAX_EXTENSIONS = 3;
+
+const VENEZUELAN_BANKS = [
+  { id: '0102', name: 'Banco de Venezuela', code: '0102' },
+  { id: '0104', name: 'Venezolano de Crédito', code: '0104' },
+  { id: '0105', name: 'Mercantil', code: '0105' },
+  { id: '0108', name: 'BBVA Provincial', code: '0108' },
+  { id: '0114', name: 'Bancaribe', code: '0114' },
+  { id: '0115', name: 'Banex', code: '0115' },
+  { id: '0116', name: 'Banplus', code: '0116' },
+  { id: '0128', name: 'Bancrecer', code: '0128' },
+  { id: '0134', name: 'Banesco', code: '0134' },
+  { id: '0137', name: 'Sofitasa', code: '0137' },
+  { id: '0138', name: 'Banfanb', code: '0138' },
+  { id: '0140', name: 'Banco del Sur', code: '0140' },
+  { id: '0146', name: 'BanBif', code: '0146' },
+  { id: '0149', name: 'Banco Exterior', code: '0149' },
+  { id: '0151', name: 'BFC', code: '0151' },
+  { id: '0156', name: '100% Banco', code: '0156' },
+  { id: '0157', name: 'DelSur', code: '0157' },
+  { id: '0163', name: 'Banco del Tesoro', code: '0163' },
+  { id: '0166', name: 'Banco Agrícola', code: '0166' },
+  { id: '0168', name: 'Banvalu', code: '0168' },
+  { id: '0169', name: 'Mi Banco', code: '0169' },
+  { id: '0171', name: 'BOD', code: '0171' },
+  { id: '0172', name: 'Banco Caroní', code: '0172' },
+  { id: '0173', name: 'Banco Plaza', code: '0173' },
+  { id: '0175', name: 'Banco Bicentenario', code: '0175' },
+  { id: '0176', name: 'Bangente', code: '0176' },
+  { id: '0190', name: 'Citibank', code: '0190' },
+  { id: '0191', name: 'BNC', code: '0191' },
+];
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function getTimerColor(remaining: number): string {
+  if (remaining > 180) return Colors.primary;
+  if (remaining > 60) return Colors.orange;
+  return Colors.error;
+}
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+
+// ── Bank Selector Dropdown Component ──
+
+function BankSelector({
+  selectedBank,
+  onSelectBank,
+}: {
+  selectedBank: string;
+  onSelectBank: (id: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.92)).current;
+
+  const selectedBankData = VENEZUELAN_BANKS.find((b) => b.id === selectedBank);
+
+  const filteredBanks = useMemo(() => {
+    if (!search.trim()) return VENEZUELAN_BANKS;
+    const q = search.toLowerCase().trim();
+    return VENEZUELAN_BANKS.filter(
+      (b) =>
+        b.name.toLowerCase().includes(q) ||
+        b.code.includes(q)
+    );
+  }, [search]);
+
+  const openDropdown = () => {
+    setIsOpen(true);
+    setSearch('');
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        damping: 20,
+        stiffness: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeDropdown = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.92,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setIsOpen(false);
+    });
+  };
+
+  const handleSelect = (id: string) => {
+    onSelectBank(id);
+    closeDropdown();
+  };
+
+  return (
+    <>
+      {/* Trigger button */}
+      <TouchableOpacity
+        style={styles.bankSelectTrigger}
+        onPress={openDropdown}
+        activeOpacity={0.7}
+      >
+        <View style={styles.bankSelectTriggerLeft}>
+          <Ionicons name="business-outline" size={16} color={selectedBank ? Colors.primary : '#9ca3af'} />
+          <Text style={[styles.bankSelectTriggerText, !selectedBank && styles.bankSelectPlaceholder]}>
+            {selectedBankData ? selectedBankData.name : 'Seleccionar banco'}
+          </Text>
+        </View>
+        <Ionicons name="chevron-down" size={16} color="#9ca3af" />
+      </TouchableOpacity>
+
+      {/* Dropdown modal */}
+      {isOpen && (
+        <Modal transparent visible={isOpen} animationType="none" onRequestClose={closeDropdown}>
+          <Pressable style={styles.bankOverlay} onPress={closeDropdown}>
+            <Animated.View
+              style={[
+                styles.bankDropdown,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ scale: scaleAnim }],
+                },
+              ]}
+            >
+              <Pressable onPress={(e) => e.stopPropagation()}>
+                {/* Header */}
+                <View style={styles.bankDropdownHeader}>
+                  <Text style={styles.bankDropdownTitle}>Seleccionar Banco</Text>
+                  <TouchableOpacity onPress={closeDropdown} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name="close" size={22} color="#6b7280" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Search */}
+                <View style={styles.bankSearchWrap}>
+                  <Ionicons name="search" size={16} color="#9ca3af" />
+                  <TextInput
+                    style={styles.bankSearchInput}
+                    placeholder="Buscar banco..."
+                    placeholderTextColor="#c4c4c4"
+                    value={search}
+                    onChangeText={setSearch}
+                    autoFocus
+                  />
+                  {search.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={16} color="#9ca3af" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Bank list */}
+                <FlatList
+                  data={filteredBanks}
+                  keyExtractor={(item) => item.id}
+                  style={styles.bankDropdownList}
+                  contentContainerStyle={styles.bankDropdownListContent}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  ListEmptyComponent={
+                    <View style={styles.bankEmpty}>
+                      <Ionicons name="search-outline" size={32} color="#d1d5db" />
+                      <Text style={styles.bankEmptyText}>Ningún banco coincide con tu búsqueda</Text>
+                    </View>
+                  }
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={[
+                        styles.bankDropdownItem,
+                        selectedBank === item.id && styles.bankDropdownItemActive,
+                      ]}
+                      onPress={() => handleSelect(item.id)}
+                    >
+                      <View style={styles.bankDropdownItemLeft}>
+                        <View style={styles.bankDot}>
+                          <Text style={styles.bankDotText}>{item.name.charAt(0)}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.bankDropdownItemName,
+                              selectedBank === item.id && styles.bankDropdownItemNameActive,
+                            ]}
+                          >
+                            {item.name}
+                          </Text>
+                          <Text style={styles.bankDropdownItemCode}>Código {item.code}</Text>
+                        </View>
+                      </View>
+                      {selectedBank === item.id && (
+                        <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
+                      )}
+                    </TouchableOpacity>
+                  )}
+                />
+              </Pressable>
+            </Animated.View>
+          </Pressable>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+// ── Main Component ──
 
 export default function MobilePaymentModal({
   visible,
@@ -78,28 +305,104 @@ export default function MobilePaymentModal({
   currency = 'VES',
   exchangeRate,
   rideId,
+  passengerName,
   platformMethod,
   onPaymentComplete,
   onCancel,
 }: MobilePaymentModalProps) {
   const insets = useSafeAreaInsets();
+  const { showToast, showStatus } = useUnifiedNotifications();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mobile');
   const [selectedBank, setSelectedBank] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showTestData, setShowTestData] = useState(true);
 
-  // P2C specific fields
   const [referencia, setReferencia] = useState('');
   const [fecha, setFecha] = useState('');
   const [telefonoP, setTelefonoP] = useState('');
   const [identificacion, setIdentificacion] = useState('');
   const [pagador, setPagador] = useState('');
 
-  // Timer states
   const [timeRemaining, setTimeRemaining] = useState(INITIAL_TIME);
   const [extensionsUsed, setExtensionsUsed] = useState(0);
   const [isTimerActive, setIsTimerActive] = useState(false);
+  const [isAutoCancelling, setIsAutoCancelling] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isPaymentCompletedRef = useRef(false);
+
+  // Collapsible state
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const expandAnim = useRef(new Animated.Value(1)).current;
+
+  // Slide animation
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  // Auto-fill nombre del pasajero y fecha actual al abrir el modal
+  useEffect(() => {
+    if (visible) {
+      const today = new Date();
+      const dd = String(today.getDate()).padStart(2, '0');
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const yyyy = today.getFullYear();
+      setFecha(`${dd}/${mm}/${yyyy}`);
+      if (passengerName) {
+        setPagador(passengerName);
+      }
+    }
+  }, [visible, passengerName]);
+
+  const resetForm = useCallback(() => {
+    setSelectedBank('');
+    setShowTestData(true);
+    setPaymentMethod('mobile');
+    setTimeRemaining(INITIAL_TIME);
+    setExtensionsUsed(0);
+    setIsTimerActive(false);
+    setReferencia('');
+    setFecha('');
+    setTelefonoP('');
+    setIdentificacion('');
+    setPagador('');
+    setIsCollapsed(false);
+    if (timerRef.current) clearInterval(timerRef.current);
+  }, []);
+
+  const handleTimeoutCancel = useCallback(async () => {
+    if (isPaymentCompletedRef.current) return;
+    setIsAutoCancelling(true);
+    try {
+      await rideAPI.cancelRide(rideId, { reason: 'payment_timeout' });
+      showToast('Tiempo agotado. El viaje ha sido cancelado.', 'error');
+    } catch {
+      showToast('Error al cancelar el viaje por tiempo agotado.', 'error');
+    } finally {
+      setIsAutoCancelling(false);
+      resetForm();
+      onCancel();
+    }
+  }, [rideId, resetForm, onCancel, showToast]);
+
+  useEffect(() => {
+    if (visible) {
+      Animated.spring(slideAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 9,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      slideAnim.setValue(0);
+    }
+  }, [visible]);
+
+  // Collapse animation
+  useEffect(() => {
+    Animated.timing(expandAnim, {
+      toValue: isCollapsed ? 0 : 1,
+      duration: 250,
+      useNativeDriver: false,
+    }).start();
+  }, [isCollapsed, expandAnim]);
 
   const otherCurrency: Currency = currency === 'USD' ? 'VES' : 'USD';
   const equivalentAmount =
@@ -109,689 +412,526 @@ export default function MobilePaymentModal({
         : amount / exchangeRate
       : null;
 
-  const banks = [
-    { id: '0102', name: 'Banco de Venezuela', code: '0102' },
-    { id: '0104', name: 'Venezolano de Crédito', code: '0104' },
-    { id: '0105', name: 'Mercantil Banco', code: '0105' },
-    { id: '0108', name: 'BBVA Provincial', code: '0108' },
-    { id: '0114', name: 'Bancaribe', code: '0114' },
-    { id: '0115', name: 'Banex', code: '0115' },
-    { id: '0116', name: 'Banplus', code: '0116' },
-    { id: '0128', name: 'Bancrecer', code: '0128' },
-    { id: '0134', name: 'Banesco', code: '0134' },
-    { id: '0137', name: 'Sofitasa', code: '0137' },
-    { id: '0138', name: 'Banfanb', code: '0138' },
-    { id: '0140', name: 'Banco del Sur', code: '0140' },
-    { id: '0146', name: 'BanBif', code: '0146' },
-    { id: '0149', name: 'Banco Exterior', code: '0149' },
-    { id: '0151', name: 'BFC Banco Fondo Común', code: '0151' },
-    { id: '0156', name: '100% Banco', code: '0156' },
-    { id: '0157', name: 'DelSur', code: '0157' },
-    { id: '0163', name: 'Banco del Tesoro', code: '0163' },
-    { id: '0166', name: 'Banco Agrícola de Venezuela', code: '0166' },
-    { id: '0168', name: 'Banvalu', code: '0168' },
-    { id: '0169', name: 'Mi Banco', code: '0169' },
-    { id: '0171', name: 'BOD', code: '0171' },
-    { id: '0172', name: 'Banco Caroní', code: '0172' },
-    { id: '0173', name: 'Banco Plaza', code: '0173' },
-    { id: '0175', name: 'Banco Bicentenario', code: '0175' },
-    { id: '0176', name: 'Bangente', code: '0176' },
-    { id: '0190', name: 'Citibank', code: '0190' },
-    { id: '0191', name: 'BNC', code: '0191' },
-  ];
-
-  // Timer effect - Solo para pago móvil
+  // Timer
   useEffect(() => {
     if (visible && paymentMethod === 'mobile') {
       setIsTimerActive(true);
       setTimeRemaining(INITIAL_TIME);
       setExtensionsUsed(0);
+      setIsAutoCancelling(false);
     } else {
       setIsTimerActive(false);
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
+      if (timerRef.current) clearInterval(timerRef.current);
     }
-
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
+      if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [visible, paymentMethod]);
 
   useEffect(() => {
     if (isTimerActive && paymentMethod === 'mobile') {
       timerRef.current = setInterval(() => {
-        setTimeRemaining(prev => {
+        setTimeRemaining((prev) => {
           if (prev <= 1) {
-            if (timerRef.current) {
-              clearInterval(timerRef.current);
-            }
+            clearInterval(timerRef.current!);
             setIsTimerActive(false);
-            Alert.alert(
-              'Tiempo Agotado',
-              'El tiempo para completar el pago ha expirado. El viaje será cancelado.',
-              [
-                {
-                  text: 'OK',
-                  onPress: () => {
-                    resetForm();
-                    onCancel();
-                  },
-                },
-              ]
-            );
+            handleTimeoutCancel();
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
-
       return () => {
-        if (timerRef.current) {
-          clearInterval(timerRef.current);
-        }
+        if (timerRef.current) clearInterval(timerRef.current);
       };
     }
-  }, [isTimerActive, paymentMethod, onCancel]);
+  }, [isTimerActive, paymentMethod, rideId, handleTimeoutCancel]);
 
   const handleExtendTime = () => {
-    if (extensionsUsed >= MAX_EXTENSIONS) {
-      Alert.alert('Límite Alcanzado', 'Has alcanzado el límite máximo de extensiones de tiempo.', [
-        { text: 'OK' },
-      ]);
-      return;
-    }
-
-    Alert.alert(
-      'Extender Tiempo',
-      `¿Deseas extender el tiempo por ${EXTENSION_TIME / 60} minutos adicionales?\n\nExtensiones usadas: ${extensionsUsed}/${MAX_EXTENSIONS}`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Extender',
-          onPress: () => {
-            setTimeRemaining(prev => prev + EXTENSION_TIME);
-            setExtensionsUsed(prev => prev + 1);
-            Alert.alert(
-              'Tiempo Extendido',
-              `Se han agregado ${EXTENSION_TIME / 60} minutos adicionales.`,
-              [{ text: 'OK' }]
-            );
-          },
-        },
-      ]
-    );
-  };
-
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const getTimerColor = (): string => {
-    if (timeRemaining > 180) return Colors.primary; // > 3 min: verde
-    if (timeRemaining > 60) return Colors.orange; // > 1 min: naranja
-    return Colors.error; // <= 1 min: rojo
+    if (extensionsUsed >= MAX_EXTENSIONS) return;
+    setTimeRemaining((p) => p + EXTENSION_TIME);
+    setExtensionsUsed((p) => p + 1);
   };
 
   const handleUseTestData = () => {
-    if (paymentMethod === 'mobile') {
-      // P2C test data - usando datos oficiales de la documentación VOB
-      setReferencia(TEST_PAYMENT_DATA.mobile.referencia);
-      setFecha(TEST_PAYMENT_DATA.mobile.fecha);
-      setSelectedBank(TEST_PAYMENT_DATA.mobile.banco);
-      setTelefonoP(TEST_PAYMENT_DATA.mobile.telefonoP);
-      setIdentificacion(TEST_PAYMENT_DATA.mobile.identificacion);
-      setPagador(TEST_PAYMENT_DATA.mobile.pagador);
-    }
+    setReferencia(TEST_PAYMENT_DATA.mobile.referencia);
+    setFecha(TEST_PAYMENT_DATA.mobile.fecha);
+    setSelectedBank(TEST_PAYMENT_DATA.mobile.banco);
+    setTelefonoP(TEST_PAYMENT_DATA.mobile.telefonoP);
+    setIdentificacion(TEST_PAYMENT_DATA.mobile.identificacion);
+    setPagador(TEST_PAYMENT_DATA.mobile.pagador);
     setShowTestData(false);
   };
 
-  const resetForm = () => {
-    setSelectedBank('');
-    setShowTestData(true);
-    setPaymentMethod('mobile');
-    setTimeRemaining(INITIAL_TIME);
-    setExtensionsUsed(0);
-    setIsTimerActive(false);
-    // Reset P2C fields
-    setReferencia('');
-    setFecha('');
-    setTelefonoP('');
-    setIdentificacion('');
-    setPagador('');
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-  };
-
   const handleSubmitPayment = async () => {
-    // Validar según método de pago
     if (paymentMethod === 'cash') {
-      // Efectivo no requiere validación
-      Alert.alert(
+      showStatus(
+        'info',
+        `Pagarás ${formatCurrency(amount, currency)} en efectivo al conductor.`,
         'Pago en Efectivo',
-        `Pagarás ${formatCurrency(amount, currency)} en efectivo al conductor al finalizar el viaje.`,
-        [
-          {
-            text: 'Confirmar',
-            onPress: () => {
-              const paymentData = {
-                method: 'cash' as const,
-              };
-              resetForm();
-              onPaymentComplete(paymentData);
-            },
+        undefined,
+        {
+          label: 'Confirmar',
+          onPress: () => {
+            resetForm();
+            onPaymentComplete({ method: 'cash' });
           },
-          { text: 'Cancelar', style: 'cancel' },
-        ]
+        },
+        12000
       );
       return;
     }
 
-    if (paymentMethod === 'mobile') {
-      // Validar pago móvil P2C
-      if (!referencia || !fecha || !selectedBank || !telefonoP || !identificacion || !pagador) {
-        Alert.alert('Error', 'Por favor completa todos los campos del Pago Móvil');
-        return;
-      }
-
-      // Validar referencia de 6 dígitos (formato requerido por el banco)
-      if (referencia.length !== 6 || !/^\d{6}$/.test(referencia)) {
-        Alert.alert('Error', 'La referencia debe tener exactamente 6 dígitos numéricos');
-        return;
-      }
-
-      // Validar fecha en formato DD/MM/YYYY
-      if (!/^\d{2}\/\d{2}\/\d{4}$/.test(fecha)) {
-        Alert.alert('Error', 'La fecha debe estar en formato DD/MM/YYYY (ej: 15/12/2024)');
-        return;
-      }
-      // Validar que la fecha sea real
-      const [day, month, year] = fecha.split('/').map(Number);
-      const dateObj = new Date(year, month - 1, day);
-      if (
-        dateObj.getFullYear() !== year ||
-        dateObj.getMonth() !== month - 1 ||
-        dateObj.getDate() !== day
-      ) {
-        Alert.alert('Error', 'La fecha ingresada no es válida');
-        return;
-      }
-
-      if (telefonoP.length < 10) {
-        Alert.alert('Error', 'Número de teléfono inválido');
-        return;
-      }
-
-      if (identificacion.length < 6) {
-        Alert.alert('Error', 'Identificación inválida');
-        return;
-      }
-
-      if (pagador.trim().length < 2) {
-        Alert.alert('Error', 'Nombre del pagador inválido');
-        return;
-      }
+    if (!referencia || !fecha || !selectedBank || !telefonoP || !identificacion) {
+      showToast('Completa todos los campos del Pago Móvil.', 'warning');
+      return;
     }
-
+    if (referencia.length !== 6 || !/^\d{6}$/.test(referencia)) {
+      showToast('La referencia debe tener 6 dígitos numéricos.', 'error');
+      return;
+    }
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(fecha)) {
+      showToast('Formato de fecha inválido. Usa DD/MM/YYYY.', 'error');
+      return;
+    }
+    const [d, m, y] = fecha.split('/').map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    if (dateObj.getFullYear() !== y || dateObj.getMonth() !== m - 1 || dateObj.getDate() !== d) {
+      showToast('La fecha ingresada no es válida.', 'error');
+      return;
+    }
+    if (telefonoP.length < 10) {
+      showToast('Número de teléfono muy corto.', 'error');
+      return;
+    }
+    if (identificacion.length < 6) {
+      showToast('Identificación demasiado corta.', 'error');
+      return;
+    }
+    if (pagador.trim().length < 2) {
+      showToast('El nombre del pagador es muy corto.', 'error');
+      return;
+    }
     setIsProcessing(true);
-
+    // Mark that payment is being processed to prevent auto-cancel
+    isPaymentCompletedRef.current = true;
     try {
-      if (paymentMethod === 'mobile') {
-        const selectedBankData = banks.find(b => b.id === selectedBank);
+      const selectedBankData = VENEZUELAN_BANKS.find((b) => b.id === selectedBank);
+      const response = await paymentAPI.verifyP2CPayment(rideId, {
+        referencia,
+        fecha,
+        banco: selectedBankData?.code || selectedBank,
+        telefonoP,
+        monto: amount,
+        identificacion,
+        pagador,
+      });
 
-        // Call P2C verification API - Requisito 2.1
-        const response = await paymentAPI.verifyP2CPayment(rideId, {
-          referencia,
-          fecha,
-          banco: selectedBankData?.code || selectedBank,
-          telefonoP,
-          monto: amount,
-          identificacion,
-          pagador,
-        });
-
-        console.log('✅ P2C Payment verified:', response.data);
-
-        // Preparar datos del pago P2C
-        const paymentData = {
-          method: 'mobile_payment' as const,
-          referencia,
-          fecha,
-          banco: selectedBankData?.code || selectedBank,
-          telefonoP,
-          monto: amount,
-          identificacion,
-          pagador,
-        };
-
-        // Show success message - Requisito 2.2 (200 response)
-        Alert.alert(
-          'Pago Verificado',
-          `Tu Pago Móvil de ${formatCurrency(amount, currency)} ha sido verificado exitosamente.\n\nReferencia: ${referencia}`,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                resetForm();
-                onPaymentComplete(paymentData);
-              },
-            },
-          ]
-        );
-      }
+      showStatus(
+        'success',
+        `Pago Móvil de ${formatCurrency(amount, currency)} verificado.\n\nReferencia: ${referencia}`,
+        'Pago Verificado',
+        undefined,
+        {
+          label: 'OK',
+          onPress: () => {
+            resetForm();
+            onPaymentComplete({
+              method: 'mobile_payment',
+              referencia,
+              fecha,
+              banco: selectedBankData?.code || selectedBank,
+              telefonoP,
+              identificacion,
+              pagador,
+            });
+          },
+        },
+        10000
+      );
     } catch (error: any) {
-      console.error('Payment processing error:', error);
-
-      // Handle different error responses according to requirements
-      let errorMessage = 'Error procesando el pago. Por favor intenta nuevamente.';
-      let showRetry = true;
-
+      let msg = 'Error procesando el pago. Intenta nuevamente.';
+      let retry = true;
       if (error.response) {
-        const status = error.response.status;
-        const data = error.response.data;
-
+        const { status, data } = error.response;
         switch (status) {
           case 422:
-            // Pago rechazado (Requisitos 2.3, 2.6, 2.7, 2.8)
-            // Handles: status="R"/"RM", E001, E010, E021 errors
-            errorMessage =
-              data.message || 'Pago rechazado por el banco. Verifica los datos ingresados.';
-            showRetry = false;
+            msg = data.message || 'Pago rechazado por el banco. Verifica los datos.';
+            retry = false;
             break;
           case 409:
-            // Pago ya procesado (Requisito 2.4)
-            // Handles: BVC-PAID error
-            errorMessage = 'Este pago ya ha sido procesado anteriormente.';
-            showRetry = false;
+            msg = 'Este pago ya fue procesado.';
+            retry = false;
             break;
           case 404:
-            // Pago no encontrado (Requisito 2.5)
-            // Handles: PAYMENT-NOT-FOUND error
-            errorMessage = 'El pago no fue encontrado en el banco. Verifica los datos.';
-            showRetry = false;
+            msg = 'Pago no encontrado en el banco. Verifica los datos.';
+            retry = false;
             break;
           case 503:
-            // Servicio no disponible (Requisito 8.5)
-            // Handles: VOB system unavailable
-            errorMessage = 'El servicio de pagos no está disponible. Por favor intenta más tarde.';
-            showRetry = true;
+            msg = 'Servicio de pagos no disponible. Intenta más tarde.';
             break;
           default:
-            errorMessage = data.message || errorMessage;
+            msg = data.message || msg;
         }
       }
-
-      const alertButtons: any[] = [{ text: 'OK', style: 'cancel' as const }];
-
-      if (showRetry) {
-        alertButtons.unshift({
-          text: 'Reintentar',
-          onPress: handleSubmitPayment,
-        });
+      if (retry) {
+        showStatus(
+          'error',
+          msg,
+          'Error de Pago',
+          undefined,
+          { label: 'Reintentar', onPress: handleSubmitPayment },
+          12000
+        );
+      } else {
+        showStatus('error', msg, 'Error de Pago', undefined, undefined, 8000);
       }
-
-      Alert.alert('Error de Pago', errorMessage, alertButtons);
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handleCancel = () => {
-    Alert.alert(
+    showStatus(
+      'warning',
+      '¿Estás seguro? El viaje se cancelará si no completas el pago.',
       'Cancelar Pago',
-      '¿Estás seguro de que deseas cancelar el pago? El viaje será cancelado si no completas el pago.',
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Sí, Cancelar',
-          style: 'destructive',
-          onPress: () => {
-            resetForm();
-            onCancel();
-          },
-        },
-      ]
+      undefined,
+      {
+        label: 'Sí, Cancelar',
+        onPress: () => { resetForm(); onCancel(); },
+      },
+      12000
     );
   };
 
-  return (
-    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={handleCancel}>
-      <View style={styles.overlay}>
-        <View style={styles.container}>
-          <ScrollView contentContainerStyle={styles.scrollContent}>
-            {/* Header */}
-            <View style={styles.header}>
-              <Ionicons name="card-outline" size={48} color={Colors.primary} />
-              <Text style={styles.title}>Confirmar Pago</Text>
-              <Text style={styles.subtitle}>Selecciona tu método de pago preferido</Text>
-            </View>
+  const timerColor = getTimerColor(timeRemaining);
 
-            {/* Timer - Solo para pago móvil */}
-            {paymentMethod === 'mobile' && (
-              <View style={[styles.timerContainer, { borderColor: getTimerColor() }]}>
-                <View style={styles.timerContent}>
-                  <Ionicons name="time-outline" size={24} color={getTimerColor()} />
-                  <View style={styles.timerTextContainer}>
-                    <Text style={styles.timerLabel}>Tiempo restante</Text>
-                    <Text style={[styles.timerValue, { color: getTimerColor() }]}>
-                      {formatTime(timeRemaining)}
-                    </Text>
-                  </View>
-                </View>
-                {extensionsUsed < MAX_EXTENSIONS && (
-                  <TouchableOpacity style={styles.extendButton} onPress={handleExtendTime}>
-                    <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
-                    <Text style={styles.extendButtonText}>
-                      Extender ({extensionsUsed}/{MAX_EXTENSIONS})
-                    </Text>
-                  </TouchableOpacity>
+  // ── Collapsible content max-height interpolation ──
+  const formMaxHeight = expandAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 2000],
+  });
+
+  const chevronRotation = expandAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['180deg', '0deg'],
+  });
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleCancel}>
+      <View style={styles.overlay}>
+        <Animated.View
+          style={[
+            styles.container,
+            {
+              transform: [
+                {
+                  translateY: slideAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [300, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          {/* ── Header ── */}
+          <View style={styles.header}>
+            <View style={styles.headerAccent} />
+            <View style={styles.headerContent}>
+              <View style={styles.headerIconWrap}>
+                <Ionicons name="wallet-outline" size={20} color={Colors.primary} />
+              </View>
+              <Text style={styles.title}>Confirmar Pago</Text>
+              <Text style={styles.subtitle}>Elige cómo quieres pagar</Text>
+            </View>
+          </View>
+
+          {/* ── Collapsible Handle ── */}
+          <TouchableOpacity
+            style={styles.collapseHandle}
+            onPress={() => setIsCollapsed(!isCollapsed)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.collapseHandleLeft}>
+              <Text style={styles.collapseHandleLabel}>
+                {formatCurrency(amount, currency)}
+              </Text>
+              <View style={styles.collapseMethodBadge}>
+                <Text style={styles.collapseMethodText}>
+                  {paymentMethod === 'mobile' ? 'Pago Móvil' : 'Efectivo'}
+                </Text>
+              </View>
+            </View>
+            <Animated.View style={{ transform: [{ rotate: chevronRotation }] }}>
+              <Ionicons name="chevron-up" size={18} color="#6b7280" />
+            </Animated.View>
+          </TouchableOpacity>
+
+          {/* ── Loading overlay for auto-cancel ── */}
+          {isAutoCancelling && (
+            <View style={styles.autoCancelOverlay}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={styles.autoCancelText}>Cancelando viaje...</Text>
+            </View>
+          )}
+
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            scrollEnabled={!isCollapsed}
+          >
+            {/* ── Form content (collapsible) ── */}
+            <Animated.View
+              style={[
+                {
+                  maxHeight: formMaxHeight,
+                  opacity: expandAnim,
+                  overflow: 'hidden',
+                },
+              ]}
+            >
+              {/* ── Monto ── */}
+              <View style={styles.amountCard}>
+                <Text style={styles.amountLabel}>Monto a Pagar</Text>
+                <Text style={styles.amountValue}>{formatCurrency(amount, currency)}</Text>
+                {equivalentAmount !== null && (
+                  <Text style={styles.amountEquiv}>
+                    ≈ {formatCurrency(equivalentAmount, otherCurrency)}
+                    <Text style={styles.amountRate}>  1 USD = Bs. {exchangeRate!.toFixed(2)}</Text>
+                  </Text>
                 )}
               </View>
-            )}
 
-            {/* Amount */}
-            <View style={styles.amountContainer}>
-              <Text style={styles.amountLabel}>Monto a Pagar</Text>
-              <Text style={styles.amountValue}>{formatCurrency(amount, currency)}</Text>
-              {equivalentAmount !== null && (
-                <Text style={styles.amountEquivalent}>
-                  {formatCurrency(equivalentAmount, otherCurrency)}
-                  {'  '}
-                  <Text style={styles.amountRate}>(@ {exchangeRate!.toFixed(2)})</Text>
-                </Text>
+              {/* ── Timer ── */}
+              {paymentMethod === 'mobile' && (
+                <View style={[styles.timerRow, { borderColor: timerColor }]}>
+                  <View style={styles.timerLeft}>
+                    <Ionicons name="time-outline" size={16} color={timerColor} />
+                    <View style={{ marginLeft: 6 }}>
+                      <Text style={styles.timerLbl}>Restante</Text>
+                      <Text style={[styles.timerVal, { color: timerColor }]}>
+                        {formatTime(timeRemaining)}
+                      </Text>
+                    </View>
+                  </View>
+                  {extensionsUsed < MAX_EXTENSIONS && (
+                    <TouchableOpacity style={styles.timerBtn} onPress={handleExtendTime}>
+                      <Ionicons name="add" size={14} color={Colors.primary} />
+                      <Text style={styles.timerBtnText}>Extender</Text>
+                    </TouchableOpacity>
+                  )}
+                  {extensionsUsed >= MAX_EXTENSIONS && (
+                    <View style={styles.timerMaxed}>
+                      <Text style={styles.timerMaxedText}>Máximo alcanzado</Text>
+                    </View>
+                  )}
+                </View>
               )}
-            </View>
 
-            {/* Payment Method Selection - Solo Pago Móvil y Efectivo */}
-            <View style={styles.section}>
-              <Text style={styles.label}>Método de Pago</Text>
-              <View style={styles.paymentMethodGrid}>
+              {/* ── Método de Pago (compact) ── */}
+              <Text style={styles.sectionTitle}>Método</Text>
+              <View style={styles.methodRow}>
                 <TouchableOpacity
-                  style={[
-                    styles.paymentMethodButton,
-                    paymentMethod === 'mobile' && styles.paymentMethodButtonSelected,
-                  ]}
-                  onPress={() => {
-                    setPaymentMethod('mobile');
-                    setShowTestData(true);
-                  }}
+                  style={[styles.methodPill, paymentMethod === 'mobile' && styles.methodPillActive]}
+                  onPress={() => { setPaymentMethod('mobile'); setShowTestData(true); }}
                 >
-                  <Ionicons
-                    name="phone-portrait-outline"
-                    size={32}
-                    color={paymentMethod === 'mobile' ? Colors.primary : Colors.mediumGray}
-                  />
-                  <Text
-                    style={[
-                      styles.paymentMethodText,
-                      paymentMethod === 'mobile' && styles.paymentMethodTextSelected,
-                    ]}
-                  >
+                  <View style={[styles.pillIconWrap, paymentMethod === 'mobile' && styles.pillIconWrapActive]}>
+                    <Ionicons
+                      name="phone-portrait-outline"
+                      size={15}
+                      color={paymentMethod === 'mobile' ? Colors.primary : '#9ca3af'}
+                    />
+                  </View>
+                  <Text style={[styles.pillLabel, paymentMethod === 'mobile' && styles.pillLabelActive]}>
                     Pago Móvil
                   </Text>
-                  <Text style={styles.paymentMethodSubtext}>Verificación automática</Text>
+                  {paymentMethod === 'mobile' && (
+                    <Ionicons name="checkmark-circle" size={12} color={Colors.primary} />
+                  )}
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[
-                    styles.paymentMethodButton,
-                    paymentMethod === 'cash' && styles.paymentMethodButtonSelected,
-                  ]}
+                  style={[styles.methodPill, paymentMethod === 'cash' && styles.methodPillActive]}
                   onPress={() => setPaymentMethod('cash')}
                 >
-                  <Ionicons
-                    name="cash-outline"
-                    size={32}
-                    color={paymentMethod === 'cash' ? Colors.primary : Colors.mediumGray}
-                  />
-                  <Text
-                    style={[
-                      styles.paymentMethodText,
-                      paymentMethod === 'cash' && styles.paymentMethodTextSelected,
-                    ]}
-                  >
+                  <View style={[styles.pillIconWrap, paymentMethod === 'cash' && styles.pillIconWrapActive]}>
+                    <Ionicons
+                      name="cash-outline"
+                      size={15}
+                      color={paymentMethod === 'cash' ? Colors.primary : '#9ca3af'}
+                    />
+                  </View>
+                  <Text style={[styles.pillLabel, paymentMethod === 'cash' && styles.pillLabelActive]}>
                     Efectivo
                   </Text>
-                  <Text style={styles.paymentMethodSubtext}>Pagar al conductor</Text>
+                  {paymentMethod === 'cash' && (
+                    <Ionicons name="checkmark-circle" size={12} color={Colors.primary} />
+                  )}
                 </TouchableOpacity>
               </View>
-            </View>
 
-            {/* Cash Payment Info */}
-            {paymentMethod === 'cash' && (
-              <View style={styles.cashInfoBox}>
-                <Ionicons name="information-circle" size={24} color={Colors.orange} />
-                <Text style={styles.cashInfoText}>
-                  Pagarás en efectivo al conductor al finalizar el viaje.
-                </Text>
-              </View>
-            )}
-
-            {/* Test Data Banner - Solo para pago móvil */}
-            {paymentMethod === 'mobile' && showTestData && (
-              <TouchableOpacity style={styles.testDataBanner} onPress={handleUseTestData}>
-                <Ionicons name="information-circle" size={24} color={Colors.primary} />
-                <View style={styles.testDataText}>
-                  <Text style={styles.testDataTitle}>Modo de Prueba</Text>
-                  <Text style={styles.testDataSubtitle}>Toca aquí para usar datos de prueba</Text>
+              {/* ── Cash info ── */}
+              {paymentMethod === 'cash' && (
+                <View style={styles.infoBox}>
+                  <Ionicons name="information-circle" size={16} color={Colors.orange} />
+                  <Text style={styles.infoText}>Pagarás en efectivo al finalizar el viaje.</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={24} color={Colors.primary} />
-              </TouchableOpacity>
-            )}
+              )}
 
-            {/* Payment Forms - Solo Pago Móvil */}
-            {paymentMethod === 'mobile' && (
-              <>
-                {/* Admin-configured account info */}
-                {platformMethod && platformMethod.type === 'pago_movil' && (
-                  <View style={styles.destinationInfoBox}>
-                    <View style={styles.destinationHeader}>
-                      <Ionicons name="phone-portrait" size={20} color={Colors.primary} />
-                      <Text style={styles.destinationTitle}>Paga con Pago Móvil a:</Text>
+              {/* ── Test data ── */}
+              {paymentMethod === 'mobile' && showTestData && (
+                <TouchableOpacity style={styles.testBanner} onPress={handleUseTestData}>
+                  <Ionicons name="flask" size={15} color={Colors.primary} />
+                  <Text style={styles.testBannerText}>Usar datos de prueba</Text>
+                  <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
+                </TouchableOpacity>
+              )}
+
+              {/* ── Formulario Pago Móvil ── */}
+              {paymentMethod === 'mobile' && (
+                <>
+                  {/* Cuenta destino */}
+                  {platformMethod?.type === 'pago_movil' && (
+                    <View style={styles.destCard}>
+                      <View style={styles.destHead}>
+                        <Ionicons name="phone-portrait" size={14} color={Colors.primary} />
+                        <Text style={styles.destTitle}>Paga a:</Text>
+                      </View>
+                      <Text style={styles.destBank}>{platformMethod.mobileBank}</Text>
+                      <View style={styles.destRow}>
+                        <Text style={styles.destDetail}>Tel: {platformMethod.mobilePhone}</Text>
+                        <Text style={styles.destDetail}>Cédula: {platformMethod.mobileCedula}</Text>
+                      </View>
+                      {platformMethod.description && (
+                        <Text style={styles.destDesc}>{platformMethod.description}</Text>
+                      )}
                     </View>
-                    <Text style={styles.destinationText}>{platformMethod.mobileBank}</Text>
-                    <Text style={styles.destinationDetail}>
-                      Teléfono: {platformMethod.mobilePhone}
-                    </Text>
-                    <Text style={styles.destinationDetail}>
-                      Cédula: {platformMethod.mobileCedula}
-                    </Text>
-                    {platformMethod.description && (
-                      <Text style={styles.destinationDetail}>{platformMethod.description}</Text>
-                    )}
-                  </View>
-                )}
-
-                {/* Admin-configured bank transfer info */}
-                {platformMethod && platformMethod.type === 'bank_transfer' && (
-                  <View style={styles.destinationInfoBox}>
-                    <View style={styles.destinationHeader}>
-                      <Ionicons name="business" size={20} color={Colors.primary} />
-                      <Text style={styles.destinationTitle}>Transfiere a:</Text>
+                  )}
+                  {platformMethod?.type === 'bank_transfer' && (
+                    <View style={styles.destCard}>
+                      <View style={styles.destHead}>
+                        <Ionicons name="business" size={14} color={Colors.primary} />
+                        <Text style={styles.destTitle}>Transfiere a:</Text>
+                      </View>
+                      <Text style={styles.destBank}>{platformMethod.transferBank}</Text>
+                      <Text style={styles.destDetail}>Cuenta: {platformMethod.accountNumber}</Text>
+                      <Text style={styles.destDetail}>Tipo: {platformMethod.accountType || 'Corriente'}</Text>
+                      <Text style={styles.destDetail}>RIF: {platformMethod.transferCedula}</Text>
+                      {platformMethod.description && (
+                        <Text style={styles.destDesc}>{platformMethod.description}</Text>
+                      )}
                     </View>
-                    <Text style={styles.destinationText}>{platformMethod.transferBank}</Text>
-                    <Text style={styles.destinationDetail}>
-                      Cuenta: {platformMethod.accountNumber}
-                    </Text>
-                    <Text style={styles.destinationDetail}>
-                      Tipo: {platformMethod.accountType || 'Corriente'}
-                    </Text>
-                    <Text style={styles.destinationDetail}>
-                      Cédula/RIF: {platformMethod.transferCedula}
-                    </Text>
-                    {platformMethod.description && (
-                      <Text style={styles.destinationDetail}>{platformMethod.description}</Text>
-                    )}
-                  </View>
-                )}
+                  )}
 
-                {/* Bank Selection - Scrollable Picker */}
-                <View style={styles.section}>
-                  <Text style={styles.label}>Banco</Text>
-                  <ScrollView style={styles.bankDropdownContainer} nestedScrollEnabled>
-                    {banks.map(bank => (
-                      <TouchableOpacity
-                        key={bank.id}
-                        style={[
-                          styles.bankButton,
-                          selectedBank === bank.id && styles.bankButtonSelected,
-                        ]}
-                        onPress={() => setSelectedBank(bank.id)}
-                      >
-                        <View style={styles.bankButtonContent}>
-                          <Text
-                            style={[
-                              styles.bankButtonText,
-                              selectedBank === bank.id && styles.bankButtonTextSelected,
-                            ]}
-                          >
-                            {bank.name}
-                          </Text>
-                          <Text style={styles.bankCode}>{bank.code}</Text>
-                        </View>
-                        {selectedBank === bank.id && (
-                          <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
+                  {/* Banco — Web-style dropdown selector */}
+                  <Text style={styles.fieldLabel}>Banco</Text>
+                  <BankSelector
+                    selectedBank={selectedBank}
+                    onSelectBank={setSelectedBank}
+                  />
 
-                {/* Referencia - 6 dígitos */}
-                <View style={styles.section}>
-                  <Text style={styles.label}>Referencia (6 dígitos)</Text>
-                  <View style={styles.inputContainer}>
-                    <Ionicons name="document-text-outline" size={20} color={Colors.mediumGray} />
+                  {/* Referencia */}
+                  <Text style={styles.fieldLabel}>Referencia (6 dígitos)</Text>
+                  <View style={styles.fieldRow}>
+                    <Ionicons name="document-text-outline" size={15} color="#9ca3af" />
                     <TextInput
-                      style={styles.input}
+                      style={styles.fieldInput}
                       placeholder="123456"
+                      placeholderTextColor="#c4c4c4"
                       value={referencia}
                       onChangeText={setReferencia}
                       keyboardType="number-pad"
                       maxLength={6}
                     />
                   </View>
-                </View>
 
-                {/* Fecha - formato DD/MM/YYYY requerido por el banco */}
-                <View style={styles.section}>
-                  <Text style={styles.label}>Fecha (DD/MM/YYYY)</Text>
-                  <View style={styles.inputContainer}>
-                    <Ionicons name="calendar-outline" size={20} color={Colors.mediumGray} />
+                  {/* Fecha */}
+                  <Text style={styles.fieldLabel}>Fecha (DD/MM/YYYY)</Text>
+                  <View style={styles.fieldRow}>
+                    <Ionicons name="calendar-outline" size={15} color="#9ca3af" />
                     <TextInput
-                      style={styles.input}
+                      style={styles.fieldInput}
                       placeholder="15/12/2024"
+                      placeholderTextColor="#c4c4c4"
                       value={fecha}
-                      onChangeText={text => {
-                        // Auto-format: insert slashes automatically
-                        let formatted = text.replace(/[^0-9]/g, '');
-                        if (formatted.length > 2)
-                          formatted = formatted.slice(0, 2) + '/' + formatted.slice(2);
-                        if (formatted.length > 5)
-                          formatted = formatted.slice(0, 5) + '/' + formatted.slice(5);
-                        setFecha(formatted.slice(0, 10));
+                      onChangeText={(t) => {
+                        let f = t.replace(/[^0-9]/g, '');
+                        if (f.length > 2) f = f.slice(0, 2) + '/' + f.slice(2);
+                        if (f.length > 5) f = f.slice(0, 5) + '/' + f.slice(5);
+                        setFecha(f.slice(0, 10));
                       }}
                       keyboardType="number-pad"
                       maxLength={10}
-                      placeholderTextColor="#9ca3af"
                     />
                   </View>
-                </View>
 
-                {/* Teléfono (formato internacional requerido por el banco) */}
-                <View style={styles.section}>
-                  <Text style={styles.label}>Teléfono (58XXXXXXXXXX)</Text>
-                  <View style={styles.inputContainer}>
-                    <Ionicons name="call-outline" size={20} color={Colors.mediumGray} />
+                  {/* Teléfono */}
+                  <Text style={styles.fieldLabel}>Teléfono</Text>
+                  <View style={styles.fieldRow}>
+                    <Ionicons name="call-outline" size={15} color="#9ca3af" />
                     <TextInput
-                      style={styles.input}
+                      style={styles.fieldInput}
                       placeholder="5844122144339"
+                      placeholderTextColor="#c4c4c4"
                       value={telefonoP}
                       onChangeText={setTelefonoP}
                       keyboardType="phone-pad"
                       maxLength={15}
-                      placeholderTextColor="#9ca3af"
                     />
                   </View>
-                </View>
 
-                {/* Identificación */}
-                <View style={styles.section}>
-                  <Text style={styles.label}>Identificación</Text>
-                  <View style={styles.inputContainer}>
-                    <Ionicons name="card-outline" size={20} color={Colors.mediumGray} />
+                  {/* Identificación */}
+                  <Text style={styles.fieldLabel}>Identificación</Text>
+                  <View style={styles.fieldRow}>
+                    <Ionicons name="card-outline" size={15} color="#9ca3af" />
                     <TextInput
-                      style={styles.input}
+                      style={styles.fieldInput}
                       placeholder="V25213842"
+                      placeholderTextColor="#c4c4c4"
                       value={identificacion}
                       onChangeText={setIdentificacion}
-                      keyboardType="default"
                       maxLength={15}
                     />
                   </View>
-                </View>
 
-                {/* Nombre del Pagador */}
-                <View style={styles.section}>
-                  <Text style={styles.label}>Nombre del Pagador</Text>
-                  <View style={styles.inputContainer}>
-                    <Ionicons name="person-outline" size={20} color={Colors.mediumGray} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Juan Pérez"
-                      value={pagador}
-                      onChangeText={setPagador}
-                      keyboardType="default"
-                      maxLength={50}
-                    />
+
+
+                  {/* Info */}
+                  <View style={styles.infoBanner}>
+                    <Ionicons name="information-circle-outline" size={14} color={Colors.primary} />
+                    <Text style={styles.infoBannerText}>
+                      Ingresa los datos exactos de tu transacción. El pago se verificará automáticamente.
+                    </Text>
                   </View>
-                </View>
-              </>
-            )}
-
-            {/* Info Box - Solo para pago móvil */}
-            {paymentMethod === 'mobile' && (
-              <View style={styles.infoBox}>
-                <Ionicons name="information-circle-outline" size={20} color={Colors.primary} />
-                <Text style={styles.infoText}>
-                  El pago móvil será verificado automáticamente con el banco VOB. Asegúrate de
-                  ingresar los datos exactos de tu transacción.
-                </Text>
-              </View>
-            )}
+                </>
+              )}
+            </Animated.View>
           </ScrollView>
 
-          {/* Actions */}
-          <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, 24) }]}>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={handleCancel}
-              disabled={isProcessing}
-            >
-              <Text style={styles.cancelButtonText}>Cancelar</Text>
+          {/* ── Actions ── */}
+          <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <TouchableOpacity style={styles.btnCancel} onPress={handleCancel} disabled={isProcessing || isAutoCancelling}>
+              <Text style={styles.btnCancelText}>Cancelar</Text>
             </TouchableOpacity>
-
             <TouchableOpacity
-              style={[styles.submitButton, isProcessing && styles.submitButtonDisabled]}
+              style={[styles.btnSubmit, (isProcessing || isAutoCancelling) && styles.btnSubmitDisabled]}
               onPress={handleSubmitPayment}
-              disabled={isProcessing}
+              disabled={isProcessing || isAutoCancelling}
             >
               {isProcessing ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color="#fff" size="small" />
               ) : (
                 <>
-                  <Text style={styles.submitButtonText}>Confirmar Pago</Text>
-                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                  <Text style={styles.btnSubmitText}>Confirmar Pago</Text>
+                  <Ionicons name="checkmark-circle" size={16} color="#fff" />
                 </>
               )}
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -800,325 +940,580 @@ export default function MobilePaymentModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
   },
   container: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '90%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '92%',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+      },
+      android: { elevation: 16 },
+    }),
   },
-  scrollContent: {
-    padding: 24,
-  },
+
+  // ── Header ──
   header: {
+    overflow: 'hidden',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  headerAccent: {
+    height: 4,
+    backgroundColor: Colors.primary,
+  },
+  headerContent: {
     alignItems: 'center',
-    marginBottom: 24,
-    paddingBottom: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: '#f0f0f0',
+  },
+  headerIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f0fdf4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
   },
   title: {
-    fontSize: 24,
+    fontSize: 17,
     fontWeight: '700',
     color: '#111827',
-    marginTop: 12,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  timerContainer: {
-    backgroundColor: '#f0fdf4',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  timerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  timerTextContainer: {
-    marginLeft: 12,
-  },
-  timerLabel: {
     fontSize: 12,
     color: '#6b7280',
-    fontWeight: '500',
-  },
-  timerValue: {
-    fontSize: 24,
-    fontWeight: '700',
     marginTop: 2,
   },
-  extendButton: {
+
+  // ── Collapse Handle ──
+  collapseHandle: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    backgroundColor: '#fafafa',
   },
-  extendButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  amountContainer: {
-    backgroundColor: '#f0fdf4',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  amountLabel: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 8,
-    fontWeight: '500',
-  },
-  amountValue: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  amountEquivalent: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#6b7280',
-    marginTop: 4,
-  },
-  amountRate: {
-    fontSize: 12,
-    color: '#9ca3af',
-  },
-  paymentMethodGrid: {
+  collapseHandleLeft: {
     flexDirection: 'row',
-    gap: 12,
-  },
-  paymentMethodButton: {
-    flex: 1,
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
     alignItems: 'center',
     gap: 8,
   },
-  paymentMethodButtonSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: '#f0fdf4',
-  },
-  paymentMethodText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#111827',
-    textAlign: 'center',
-  },
-  paymentMethodSubtext: {
-    fontSize: 10,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  paymentMethodTextSelected: {
+  collapseHandleLabel: {
+    fontSize: 15,
+    fontWeight: '700',
     color: Colors.primary,
-    fontWeight: '700',
   },
-  cashInfoBox: {
-    flexDirection: 'row',
-    backgroundColor: '#fff7ed',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
+  collapseMethodBadge: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  collapseMethodText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+
+  // ── Auto-cancel overlay ──
+  autoCancelOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    zIndex: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 12,
   },
-  cashInfoText: {
-    flex: 1,
+  autoCancelText: {
     fontSize: 14,
-    color: '#111827',
-    lineHeight: 20,
-    fontWeight: '500',
+    fontWeight: '600',
+    color: '#374151',
   },
-  testDataBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
+
+  // ── Scroll ──
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+
+  // ── Amount ──
+  amountCard: {
     backgroundColor: '#f0fdf4',
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#dcfce7',
   },
-  testDataText: {
-    flex: 1,
-    marginLeft: 12,
+  amountLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#6b7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  testDataTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
+  amountValue: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: Colors.primary,
+    marginTop: 3,
   },
-  testDataSubtitle: {
+  amountEquiv: {
     fontSize: 12,
+    fontWeight: '500',
     color: '#6b7280',
     marginTop: 2,
   },
-  section: {
-    marginBottom: 20,
+  amountRate: {
+    fontSize: 10,
+    color: '#9ca3af',
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  bankGrid: {
-    gap: 12,
-  },
-  bankDropdownContainer: {
-    maxHeight: 280,
-    gap: 10,
-  },
-  bankButton: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
+
+  // ── Timer ──
+  timerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  bankButtonSelected: {
-    borderColor: Colors.primary,
     backgroundColor: '#f0fdf4',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+    borderWidth: 1,
   },
-  bankButtonContent: {
-    flex: 1,
+  timerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  bankButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  bankButtonTextSelected: {
-    color: Colors.primary,
-    fontWeight: '700',
-  },
-  bankCode: {
-    fontSize: 13,
+  timerLbl: {
+    fontSize: 10,
     color: '#6b7280',
     fontWeight: '500',
   },
-  inputContainer: {
+  timerVal: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  timerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    gap: 3,
+  },
+  timerBtnText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  timerMaxed: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  timerMaxedText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#9ca3af',
+    fontStyle: 'italic',
+  },
+
+  // ── Section title ──
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+
+  // ── Payment method pills (compact) ──
+  methodRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  methodPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderWidth: 2,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1.5,
     borderColor: '#e5e7eb',
   },
-  input: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: 16,
-    color: '#111827',
+  methodPillActive: {
+    borderColor: Colors.primary,
+    backgroundColor: '#f0fdf4',
   },
+  pillIconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pillIconWrapActive: {
+    backgroundColor: '#f0fdf4',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 2,
+      },
+      android: { elevation: 1 },
+    }),
+  },
+  pillLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+    flex: 1,
+  },
+  pillLabelActive: {
+    color: Colors.primary,
+  },
+
+  // ── Cash info ──
   infoBox: {
     flexDirection: 'row',
-    backgroundColor: '#eff6ff',
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
+    backgroundColor: '#fff7ed',
+    borderRadius: 8,
+    padding: 10,
+    gap: 8,
+    marginBottom: 12,
+    alignItems: 'flex-start',
   },
   infoText: {
     flex: 1,
-    fontSize: 13,
-    color: '#111827',
-    lineHeight: 18,
-    fontWeight: '500',
+    fontSize: 12,
+    color: '#92400e',
+    lineHeight: 16,
   },
-  actions: {
-    flexDirection: 'row',
-    padding: 24,
-    paddingTop: 16,
-    gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  cancelButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#6b7280',
-  },
-  submitButton: {
-    flex: 2,
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    paddingVertical: 14,
+
+  // ── Test data ──
+  testBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  submitButtonDisabled: {
-    opacity: 0.5,
-  },
-  submitButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  destinationInfoBox: {
     backgroundColor: '#f0fdf4',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: Colors.primary,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+    gap: 6,
   },
-  destinationHeader: {
+  testBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+
+  // ── Destination account ──
+  destCard: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  destHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    gap: 5,
+    marginBottom: 5,
   },
-  destinationTitle: {
-    fontSize: 15,
+  destTitle: {
+    fontSize: 12,
     fontWeight: '700',
     color: Colors.primary,
   },
-  destinationText: {
-    fontSize: 16,
+  destBank: {
+    fontSize: 14,
     fontWeight: '600',
     color: '#111827',
+    marginBottom: 3,
+  },
+  destRow: {
+    flexDirection: 'row',
+    gap: 14,
+    marginTop: 1,
+  },
+  destDetail: {
+    fontSize: 11,
+    color: '#4b5563',
+    marginTop: 1,
+  },
+  destDesc: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontStyle: 'italic',
+    marginTop: 3,
+  },
+
+  // ── Bank Selector (Dropdown) ──
+  bankSelectTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 40,
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+    marginBottom: 10,
+  },
+  bankSelectTriggerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  bankSelectTriggerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1f2937',
+    flex: 1,
+  },
+  bankSelectPlaceholder: {
+    color: '#9ca3af',
+    fontWeight: '400',
+  },
+
+  // ── Bank Dropdown Modal ──
+  bankOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  bankDropdown: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: SCREEN_WIDTH - 48,
+    maxHeight: '80%',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 16,
+      },
+      android: { elevation: 12 },
+    }),
+  },
+  bankDropdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  bankDropdownTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  bankSearchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 10,
+    height: 38,
+    gap: 6,
+  },
+  bankSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#111827',
+    padding: 0,
+    height: 38,
+  },
+  bankDropdownList: {
+    maxHeight: 320,
+  },
+  bankDropdownListContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  bankDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     marginBottom: 4,
   },
-  destinationDetail: {
+  bankDropdownItemActive: {
+    backgroundColor: '#f0fdf4',
+  },
+  bankDropdownItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  bankDot: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#e5e7eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bankDotText: {
     fontSize: 13,
-    color: '#4b5563',
-    marginTop: 2,
+    fontWeight: '700',
+    color: '#6b7280',
+  },
+  bankDropdownItemName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  bankDropdownItemNameActive: {
+    color: Colors.primary,
+  },
+  bankDropdownItemCode: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginTop: 1,
+  },
+  bankEmpty: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    gap: 8,
+  },
+  bankEmptyText: {
+    fontSize: 13,
+    color: '#9ca3af',
+    textAlign: 'center',
+  },
+
+  // ── Info banner ──
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 5,
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 38,
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+    marginBottom: 10,
+    gap: 7,
+  },
+  fieldInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#111827',
+    padding: 0,
+    height: 38,
+  },
+
+  // ── Info banner ──
+  infoBanner: {
+    flexDirection: 'row',
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    padding: 10,
+    gap: 7,
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  infoBannerText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#1e40af',
+    lineHeight: 16,
+  },
+
+  // ── Actions ──
+  actions: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 16,
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  btnCancel: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  btnCancelText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  btnSubmit: {
+    flex: 2,
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  btnSubmitDisabled: {
+    opacity: 0.5,
+  },
+  btnSubmitText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#fff',
   },
 });

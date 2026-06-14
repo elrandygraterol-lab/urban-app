@@ -25,7 +25,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,6 +33,7 @@ import { RoutePoint, delegatedRidesAPI } from '@/services/api';
 import { formatCurrency, Currency } from '@/utils/currency';
 import DualPaymentSelector, { DualPaymentConfig } from '@/components/DualPaymentSelector';
 import { logError, logInfo } from '@/utils/errorLogger';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -119,6 +119,7 @@ export default function DelegatedRideModal({
   const [paymentConfig, setPaymentConfig] = useState<DualPaymentConfig>({
     mode: 'cash',
   });
+  const { showStatus, showToast } = useUnifiedNotifications();
   const [isConfirming, setIsConfirming] = useState(false);
 
   // Reset state when modal opens/closes
@@ -214,20 +215,20 @@ export default function DelegatedRideModal({
 
       logInfo('DelegatedRideModal', 'Delegated ride created successfully', { rideId });
 
-      // Show success message
-      Alert.alert(
-        '✅ Viaje Solicitado',
+      // Show success notification
+      showStatus(
+        'success',
         `El viaje para ${beneficiaryName.trim()} ha sido solicitado exitosamente.\n\n` +
           `El conductor contactará al beneficiario al número ${beneficiaryPhone.trim()}.\n\n` +
           `Puedes seguir el estado del viaje en tiempo real.`,
-        [
-          {
-            text: 'Ver Viaje',
-            onPress: () => {
-              onSuccess(rideId);
-            },
+        '✅ Viaje Solicitado',
+        undefined,
+        {
+          label: 'Ver Viaje',
+          onPress: () => {
+            onSuccess(rideId);
           },
-        ]
+        }
       );
     } catch (error: any) {
       logError('DelegatedRideModal', error, { context: 'Creating delegated ride' });
@@ -261,7 +262,7 @@ export default function DelegatedRideModal({
         errorMessage = 'No hay conexión a internet. Verifica tu conexión e intenta nuevamente.';
       }
 
-      Alert.alert('Error', errorMessage, [{ text: 'OK' }]);
+      showToast(errorMessage, 'error');
     } finally {
       setIsConfirming(false);
     }

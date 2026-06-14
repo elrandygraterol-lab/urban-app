@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, TextInput, Modal, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, Modal } from 'react-native';
 import api from '@/services/api';
 import { Colors as colors } from '@/constants/theme';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 
 interface RatingModalProps {
   visible: boolean;
@@ -20,13 +21,14 @@ export default function RatingModal({
   onClose,
   onSubmit,
 }: RatingModalProps) {
+  const { showToast, showStatus } = useUnifiedNotifications();
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
     if (rating === 0) {
-      Alert.alert('Error', 'Please select a rating');
+      showToast('Please select a rating', 'warning');
       return;
     }
 
@@ -39,13 +41,13 @@ export default function RatingModal({
         comment: comment || undefined,
       });
 
-      Alert.alert('Success', 'Rating submitted!');
+      showStatus('success', 'Rating submitted!', 'Success');
       setRating(0);
       setComment('');
       onClose();
       onSubmit?.();
     } catch {
-      Alert.alert('Error', 'Failed to submit rating');
+      showToast('Failed to submit rating', 'error');
     } finally {
       setLoading(false);
     }
