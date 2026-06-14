@@ -15,10 +15,10 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   Linking,
   Platform,
 } from 'react-native';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
@@ -96,6 +96,7 @@ export default function DelegatedRideTrackingScreen() {
   const { user, token } = useAuthStore();
   const mapRef = useRef<MapView>(null);
   const insets = useSafeAreaInsets();
+  const { showToast, showStatus } = useUnifiedNotifications();
 
   // Enable automatic socket reconnection
   useSocketReconnect();
@@ -110,7 +111,7 @@ export default function DelegatedRideTrackingScreen() {
   const loadRideData = useCallback(async () => {
     if (!rideId || !token) {
       logError('DelegatedRideTracking', new Error('Missing rideId or token'));
-      Alert.alert('Error', 'No se pudo cargar la información del viaje');
+      showToast('No se pudo cargar la información del viaje', 'error');
       router.back();
       return;
     }
@@ -169,13 +170,7 @@ export default function DelegatedRideTrackingScreen() {
       
       const errorMessage = error.response?.data?.error?.message || error.message || 'Error desconocido';
       
-      Alert.alert(
-        'Error',
-        `No se pudo cargar la información del viaje: ${errorMessage}`,
-        [
-          { text: 'Volver', onPress: () => router.back() },
-        ]
-      );
+      showToast(`No se pudo cargar la información del viaje: ${errorMessage}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -234,17 +229,9 @@ export default function DelegatedRideTrackingScreen() {
 
       // Show alerts for important status changes
       if (data.status === 'arrived') {
-        Alert.alert(
-          '📍 Conductor en el Punto de Recogida',
-          `El conductor ha llegado al punto de recogida para ${rideData?.beneficiaryName}.`,
-          [{ text: 'Entendido' }]
-        );
+        showStatus('info', `El conductor ha llegado al punto de recogida para ${rideData?.beneficiaryName}.`, '📍 Conductor en el Punto de Recogida');
       } else if (data.status === 'in_progress') {
-        Alert.alert(
-          '🚀 Viaje en Progreso',
-          `El viaje de ${rideData?.beneficiaryName} está en progreso.`,
-          [{ text: 'Entendido' }]
-        );
+        showStatus('info', `El viaje de ${rideData?.beneficiaryName} está en progreso.`, '🚀 Viaje en Progreso');
       }
     };
 
@@ -284,14 +271,7 @@ export default function DelegatedRideTrackingScreen() {
         finalFare: data.finalFare,
       } : null);
 
-      Alert.alert(
-        '✅ Viaje Completado',
-        `El viaje de ${rideData?.beneficiaryName} ha sido completado exitosamente.`,
-        [
-          { text: 'Ver Historial', onPress: () => router.push('/(passenger)/history') },
-          { text: 'Cerrar', onPress: () => router.back() },
-        ]
-      );
+      showStatus('info', `El viaje de ${rideData?.beneficiaryName} ha sido completado exitosamente.`, '✅ Viaje Completado', undefined, { label: 'Ver Historial', onPress: () => router.push('/(passenger)/history') });
     });
 
     // Listen for ride cancelled
@@ -300,11 +280,7 @@ export default function DelegatedRideTrackingScreen() {
 
       setRideData(prev => prev ? { ...prev, status: 'cancelled' } : null);
 
-      Alert.alert(
-        '❌ Viaje Cancelado',
-        `El viaje de ${rideData?.beneficiaryName} ha sido cancelado.\n\nMotivo: ${data.cancellationReason}`,
-        [{ text: 'Entendido', onPress: () => router.back() }]
-      );
+      showStatus('info', `El viaje de ${rideData?.beneficiaryName} ha sido cancelado.\n\nMotivo: ${data.cancellationReason}`, '❌ Viaje Cancelado', undefined, { label: 'Entendido', onPress: () => router.back() });
     });
 
     onRideStatusChanged(handleRideStatusChanged);
@@ -325,55 +301,41 @@ export default function DelegatedRideTrackingScreen() {
   // Handle call beneficiary
   const handleCallBeneficiary = useCallback(() => {
     if (!rideData?.beneficiaryPhone) {
-      Alert.alert('Error', 'No se encontró el número de teléfono del beneficiario');
+      showToast('No se encontró el número de teléfono del beneficiario', 'error');
       return;
     }
 
     const phoneUrl = `tel:${rideData.beneficiaryPhone}`;
     
-    Alert.alert(
-      'Llamar al Beneficiario',
-      `¿Deseas llamar a ${rideData.beneficiaryName}?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Llamar',
-          onPress: () => {
-            Linking.openURL(phoneUrl).catch(err => {
-              logError('DelegatedRideTracking', err, { context: 'Opening phone dialer' });
-              Alert.alert('Error', 'No se pudo abrir el marcador telefónico');
-            });
-          },
-        },
-      ]
-    );
+    showStatus('info', `¿Deseas llamar a ${rideData.beneficiaryName}?`, 'Llamar al Beneficiario', undefined, {
+      label: 'Llamar',
+      onPress: () => {
+        Linking.openURL(phoneUrl).catch(err => {
+          logError('DelegatedRideTracking', err, { context: 'Opening phone dialer' });
+          showToast('No se pudo abrir el marcador telefónico', 'error');
+        });
+      },
+    });
   }, [rideData]);
 
   // Handle call driver
   const handleCallDriver = useCallback(() => {
     if (!rideData?.driver?.phone) {
-      Alert.alert('Error', 'No se encontró el número de teléfono del conductor');
+      showToast('No se encontró el número de teléfono del conductor', 'error');
       return;
     }
 
     const phoneUrl = `tel:${rideData.driver.phone}`;
     
-    Alert.alert(
-      'Llamar al Conductor',
-      `¿Deseas llamar a ${rideData.driver.name}?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Llamar',
-          onPress: () => {
-            Linking.openURL(phoneUrl).catch(err => {
-              logError('DelegatedRideTracking', err, { context: 'Opening phone dialer' });
-              Alert.alert('Error', 'No se pudo abrir el marcador telefónico');
-            });
-          },
-        },
-      ]
-    );
+    showStatus('info', `¿Deseas llamar a ${rideData.driver.name}?`, 'Llamar al Conductor', undefined, {
+      label: 'Llamar',
+      onPress: () => {
+        Linking.openURL(phoneUrl).catch(err => {
+          logError('DelegatedRideTracking', err, { context: 'Opening phone dialer' });
+          showToast('No se pudo abrir el marcador telefónico', 'error');
+        });
+      },
+    });
   }, [rideData]);
 
   // Get status label and color

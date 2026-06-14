@@ -6,7 +6,6 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -17,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '@/constants/theme';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import { BusinessHoursEditor } from '@/components/stores/BusinessHoursEditor';
 import { CategoryPicker } from '@/components/stores/CategoryPicker';
 import { useStoreStore } from '@/store/storeStore';
@@ -49,6 +49,7 @@ export default function StoreFormScreen() {
   const isEditMode = !!storeId;
 
   const { user } = useAuthStore();
+  const { showToast, showStatus } = useUnifiedNotifications();
   const { categories, fetchCategories, createStore, updateStore, fetchStoreById, selectedStore, loading } = useStoreStore();
 
   // Multi-step state
@@ -118,7 +119,7 @@ export default function StoreFormScreen() {
       // For now, we'll access it directly after the fetch
     } catch (error) {
       console.error('Error loading store data:', error);
-      Alert.alert('Error', 'No se pudo cargar la información de la tienda');
+      showToast('No se pudo cargar la información de la tienda', 'error');
       router.back();
     } finally {
       setIsLoadingStore(false);
@@ -269,7 +270,7 @@ export default function StoreFormScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (status !== 'granted') {
-      Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería para seleccionar el logo');
+      showToast('Necesitamos acceso a tu galería para seleccionar el logo', 'error');
       return;
     }
 
@@ -287,10 +288,7 @@ export default function StoreFormScreen() {
       const isValid = await validateImageSize(asset.uri);
       if (!isValid) {
         const size = await getImageSize(asset.uri);
-        Alert.alert(
-          'Imagen muy grande',
-          `La imagen seleccionada (${formatFileSize(size)}) excede el límite de 5MB. Por favor, selecciona una imagen más pequeña.`
-        );
+        showStatus('info', `La imagen seleccionada (${formatFileSize(size)}) excede el límite de 5MB. Por favor, selecciona una imagen más pequeña.`, 'Imagen muy grande');
         return;
       }
       
@@ -327,7 +325,7 @@ export default function StoreFormScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (status !== 'granted') {
-      Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería para seleccionar fotos');
+      showToast('Necesitamos acceso a tu galería para seleccionar fotos', 'error');
       return;
     }
 
@@ -335,7 +333,7 @@ export default function StoreFormScreen() {
     const totalPhotoCount = existingPhotoCount + photos.length;
     
     if (totalPhotoCount >= 10) {
-      Alert.alert('Límite alcanzado', 'Solo puedes tener un máximo de 10 fotos');
+      showStatus('info', 'Solo puedes tener un máximo de 10 fotos', 'Límite alcanzado');
       return;
     }
 
@@ -348,7 +346,7 @@ export default function StoreFormScreen() {
     if (!result.canceled) {
       const totalPhotos = totalPhotoCount + result.assets.length;
       if (totalPhotos > 10) {
-        Alert.alert('Límite excedido', `Solo puedes tener 10 fotos. Tienes ${totalPhotoCount}, intentas agregar ${result.assets.length}`);
+        showStatus('info', `Solo puedes tener 10 fotos. Tienes ${totalPhotoCount}, intentas agregar ${result.assets.length}`, 'Límite excedido');
         return;
       }
       
@@ -382,10 +380,7 @@ export default function StoreFormScreen() {
       const validPhotos = compressedPhotos.filter(photo => photo !== null) as ImageAsset[];
       
       if (validPhotos.length < result.assets.length) {
-        Alert.alert(
-          'Algunas imágenes no se agregaron',
-          `${result.assets.length - validPhotos.length} imagen(es) excedieron el límite de 5MB y no se agregaron.`
-        );
+        showStatus('info', `${result.assets.length - validPhotos.length} imagen(es) excedieron el límite de 5MB y no se agregaron.`, 'Algunas imágenes no se agregaron');
       }
 
       setPhotos([...photos, ...validPhotos]);
@@ -401,12 +396,12 @@ export default function StoreFormScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (status !== 'granted') {
-      Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería para seleccionar imágenes de menú');
+      showToast('Necesitamos acceso a tu galería para seleccionar imágenes de menú', 'error');
       return;
     }
 
     if (menuImages.length >= 10) {
-      Alert.alert('Límite alcanzado', 'Solo puedes tener un máximo de 10 imágenes de menú');
+      showStatus('info', 'Solo puedes tener un máximo de 10 imágenes de menú', 'Límite alcanzado');
       return;
     }
 
@@ -419,7 +414,7 @@ export default function StoreFormScreen() {
     if (!result.canceled) {
       const totalMenuImages = menuImages.length + result.assets.length;
       if (totalMenuImages > 10) {
-        Alert.alert('Límite excedido', `Solo puedes tener 10 imágenes de menú. Tienes ${menuImages.length}, intentas agregar ${result.assets.length}`);
+        showStatus('info', `Solo puedes tener 10 imágenes de menú. Tienes ${menuImages.length}, intentas agregar ${result.assets.length}`, 'Límite excedido');
         return;
       }
 
@@ -453,10 +448,7 @@ export default function StoreFormScreen() {
       const validMenuImages = compressedMenuImages.filter(img => img !== null) as ImageAsset[];
 
       if (validMenuImages.length < result.assets.length) {
-        Alert.alert(
-          'Algunas imágenes no se agregaron',
-          `${result.assets.length - validMenuImages.length} imagen(es) excedieron el límite de 5MB y no se agregaron.`
-        );
+        showStatus('info', `${result.assets.length - validMenuImages.length} imagen(es) excedieron el límite de 5MB y no se agregaron.`, 'Algunas imágenes no se agregaron');
       }
 
       setMenuImages([...menuImages, ...validMenuImages]);
@@ -482,10 +474,7 @@ export default function StoreFormScreen() {
   const captureLocationAutomatically = async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
-        'Ubicación no disponible',
-        'Permiso de ubicación denegado. Ingrese las coordenadas manualmente'
-      );
+      showStatus('info', 'Permiso de ubicación denegado. Ingrese las coordenadas manualmente', 'Ubicación no disponible');
       return;
     }
     const location = await Location.getCurrentPositionAsync({
@@ -500,7 +489,7 @@ export default function StoreFormScreen() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       
       if (status !== 'granted') {
-        Alert.alert('Permiso requerido', 'Necesitamos acceso a tu ubicación para obtener las coordenadas');
+        showToast('Necesitamos acceso a tu ubicación para obtener las coordenadas', 'error');
         return;
       }
 
@@ -508,10 +497,10 @@ export default function StoreFormScreen() {
       setLatitude(location.coords.latitude);
       setLongitude(location.coords.longitude);
       
-      Alert.alert('Ubicación obtenida', 'Se han guardado las coordenadas de tu ubicación actual');
+      showStatus('info', 'Se han guardado las coordenadas de tu ubicación actual', 'Ubicación obtenida');
     } catch (error) {
       console.error('Error getting location:', error);
-      Alert.alert('Error', 'No se pudo obtener la ubicación');
+      showToast('No se pudo obtener la ubicación', 'error');
     }
   };
 
@@ -586,32 +575,17 @@ export default function StoreFormScreen() {
         }
       }
 
-      Alert.alert(
-        'Éxito',
-        isEditMode 
+      showStatus('success', isEditMode 
           ? 'Tu tienda ha sido actualizada exitosamente'
-          : 'Tu tienda ha sido registrada y está pendiente de aprobación',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.push('/(tabs)/stores/my-stores'),
-          },
-        ]
-      );
+          : 'Tu tienda ha sido registrada y está pendiente de aprobación', 'Éxito', undefined, { label: 'OK', onPress: () => router.push('/(tabs)/stores/my-stores') });
     } catch (error: any) {
       console.error('Error saving store:', error);
       
       // Check for role verification error
       if (error.response?.status === 403) {
-        Alert.alert(
-          'Acceso denegado',
-          'Solo los usuarios con rol de Propietario pueden gestionar tiendas. Por favor, contacta al administrador.'
-        );
+        showStatus('info', 'Solo los usuarios con rol de Propietario pueden gestionar tiendas. Por favor, contacta al administrador.', 'Acceso denegado');
       } else {
-        Alert.alert(
-          'Error',
-          error.response?.data?.error?.message || `No se pudo ${isEditMode ? 'actualizar' : 'crear'} la tienda. Intenta de nuevo.`
-        );
+        showToast(error.response?.data?.error?.message || `No se pudo ${isEditMode ? 'actualizar' : 'crear'} la tienda. Intenta de nuevo.`, 'error');
       }
     }
   };

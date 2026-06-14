@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   Image,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -15,6 +14,7 @@ import { driverAPI } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { Colors as COLORS } from '@/constants/theme';
 import { uploadDocumentToCloudinary } from '@/services/cloudinary';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 
 type DocumentType =
   | 'drivers_license'
@@ -64,6 +64,7 @@ const REQUIRED_DOCUMENTS: DocumentUpload[] = [
 export default function DocumentsUploadScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { showToast } = useUnifiedNotifications();
   const [documents, setDocuments] = useState<DocumentUpload[]>(REQUIRED_DOCUMENTS);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -90,14 +91,14 @@ export default function DocumentsUploadScreen() {
         setDocuments(newDocuments);
       }
     } catch (error) {
-      Alert.alert('Error', 'No se pudo seleccionar la imagen');
+      showToast('No se pudo seleccionar la imagen', 'error');
     }
   };
 
   const uploadDocument = async (index: number) => {
     const doc = documents[index];
     if (!doc.uri) {
-      Alert.alert('Error', 'Por favor selecciona una imagen primero');
+      showToast('Por favor selecciona una imagen primero', 'error');
       return;
     }
 
@@ -121,14 +122,14 @@ export default function DocumentsUploadScreen() {
       newDocuments[index].isUploaded = true;
       setDocuments(newDocuments);
 
-      Alert.alert('Éxito', `${doc.label} subido correctamente a Cloudinary`);
+      showToast(`${doc.label} subido correctamente`, 'success');
     } catch (error) {
       const newDocuments = [...documents];
       newDocuments[index].isUploading = false;
       setDocuments(newDocuments);
-      Alert.alert(
-        'Error',
-        error instanceof Error ? error.message : 'No se pudo subir el documento'
+      showToast(
+        error instanceof Error ? error.message : 'No se pudo subir el documento',
+        'error'
       );
     }
   };
@@ -137,7 +138,7 @@ export default function DocumentsUploadScreen() {
 
   const handleSubmit = async () => {
     if (!allDocumentsUploaded) {
-      Alert.alert('Error', 'Por favor sube todos los documentos requeridos');
+      showToast('Por favor sube todos los documentos requeridos', 'error');
       return;
     }
 
@@ -146,7 +147,7 @@ export default function DocumentsUploadScreen() {
       // Navigate to verification status screen
       router.push('/(driver)/verification-status');
     } catch (error) {
-      Alert.alert('Error', 'No se pudo completar el registro');
+      showToast('No se pudo completar el registro', 'error');
     } finally {
       setIsSubmitting(false);
     }

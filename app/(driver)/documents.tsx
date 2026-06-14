@@ -5,7 +5,6 @@ import {
   Text,
   TouchableOpacity,
   Image,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -13,6 +12,7 @@ import { useAuthStore } from '@/store/authStore';
 import api from '@/services/api';
 import { Colors as colors } from '@/constants/theme';
 import { uploadDocumentToCloudinary } from '@/services/cloudinary';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 
 interface Document {
   id: string;
@@ -24,6 +24,7 @@ interface Document {
 
 export default function DocumentsScreen() {
   const { user } = useAuthStore();
+  const { showToast } = useUnifiedNotifications();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -45,7 +46,7 @@ export default function DocumentsScreen() {
       const driverResponse = await api.get(`/api/users/drivers/${user?.id}`);
       setReVerificationStatus(driverResponse.data.verification_status);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load documents');
+      showToast('Failed to load documents', 'error');
     } finally {
       setLoading(false);
     }
@@ -64,7 +65,7 @@ export default function DocumentsScreen() {
         uploadDocument(result.assets[0].uri, documentType);
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to pick image');
+      showToast('Failed to pick image', 'error');
     }
   };
 
@@ -89,13 +90,13 @@ export default function DocumentsScreen() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      Alert.alert('Éxito', 'Documento subido correctamente a Cloudinary');
+      showToast('Documento subido correctamente a Cloudinary', 'success');
       setReVerificationStatus('pending');
       fetchDocuments();
     } catch (error) {
-      Alert.alert(
-        'Error',
-        error instanceof Error ? error.message : 'No se pudo subir el documento'
+      showToast(
+        error instanceof Error ? error.message : 'No se pudo subir el documento',
+        'error'
       );
     } finally {
       setUploading(false);

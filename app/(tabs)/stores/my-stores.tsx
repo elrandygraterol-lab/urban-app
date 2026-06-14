@@ -8,7 +8,6 @@ import {
   RefreshControl,
   ActivityIndicator,
   Platform,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -17,12 +16,14 @@ import { useStoreStore } from '@/store/storeStore';
 import { StoreCard } from '@/components/stores/StoreCard';
 import { Colors, Typography, BorderRadius, Spacing, Shadows } from '@/constants/theme';
 import type { Store } from '@/types/store';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 
 type TabType = 'my-stores' | 'explore';
 
 export default function MyStoresScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { showToast, showStatus } = useUnifiedNotifications();
   const {
     myStores,
     loading,
@@ -78,20 +79,9 @@ export default function MyStoresScreen() {
   // Handle toggle store active status
   const handleToggleActive = async (store: Store) => {
     // This will be implemented in task 22
-    Alert.alert(
-      'Cambiar estado',
-      `¿Deseas ${store.status === 'activa' ? 'desactivar' : 'activar'} esta tienda?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Confirmar',
-          onPress: () => {
-            // TODO: Implement in task 22
-            Alert.alert('Información', 'Esta función se implementará próximamente');
-          },
-        },
-      ]
-    );
+    showStatus('info', `¿Deseas ${store.status === 'activa' ? 'desactivar' : 'activar'} esta tienda?`, 'Cambiar estado', undefined, { label: 'Confirmar', onPress: () => {
+      showToast('Esta función se implementará próximamente', 'info');
+    }});
   };
 
   // Handle view stats

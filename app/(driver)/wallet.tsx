@@ -11,7 +11,6 @@ import {
   ScrollView,
   RefreshControl,
   ActivityIndicator,
-  Alert,
   StyleSheet,
 } from 'react-native';
 import { Colors as colors } from '@/constants/theme';
@@ -21,10 +20,12 @@ import walletService, {
   CommissionRateResponse,
 } from '@/services/walletService';
 import TransactionHistory from '@/src/components/driver/TransactionHistory';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 
 const PAGE_SIZE = 20;
 
 export default function WalletScreen() {
+  const { showToast } = useUnifiedNotifications();
   const [wallet, setWallet] = useState<WalletResponseDto | null>(null);
   const [transactions, setTransactions] = useState<WalletTransactionDto[]>([]);
   const [totalTransactions, setTotalTransactions] = useState(0);
@@ -58,7 +59,7 @@ export default function WalletScreen() {
         error?.response?.data?.message ||
         error?.message ||
         'No se pudo cargar la información de la billetera';
-      Alert.alert('Error', message);
+      showToast(message, 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -79,7 +80,7 @@ export default function WalletScreen() {
         error?.response?.data?.message ||
         error?.message ||
         'No se pudo cargar más transacciones';
-      Alert.alert('Error', message);
+      showToast(message, 'error');
     } finally {
       setLoadingMore(false);
     }

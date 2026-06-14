@@ -22,6 +22,7 @@ import { useLanguage } from '../../hooks/useLanguage';
 import { translations } from '../../i18n/translations';
 import { userAPI, notificationAPI } from '../../services/api';
 import * as ImagePicker from 'expo-image-picker';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import { useSmartTutorial } from '@/hooks/useSmartTutorial';
 import { setActiveTutorialScreen } from '@/utils/tutorialState';
 import { resolveFileUrl } from '@/services/fileUrl';
@@ -42,6 +43,7 @@ export default function PassengerProfileScreen() {
   const t = translations[language].profile;
   // const { start: startTour } = useCopilot();
   const { isActive: needsTutorial } = useSmartTutorial('passenger_profile');
+  const { showToast, showStatus } = useUnifiedNotifications();
 
   useEffect(() => {
     if (needsTutorial) {
@@ -82,7 +84,7 @@ export default function PassengerProfileScreen() {
       // API returns: {success: true, data: {user data}}
       if (!userResponse || !userResponse.data || !userResponse.data.data) {
         console.warn('User API returned invalid response:', userResponse);
-        Alert.alert('Error', t.loadError);
+        showToast(t.loadError, 'error');
         return;
       }
 
@@ -114,7 +116,7 @@ export default function PassengerProfileScreen() {
       }
     } catch (error) {
       console.error('Error loading user data:', error);
-      Alert.alert('Error', t.loadError);
+      showToast(t.loadError, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -125,10 +127,10 @@ export default function PassengerProfileScreen() {
       setIsSaving(true);
       await userAPI.updateMe({ name, phone });
       setIsEditing(false);
-      Alert.alert('Éxito', t.updateSuccess);
+      showToast(t.updateSuccess, 'success');
     } catch (error) {
       console.error('Error updating profile:', error);
-      Alert.alert('Error', t.updateError);
+      showToast(t.updateError, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -138,10 +140,7 @@ export default function PassengerProfileScreen() {
     key: keyof NotificationPreferences,
     value: boolean
   ) => {
-    Alert.alert(
-      'En desarrollo',
-      'Esta opción estará disponible en una futura actualización. Por ahora, las notificaciones permanecen activadas por defecto.'
-    );
+    showStatus('info', 'Esta opción estará disponible en una futura actualización. Por ahora, las notificaciones permanecen activadas por defecto.', 'En desarrollo');
   };
 
   const handleLanguageChange = async (newLanguage: 'es' | 'en') => {
@@ -153,56 +152,42 @@ export default function PassengerProfileScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert(t.logoutConfirmTitle, t.logoutConfirmMessage, [
-      { text: t.cancel, style: 'cancel' },
-      {
-        text: t.logoutConfirmButton,
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          router.replace('/(auth)/login');
-        },
+    showStatus('info', t.logoutConfirmMessage, t.logoutConfirmTitle, undefined, {
+      label: t.logoutConfirmButton,
+      onPress: async () => {
+        await logout();
+        router.replace('/(auth)/login');
       },
-    ]);
+    });
   };
 
   const handleDeleteAccount = () => {
-    // First confirmation
-    Alert.alert(t.deleteConfirmTitle, t.deleteConfirmMessage, [
-      { text: t.cancel, style: 'cancel' },
-      {
-        text: t.deleteConfirmButton,
-        style: 'destructive',
-        onPress: () => {
-          // Second confirmation
-          Alert.alert(t.deleteSecondConfirmTitle, t.deleteSecondConfirmMessage, [
-            { text: t.cancel, style: 'cancel' },
-            {
-              text: t.deleteSecondConfirmButton,
-              style: 'destructive',
-              onPress: async () => {
-                try {
-                  await userAPI.deleteAccount();
-                  await logout();
-                  Alert.alert('Éxito', t.deleteSuccess);
-                  router.replace('/(auth)/login');
-                } catch (error) {
-                  console.error('Error deleting account:', error);
-                  Alert.alert('Error', t.deleteError);
-                }
-              },
-            },
-          ]);
-        },
+    showStatus('info', t.deleteConfirmMessage, t.deleteConfirmTitle, undefined, {
+      label: t.deleteConfirmButton,
+      onPress: () => {
+        showStatus('info', t.deleteSecondConfirmMessage, t.deleteSecondConfirmTitle, undefined, {
+          label: t.deleteSecondConfirmButton,
+          onPress: async () => {
+            try {
+              await userAPI.deleteAccount();
+              await logout();
+              showToast(t.deleteSuccess, 'success');
+              router.replace('/(auth)/login');
+            } catch (error) {
+              console.error('Error deleting account:', error);
+              showToast(t.deleteError, 'error');
+            }
+          },
+        });
       },
-    ]);
+    });
   };
 
   const handleChangePhoto = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permiso requerido', 'Necesitamos permiso para acceder a tus fotos');
+        showStatus('info', 'Necesitamos permiso para acceder a tus fotos', 'Permiso requerido');
         return;
       }
 
@@ -244,7 +229,7 @@ export default function PassengerProfileScreen() {
       ]);
     } catch (error) {
       console.error('Error picking profile photo:', error);
-      Alert.alert('Error', 'No se pudo seleccionar la foto');
+      showToast('No se pudo seleccionar la foto', 'error');
     }
   };
 
@@ -256,10 +241,10 @@ export default function PassengerProfileScreen() {
       if (user) {
         useAuthStore.getState().setUser({ ...user, profilePhotoUrl });
       }
-      Alert.alert('Éxito', 'Foto de perfil actualizada');
+      showToast('Foto de perfil actualizada', 'success');
     } catch (error) {
       console.error('Error uploading photo:', error);
-      Alert.alert('Error', 'No se pudo actualizar la foto de perfil');
+      showToast('No se pudo actualizar la foto de perfil', 'error');
     }
   };
 

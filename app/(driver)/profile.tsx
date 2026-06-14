@@ -23,6 +23,7 @@ import { translations } from '../../i18n/translations';
 import { userAPI, notificationAPI, driverAPI } from '../../services/api';
 import { getSocket, addConnectionListener, removeConnectionListener, reconnectSocket, getSocketDiagnostics } from '@/services/socket';
 import { resolveFileUrl } from '@/services/fileUrl';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 
 
 interface NotificationPreferences {
@@ -47,6 +48,7 @@ export default function DriverProfileScreen() {
   const { isAvailable, isUpdatingAvailability, setIsAvailable, toggleAvailability } = useDriverStore();
   const { language, setLanguage } = useLanguage();
   const t = translations[language].profile;
+  const { showToast, showStatus } = useUnifiedNotifications();
 
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -136,7 +138,7 @@ export default function DriverProfileScreen() {
 
       if (!userResponse || !userResponse.data || !userResponse.data.data) {
         console.warn('User API returned invalid response:', userResponse);
-        Alert.alert('Error', t.loadError);
+        showToast(t.loadError, 'error');
         return;
       }
 
@@ -191,7 +193,7 @@ export default function DriverProfileScreen() {
       }
     } catch (error) {
       console.error('Error loading user data:', error);
-      Alert.alert('Error', t.loadError);
+      showToast(t.loadError, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -202,10 +204,10 @@ export default function DriverProfileScreen() {
       setIsSaving(true);
       await userAPI.updateMe({ name, phone });
       setIsEditing(false);
-      Alert.alert('Éxito', t.updateSuccess);
+      showToast(t.updateSuccess, 'success');
     } catch (error) {
       console.error('Error updating profile:', error);
-      Alert.alert('Error', t.updateError);
+      showToast(t.updateError, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -218,21 +220,18 @@ export default function DriverProfileScreen() {
       const hasBankTransfer = paymentInfo.bankTransferBank && paymentInfo.bankTransferAccount;
 
       if (!hasPagoMovil && !hasBankTransfer) {
-        Alert.alert(
-          'Error',
-          'Debes configurar al menos un método de pago completo:\n\n• Pago Móvil: teléfono, banco y cédula\n• Transferencia: banco y cuenta'
-        );
+        showToast('Debes configurar al menos un método de pago completo:\n\n• Pago Móvil: teléfono, banco y cédula\n• Transferencia: banco y cuenta', 'error');
         return;
       }
 
       setIsSavingPayment(true);
       await driverAPI.updatePaymentInfo(paymentInfo);
-      Alert.alert('Éxito', 'Información de pago actualizada exitosamente');
+      showToast('Información de pago actualizada exitosamente', 'success');
       setIsPaymentSectionExpanded(false);
     } catch (error: any) {
       console.error('Error updating payment info:', error);
       const errorMessage = error?.response?.data?.error?.message || 'Error al actualizar información de pago';
-      Alert.alert('Error', errorMessage);
+      showToast(errorMessage, 'error');
     } finally {
       setIsSavingPayment(false);
     }
@@ -247,10 +246,7 @@ export default function DriverProfileScreen() {
     key: keyof NotificationPreferences,
     value: boolean
   ) => {
-    Alert.alert(
-      'En desarrollo',
-      'Esta opción estará disponible en una futura actualización. Por ahora, las notificaciones permanecen activadas por defecto.'
-    );
+    showStatus('info', 'Esta opción estará disponible en una futura actualización. Por ahora, las notificaciones permanecen activadas por defecto.', 'En desarrollo');
   };
 
   const handleLanguageChange = async (newLanguage: 'es' | 'en') => {
@@ -262,54 +258,42 @@ export default function DriverProfileScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert(t.logoutConfirmTitle, t.logoutConfirmMessage, [
-      { text: t.cancel, style: 'cancel' },
-      {
-        text: t.logoutConfirmButton,
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          router.replace('/(auth)/login');
-        },
+    showStatus('warning', t.logoutConfirmMessage, t.logoutConfirmTitle, undefined, {
+      label: t.logoutConfirmButton,
+      onPress: async () => {
+        await logout();
+        router.replace('/(auth)/login');
       },
-    ]);
+    });
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(t.deleteConfirmTitle, t.deleteConfirmMessage, [
-      { text: t.cancel, style: 'cancel' },
-      {
-        text: t.deleteConfirmButton,
-        style: 'destructive',
-        onPress: () => {
-          Alert.alert(t.deleteSecondConfirmTitle, t.deleteSecondConfirmMessage, [
-            { text: t.cancel, style: 'cancel' },
-            {
-              text: t.deleteSecondConfirmButton,
-              style: 'destructive',
-              onPress: async () => {
-                try {
-                  await userAPI.deleteAccount();
-                  await logout();
-                  Alert.alert('Éxito', t.deleteSuccess);
-                  router.replace('/(auth)/login');
-                } catch (error) {
-                  console.error('Error deleting account:', error);
-                  Alert.alert('Error', t.deleteError);
-                }
-              },
-            },
-          ]);
-        },
+    showStatus('warning', t.deleteConfirmMessage, t.deleteConfirmTitle, undefined, {
+      label: t.deleteConfirmButton,
+      onPress: () => {
+        showStatus('warning', t.deleteSecondConfirmMessage, t.deleteSecondConfirmTitle, undefined, {
+          label: t.deleteSecondConfirmButton,
+          onPress: async () => {
+            try {
+              await userAPI.deleteAccount();
+              await logout();
+              showToast(t.deleteSuccess, 'success');
+              router.replace('/(auth)/login');
+            } catch (error) {
+              console.error('Error deleting account:', error);
+              showToast(t.deleteError, 'error');
+            }
+          },
+        });
       },
-    ]);
+    });
   };
 
   const handleChangePhoto = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permiso requerido', 'Necesitamos permiso para acceder a tus fotos');
+        showStatus('info', 'Necesitamos permiso para acceder a tus fotos', 'Permiso requerido');
         return;
       }
 
@@ -351,7 +335,7 @@ export default function DriverProfileScreen() {
       ]);
     } catch (error) {
       console.error('Error picking profile photo:', error);
-      Alert.alert('Error', 'No se pudo seleccionar la foto');
+      showToast('No se pudo seleccionar la foto', 'error');
     }
   };
 
@@ -363,10 +347,10 @@ export default function DriverProfileScreen() {
       if (user) {
         useAuthStore.getState().setUser({ ...user, profilePhotoUrl });
       }
-      Alert.alert('Éxito', 'Foto de perfil actualizada');
+      showToast('Foto de perfil actualizada', 'success');
     } catch (error) {
       console.error('Error uploading photo:', error);
-      Alert.alert('Error', 'No se pudo actualizar la foto de perfil');
+      showToast('No se pudo actualizar la foto de perfil', 'error');
     }
   };
 

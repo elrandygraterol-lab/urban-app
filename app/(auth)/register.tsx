@@ -172,7 +172,7 @@ export default function RegisterScreen() {
   const handlePickProfilePhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permiso requerido', 'Necesitamos permiso para acceder a tus fotos');
+      showToast('Necesitamos permiso para acceder a tus fotos', 'error');
       return;
     }
     Alert.alert('Foto de perfil', 'Elige una opción', [
@@ -222,7 +222,7 @@ export default function RegisterScreen() {
   const handlePickDocument = async (setter: (file: DocumentFile) => void) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permiso requerido', 'Necesitamos permiso para acceder a tus archivos');
+      showToast('Necesitamos permiso para acceder a tus archivos', 'error');
       return;
     }
     Alert.alert('Seleccionar documento', 'Elige una opción', [
@@ -330,14 +330,7 @@ export default function RegisterScreen() {
       if (role === 'passenger') {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert(
-            'Permiso de ubicación requerido',
-            'La app necesita acceso a tu ubicación para calcular rutas y mostrar conductores cercanos.',
-            [
-              { text: 'Abrir Configuración', onPress: () => Linking.openSettings() },
-              { text: 'Continuar de todas formas', style: 'cancel' },
-            ]
-          );
+          showStatus('warning', 'La app necesita acceso a tu ubicación para calcular rutas y mostrar conductores cercanos.', 'Permiso de ubicación requerido', undefined, { label: 'Abrir Configuración', onPress: () => Linking.openSettings() });
         }
       }
 

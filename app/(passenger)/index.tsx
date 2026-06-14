@@ -14,6 +14,7 @@ import {
   Linking,
   AppState,
 } from 'react-native';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import Svg, { Path, G } from 'react-native-svg';
 import Animated, {
   useSharedValue,
@@ -154,6 +155,7 @@ export default function PassengerHomeScreen() {
 
   // Enable automatic socket reconnection on app state changes
   useSocketReconnect();
+  const { showToast, showStatus } = useUnifiedNotifications();
 
   logInfo('PassengerHomeScreen', 'Component mounted', {
     userId: user?.id,
@@ -379,13 +381,12 @@ export default function PassengerHomeScreen() {
 
         if (status !== 'granted') {
           logWarning('PassengerHomeScreen', 'Location permission denied');
-          Alert.alert(
-            'Permiso de ubicación requerido',
+          showStatus(
+            'error',
             'Esta app necesita acceso a tu ubicación para funcionar. Por favor activa el permiso en Configuración.',
-            [
-              { text: 'Abrir Configuración', onPress: () => Linking.openSettings() },
-              { text: 'Cancelar', style: 'cancel' },
-            ]
+            'Permiso de ubicación requerido',
+            undefined,
+            { label: 'Abrir Configuración', onPress: () => Linking.openSettings() }
           );
           setIsLoadingLocation(false);
           return;
@@ -468,10 +469,10 @@ export default function PassengerHomeScreen() {
                 });
                 anyLastKnown = true;
                 // Inform user the position may not be current
-                Alert.alert(
-                  'Usando última ubicación conocida',
+                showStatus(
+                  'info',
                   'No se pudo obtener tu ubicación actual (sin conexión o GPS sin señal). Se está usando tu última posición registrada. La precisión puede ser menor.',
-                  [{ text: 'Entendido' }]
+                  'Usando última ubicación conocida'
                 );
               }
             } catch {
@@ -509,21 +510,14 @@ export default function PassengerHomeScreen() {
 
               logWarning('PassengerHomeScreen', { context: 'Getting location', isNetwork, isGpsOff, message: msg });
 
-              Alert.alert(title, message, [
-                { text: 'Abrir Configuración', onPress: () => Linking.openSettings() },
-                {
-                  text: 'Reintentar',
-                  onPress: () => {
-                    setIsLoadingLocation(true);
-                    Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-                      .then(loc =>
-                        applyLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude })
-                      )
-                      .catch(() => setIsLoadingLocation(false));
-                  },
-                },
-                { text: 'Cerrar', style: 'cancel' },
-              ]);
+              showStatus('warning', message, title, undefined, { label: 'Reintentar', onPress: () => {
+                setIsLoadingLocation(true);
+                Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+                  .then(loc =>
+                    applyLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude })
+                  )
+                  .catch(() => setIsLoadingLocation(false));
+              }});
 
               setIsLoadingLocation(false);
             }
@@ -534,11 +528,7 @@ export default function PassengerHomeScreen() {
       } catch (error: any) {
         // Outer catch: unexpected errors (e.g. permissions API crash)
         logError('PassengerHomeScreen', error, { context: 'Location init' });
-        Alert.alert(
-          'Error inesperado',
-          'Ocurrió un error al inicializar la ubicación. Reinicia la app e intenta de nuevo.',
-          [{ text: 'OK' }]
-        );
+        showToast('Ocurrió un error al inicializar la ubicación. Reinicia la app e intenta de nuevo.', 'error');
         setIsLoadingLocation(false);
       }
     })();
@@ -669,32 +659,31 @@ export default function PassengerHomeScreen() {
       const ratingText = data.driver?.rating ? `⭐ ${data.driver.rating.toFixed(1)}` : '';
 
       // Show single comprehensive driver info alert
-      Alert.alert(
-        '🚗 ¡Tu Conductor Viene en Camino!',
+      showStatus(
+        'info',
         `${data.driver?.name || 'Tu conductor'} ha aceptado tu viaje y se dirige hacia ti.\n\n` +
           `🚙 Vehículo: ${vehicleText}\n` +
           `${ratingText ? `${ratingText}\n` : ''}` +
           `\nPuedes ver su ubicación en el mapa.`,
-        [
-          {
-            text: 'Ver en Mapa',
-            onPress: () => {
-              // Focus map on driver location if available
-              if (data.driver?.currentLocation && mapRef.current) {
-                mapRef.current.animateToRegion(
-                  {
-                    latitude: data.driver.currentLocation.latitude,
-                    longitude: data.driver.currentLocation.longitude,
-                    latitudeDelta: 0.02,
-                    longitudeDelta: 0.02,
-                  },
-                  1000
-                );
-              }
-            },
+        '🚗 ¡Tu Conductor Viene en Camino!',
+        undefined,
+        {
+          label: 'Ver en Mapa',
+          onPress: () => {
+            // Focus map on driver location if available
+            if (data.driver?.currentLocation && mapRef.current) {
+              mapRef.current.animateToRegion(
+                {
+                  latitude: data.driver.currentLocation.latitude,
+                  longitude: data.driver.currentLocation.longitude,
+                  latitudeDelta: 0.02,
+                  longitudeDelta: 0.02,
+                },
+                1000
+              );
+            }
           },
-          { text: 'Entendido', style: 'cancel' },
-        ]
+        }
       );
     };
 
@@ -710,37 +699,32 @@ export default function PassengerHomeScreen() {
       // Show native alerts for important status changes
       if (data.status === 'arrived') {
         playNotificationSound();
-        Alert.alert(
-          '📍 ¡Tu Conductor ha Llegado!',
+        showStatus(
+          'info',
           'Tu conductor está esperándote en el punto de recogida. Por favor dirígete al vehículo.',
-          [
-            {
-              text: 'Ver Ubicación',
-              onPress: () => {
-                // Focus map on pickup location
-                if (pickupLocation && mapRef.current) {
-                  mapRef.current.animateToRegion(
-                    {
-                      latitude: pickupLocation.latitude,
-                      longitude: pickupLocation.longitude,
-                      latitudeDelta: 0.01,
-                      longitudeDelta: 0.01,
-                    },
-                    1000
-                  );
-                }
-              },
+          '📍 ¡Tu Conductor ha Llegado!',
+          undefined,
+          {
+            label: 'Ver Ubicación',
+            onPress: () => {
+              // Focus map on pickup location
+              if (pickupLocation && mapRef.current) {
+                mapRef.current.animateToRegion(
+                  {
+                    latitude: pickupLocation.latitude,
+                    longitude: pickupLocation.longitude,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
+                  },
+                  1000
+                );
+              }
             },
-            { text: 'OK', style: 'cancel' },
-          ]
+          }
         );
       } else if (data.status === 'in_progress') {
         playNotificationSound();
-        Alert.alert(
-          '🚀 ¡Viaje en Progreso!',
-          '¡Buen viaje! Tu conductor te llevará a tu destino de forma segura.',
-          [{ text: 'Entendido' }]
-        );
+        showToast('¡Buen viaje! Tu conductor te llevará a tu destino de forma segura.', 'success');
       }
       // Note: 'completed' status is handled by the dedicated handleRideCompleted event listener
     };
@@ -833,11 +817,11 @@ export default function PassengerHomeScreen() {
         setHasShownNearbyNotification(true);
         playNotificationSound();
 
-        Alert.alert(
-          '🚗 ¡Tu Conductor Está Cerca!',
+        showStatus(
+          'info',
           `Tu conductor llegará en aproximadamente ${Math.ceil(estimatedMinutes)} minuto${estimatedMinutes > 1 ? 's' : ''}.\n\n` +
             `Prepárate para abordar el vehículo.`,
-          [{ text: 'Entendido' }]
+          '🚗 ¡Tu Conductor Está Cerca!'
         );
       }
     };
@@ -856,30 +840,29 @@ export default function PassengerHomeScreen() {
       playNotificationSound();
 
       // Show native alert with enhanced message
-      Alert.alert(
-        '📍 ¡Tu Conductor Está Aquí!',
+      showStatus(
+        'info',
         `${data.driverName} te está esperando en el punto de recogida.\n\n` +
           `Por favor dirígete al vehículo. Si no lo ves, puedes llamarlo desde el panel.`,
-        [
-          {
-            text: 'Ver en Mapa',
-            onPress: () => {
-              // Focus map on pickup location if available
-              if (pickupLocation && mapRef.current) {
-                mapRef.current.animateToRegion(
-                  {
-                    latitude: pickupLocation.latitude,
-                    longitude: pickupLocation.longitude,
-                    latitudeDelta: 0.01,
-                    longitudeDelta: 0.01,
-                  },
-                  1000
-                );
-              }
-            },
+        '📍 ¡Tu Conductor Está Aquí!',
+        undefined,
+        {
+          label: 'Ver en Mapa',
+          onPress: () => {
+            // Focus map on pickup location if available
+            if (pickupLocation && mapRef.current) {
+              mapRef.current.animateToRegion(
+                {
+                  latitude: pickupLocation.latitude,
+                  longitude: pickupLocation.longitude,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                },
+                1000
+              );
+            }
           },
-          { text: 'Ya Voy', style: 'cancel' },
-        ]
+        }
       );
     };
 
@@ -899,12 +882,12 @@ export default function PassengerHomeScreen() {
 
       // Show native alert based on who cancelled
       if (data.cancelledBy === 'system') {
-        Alert.alert(
-          '😔 No Hay Conductores Disponibles',
+        showStatus(
+          'ride_cancelled',
           data.cancellationReason ||
             'Lo sentimos, no encontramos conductores disponibles en este momento.\n\n' +
               'Por favor intenta nuevamente en unos minutos.',
-          [{ text: 'Entendido' }]
+          '😔 No Hay Conductores Disponibles'
         );
 
         // Reset ride state
@@ -912,12 +895,12 @@ export default function PassengerHomeScreen() {
         setDriverLocation(null);
         setIsSearchingDriver(false);
       } else if (data.cancelledBy === 'driver') {
-        Alert.alert(
-          '⚠️ Conductor Canceló el Viaje',
+        showStatus(
+          'ride_cancelled',
           `El conductor ha cancelado tu viaje.\n\n` +
             `Motivo: ${data.cancellationReason || 'No especificado'}\n\n` +
             `Estamos buscando otro conductor disponible para ti.`,
-          [{ text: 'Buscar Otro Conductor' }]
+          '⚠️ Conductor Canceló el Viaje'
         );
       } else if (data.cancelledBy === 'passenger') {
         // Show cancellation fee if applicable
@@ -926,9 +909,7 @@ export default function PassengerHomeScreen() {
             ? `\n\n💰 Tarifa de cancelación aplicada: ${formatCurrency(data.cancellationFee, fareCurrency)}`
             : '';
 
-        Alert.alert('✓ Viaje Cancelado', `Tu viaje ha sido cancelado exitosamente.${feeMessage}`, [
-          { text: 'Entendido' },
-        ]);
+        showToast(`Tu viaje ha sido cancelado exitosamente.${feeMessage}`, 'info');
 
         // Reset ride state
         setActiveRide(null);
@@ -953,19 +934,18 @@ export default function PassengerHomeScreen() {
       playNotificationSound();
 
       // Show completion alert and then rating modal
-      Alert.alert(
-        '🎉 Viaje Completado',
+      showStatus(
+        'success',
         `Tu viaje ha finalizado exitosamente.\n\nTarifa Final: ${formatCurrency(data.finalFare, fareCurrency)}\n\nPor favor califica tu experiencia.`,
-        [
-          {
-            text: 'Calificar',
-            onPress: () => {
-              console.log('[PASSENGER] Opening rating modal');
-              setShowRatingModal(true);
-            },
+        '🎉 Viaje Completado',
+        undefined,
+        {
+          label: 'Calificar',
+          onPress: () => {
+            console.log('[PASSENGER] Opening rating modal');
+            setShowRatingModal(true);
           },
-        ],
-        { cancelable: false }
+        }
       );
     };
 
@@ -1045,11 +1025,7 @@ export default function PassengerHomeScreen() {
       if (currentInvitation?.id === data.invitationId) {
         setShowInvitationModal(false);
         setCurrentInvitation(null);
-        Alert.alert(
-          'Invitación Expirada',
-          'La invitación de viaje compartido ha expirado.',
-          [{ text: 'OK' }]
-        );
+        showToast('La invitación de viaje compartido ha expirado.', 'info');
       }
     });
 
@@ -1177,11 +1153,7 @@ export default function PassengerHomeScreen() {
       setCurrentInvitation(null);
 
       // Show success message
-      Alert.alert(
-        'Invitación Aceptada',
-        'Has aceptado la invitación. El solicitante confirmará el viaje y se buscará un conductor.',
-        [{ text: 'OK' }]
-      );
+      showToast('Has aceptado la invitación. El solicitante confirmará el viaje y se buscará un conductor.', 'success');
     },
     []
   );
@@ -1194,9 +1166,7 @@ export default function PassengerHomeScreen() {
     setCurrentInvitation(null);
 
     // Show confirmation message
-    Alert.alert('Invitación Rechazada', 'Has rechazado la invitación de viaje compartido.', [
-      { text: 'OK' },
-    ]);
+    showToast('Has rechazado la invitación de viaje compartido.', 'info');
   }, []);
 
   const handleInvitationClose = useCallback(() => {
@@ -1628,7 +1598,7 @@ export default function PassengerHomeScreen() {
    */
   const handleContactDriver = () => {
     if (!activeRide?.driver?.phone) {
-      Alert.alert('Error', 'Número de teléfono no disponible');
+      showToast('Número de teléfono no disponible', 'error');
       return;
     }
     setShowContactModal(true);
@@ -1639,7 +1609,7 @@ export default function PassengerHomeScreen() {
    */
   const handlePhoneCall = () => {
     if (!activeRide?.driver?.phone) {
-      Alert.alert('Error', 'Número de teléfono no disponible');
+      showToast('Número de teléfono no disponible', 'error');
       return;
     }
 
@@ -1655,7 +1625,7 @@ export default function PassengerHomeScreen() {
    */
   const handleWhatsAppCall = () => {
     if (!activeRide?.driver?.phone) {
-      Alert.alert('Error', 'Número de teléfono no disponible');
+      showToast('Número de teléfono no disponible', 'error');
       return;
     }
 
@@ -1680,7 +1650,7 @@ export default function PassengerHomeScreen() {
     // Try to open WhatsApp
     Linking.openURL(whatsappUrl).catch(err => {
       console.error('Error opening WhatsApp:', err);
-      Alert.alert('Error', 'No se pudo abrir WhatsApp. Asegúrate de tener WhatsApp instalado.');
+      showToast('No se pudo abrir WhatsApp. Asegúrate de tener WhatsApp instalado.', 'error');
     });
   };
 
@@ -1724,7 +1694,7 @@ export default function PassengerHomeScreen() {
 
   const handleSearchDestination = async () => {
     if (!destinationAddress.trim()) {
-      Alert.alert('Error', 'Por favor ingresa una dirección de destino');
+      showToast('Por favor ingresa una dirección de destino', 'error');
       return;
     }
 
@@ -1758,15 +1728,12 @@ export default function PassengerHomeScreen() {
       const location = await mapsService.geocodeAddress(searchQuery);
 
       if (!location || !location.latitude || !location.longitude) {
-        Alert.alert(
-          'Dirección no encontrada',
+        showStatus(
+          'info',
           'Esta dirección aún no está registrada en nuestro mapa. Pronto será agregada.\n\nPor favor, selecciona manualmente la ubicación en el mapa.',
-          [
-            {
-              text: 'Seleccionar en mapa',
-              onPress: () => handleEnableMapSelection('destination'),
-            },
-          ]
+          'Dirección no encontrada',
+          undefined,
+          { label: 'Seleccionar en mapa', onPress: () => handleEnableMapSelection('destination') }
         );
         return;
       }
@@ -1792,26 +1759,23 @@ export default function PassengerHomeScreen() {
         error.message?.includes('status code 500');
 
       if (isNotFound) {
-        Alert.alert(
-          'Dirección no encontrada',
+        showStatus(
+          'info',
           'Esta dirección aún no está registrada en nuestro mapa. Pronto será agregada.\n\nPor favor, selecciona manualmente la ubicación en el mapa.',
-          [
-            {
-              text: 'Seleccionar en mapa',
-              onPress: () => handleEnableMapSelection('destination'),
-            },
-          ]
+          'Dirección no encontrada',
+          undefined,
+          { label: 'Seleccionar en mapa', onPress: () => handleEnableMapSelection('destination') }
         );
       } else {
         logError('PassengerHomeScreen', error, { context: 'Geocoding destination' });
-        Alert.alert('Error', 'No se pudo buscar la dirección. Verifica tu conexión.');
+        showToast('No se pudo buscar la dirección. Verifica tu conexión.', 'error');
       }
     }
   };
 
   const handleSearchPickup = async () => {
     if (!pickupAddress.trim()) {
-      Alert.alert('Error', 'Por favor ingresa una dirección de recogida');
+      showToast('Por favor ingresa una dirección de recogida', 'error');
       return;
     }
 
@@ -1846,15 +1810,12 @@ export default function PassengerHomeScreen() {
       const location = await mapsService.geocodeAddress(searchQuery);
 
       if (!location || !location.latitude || !location.longitude) {
-        Alert.alert(
-          'Dirección no encontrada',
+        showStatus(
+          'info',
           'Esta dirección aún no está registrada en nuestro mapa. Pronto será agregada.\n\nPor favor, selecciona manualmente la ubicación en el mapa.',
-          [
-            {
-              text: 'Seleccionar en mapa',
-              onPress: () => handleEnableMapSelection('pickup'),
-            },
-          ]
+          'Dirección no encontrada',
+          undefined,
+          { label: 'Seleccionar en mapa', onPress: () => handleEnableMapSelection('pickup') }
         );
         return;
       }
@@ -1880,19 +1841,16 @@ export default function PassengerHomeScreen() {
         error.message?.includes('status code 500');
 
       if (isNotFound) {
-        Alert.alert(
-          'Dirección no encontrada',
+        showStatus(
+          'info',
           'Esta dirección aún no está registrada en nuestro mapa. Pronto será agregada.\n\nPor favor, selecciona manualmente la ubicación en el mapa.',
-          [
-            {
-              text: 'Seleccionar en mapa',
-              onPress: () => handleEnableMapSelection('pickup'),
-            },
-          ]
+          'Dirección no encontrada',
+          undefined,
+          { label: 'Seleccionar en mapa', onPress: () => handleEnableMapSelection('pickup') }
         );
       } else {
         logError('PassengerHomeScreen', error, { context: 'Geocoding pickup' });
-        Alert.alert('Error', 'No se pudo buscar la dirección. Verifica tu conexión.');
+        showToast('No se pudo buscar la dirección. Verifica tu conexión.', 'error');
       }
     }
   };
@@ -1937,7 +1895,7 @@ export default function PassengerHomeScreen() {
 
     if (!event || !event.nativeEvent) {
       console.error('[MAP_LONG_PRESS] Invalid event object');
-      Alert.alert('Error', 'No se pudo capturar la ubicación. Intenta de nuevo.');
+      showToast('No se pudo capturar la ubicación. Intenta de nuevo.', 'error');
       return;
     }
 
@@ -1945,7 +1903,7 @@ export default function PassengerHomeScreen() {
 
     if (!coordinate) {
       console.warn('[MAP_LONG_PRESS] No coordinate in event');
-      Alert.alert('Error', 'No se pudo obtener las coordenadas. Intenta de nuevo.');
+      showToast('No se pudo obtener las coordenadas. Intenta de nuevo.', 'error');
       return;
     }
 
@@ -1986,17 +1944,13 @@ export default function PassengerHomeScreen() {
       console.log('[MAP_LONG_PRESS] Address to show:', address);
 
       // Confirm selection with user
-      Alert.alert('Confirmar Ubicación', `¿Usar esta ubicación?\n\n${address}`, [
+      showStatus(
+        'info',
+        `¿Usar esta ubicación?\n\n${address}`,
+        'Confirmar Ubicación',
+        undefined,
         {
-          text: 'Cancelar',
-          style: 'cancel',
-          onPress: () => {
-            console.log('[MAP_LONG_PRESS] User cancelled selection');
-            setTempMarkerLocation(null);
-          },
-        },
-        {
-          text: 'Confirmar',
+          label: 'Confirmar',
           onPress: () => {
             console.log('[MAP_LONG_PRESS] User confirmed selection');
             const shortAddress = extractShortAddress(address);
@@ -2021,52 +1975,45 @@ export default function PassengerHomeScreen() {
             setTempMarkerLocation(null);
             setIsPanelCollapsed(false);
           },
-        },
-      ]);
+        }
+      );
     } catch (error) {
       console.error('[MAP_LONG_PRESS] Reverse geocoding error:', error);
 
       // Fallback to coordinates if reverse geocoding fails
       const address = `${coordinate.latitude.toFixed(6)}, ${coordinate.longitude.toFixed(6)}`;
 
-      Alert.alert(
-        'Confirmar Ubicación',
+      showStatus(
+        'info',
         `No se pudo obtener la dirección exacta.\n¿Usar estas coordenadas?\n\n${address}`,
-        [
-          {
-            text: 'Cancelar',
-            style: 'cancel',
-            onPress: () => {
-              setTempMarkerLocation(null);
-            },
-          },
-          {
-            text: 'Confirmar',
-            onPress: () => {
-              const shortAddress = extractShortAddress(address);
-              if (mapSelectionMode === 'pickup') {
-                setPickupLocation(coordinate);
-                setPickupAddress(shortAddress);
-              } else if (mapSelectionMode === 'destination') {
-                setDestinationLocation(coordinate);
-                setDestinationAddress(shortAddress);
-              } else if (mapSelectionMode === 'second_pickup') {
-                setSecondPickupLocation(coordinate);
-                setSecondPickupAddress(shortAddress);
-                setSecondPickupLocationSource('custom');
-              } else if (mapSelectionMode === 'second_destination') {
-                setSecondDestinationLocation(coordinate);
-                setSecondDestinationAddress(shortAddress);
-                setSecondDestinationLocationSource('custom');
-              }
+        'Confirmar Ubicación',
+        undefined,
+        {
+          label: 'Confirmar',
+          onPress: () => {
+            const shortAddress = extractShortAddress(address);
+            if (mapSelectionMode === 'pickup') {
+              setPickupLocation(coordinate);
+              setPickupAddress(shortAddress);
+            } else if (mapSelectionMode === 'destination') {
+              setDestinationLocation(coordinate);
+              setDestinationAddress(shortAddress);
+            } else if (mapSelectionMode === 'second_pickup') {
+              setSecondPickupLocation(coordinate);
+              setSecondPickupAddress(shortAddress);
+              setSecondPickupLocationSource('custom');
+            } else if (mapSelectionMode === 'second_destination') {
+              setSecondDestinationLocation(coordinate);
+              setSecondDestinationAddress(shortAddress);
+              setSecondDestinationLocationSource('custom');
+            }
 
-              // Reset selection mode
-              setMapSelectionMode('none');
-              setTempMarkerLocation(null);
-              setIsPanelCollapsed(false);
-            },
+            // Reset selection mode
+            setMapSelectionMode('none');
+            setTempMarkerLocation(null);
+            setIsPanelCollapsed(false);
           },
-        ]
+        }
       );
     }
   };
@@ -2079,7 +2026,7 @@ export default function PassengerHomeScreen() {
 
   const handleUseCurrentLocation = async () => {
     if (!currentLocation) {
-      Alert.alert('Error', 'No se pudo obtener tu ubicación actual');
+      showToast('No se pudo obtener tu ubicación actual', 'error');
       return;
     }
 
@@ -2114,7 +2061,7 @@ export default function PassengerHomeScreen() {
 
   const handleCenterOnUserLocation = () => {
     if (!currentLocation) {
-      Alert.alert('Error', 'No se pudo obtener tu ubicación actual');
+      showToast('No se pudo obtener tu ubicación actual', 'error');
       return;
     }
 
@@ -2147,12 +2094,12 @@ export default function PassengerHomeScreen() {
 
   const handleRequestRide = async () => {
     if (!pickupLocation || !destinationLocation) {
-      Alert.alert('Error', 'Por favor selecciona un destino');
+      showToast('Por favor selecciona un destino', 'error');
       return;
     }
 
     if (!user) {
-      Alert.alert('Error', 'Debes iniciar sesión para solicitar un viaje');
+      showToast('Debes iniciar sesión para solicitar un viaje', 'error');
       return;
     }
 
@@ -2233,13 +2180,13 @@ export default function PassengerHomeScreen() {
       setIsSearchingDriver(true);
 
       // Show native alert for searching driver
-      Alert.alert('Buscando conductor...', 'Estamos notificando a conductores cercanos', [
-        {
-          text: 'Cancelar Búsqueda',
-          onPress: handleCancelSearching,
-          style: 'cancel',
-        },
-      ]);
+      showStatus(
+        'info',
+        'Estamos notificando a conductores cercanos',
+        'Buscando conductor...',
+        undefined,
+        { label: 'Cancelar Búsqueda', onPress: handleCancelSearching }
+      );
 
       console.log('✅ Ride requested:', rideId);
     } catch (error: any) {
@@ -2250,17 +2197,9 @@ export default function PassengerHomeScreen() {
 
       // Handle specific error cases with user-friendly messages
       if (error.response?.status === 404) {
-        Alert.alert(
-          'No hay conductores disponibles',
-          'Lo sentimos, no hay conductores disponibles en tu área en este momento. Por favor, intenta nuevamente en unos minutos.',
-          [{ text: 'OK' }]
-        );
+        showToast('Lo sentimos, no hay conductores disponibles en tu área en este momento.', 'error');
       } else if (error.response?.status === 401) {
-        Alert.alert(
-          'Sesión expirada',
-          'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
-          [{ text: 'OK' }]
-        );
+        showToast('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.', 'error');
       } else {
         // Log error to console only, don't show to user
         console.error('Error details:', {
@@ -2282,7 +2221,7 @@ export default function PassengerHomeScreen() {
       setDriverLocation(null);
 
       // Show cancellation alert
-      Alert.alert('Búsqueda Cancelada', 'Has cancelado la búsqueda de conductor', [{ text: 'OK' }]);
+      showToast('Has cancelado la búsqueda de conductor', 'info');
       return;
     }
 
@@ -2295,7 +2234,7 @@ export default function PassengerHomeScreen() {
       setIsSearchingDriver(false);
 
       // Show cancellation confirmation
-      Alert.alert('Búsqueda Cancelada', 'Has cancelado la búsqueda de conductor', [{ text: 'OK' }]);
+      showToast('Has cancelado la búsqueda de conductor', 'info');
       setDriverLocation(null);
 
       console.log('✅ Ride search cancelled');
@@ -2308,9 +2247,9 @@ export default function PassengerHomeScreen() {
         setActiveRide(null);
         setIsSearchingDriver(false);
         setDriverLocation(null);
-        Alert.alert('Búsqueda Finalizada', 'La búsqueda ya ha sido cancelada.');
+        showToast('La búsqueda ya ha sido cancelada.', 'info');
       } else {
-        Alert.alert('Error', 'No se pudo cancelar la búsqueda. Por favor, intenta nuevamente.');
+        showToast('No se pudo cancelar la búsqueda. Por favor, intenta nuevamente.', 'error');
       }
     }
   };
@@ -2320,12 +2259,12 @@ export default function PassengerHomeScreen() {
 
     // Check if we can cancel using the policy
     if (!cancellationPolicy) {
-      Alert.alert('Error', 'No se pudo obtener la política de cancelación');
+      showToast('No se pudo obtener la política de cancelación', 'error');
       return;
     }
 
     if (!cancellationPolicy.canCancel) {
-      Alert.alert('No se puede cancelar', 'No es posible cancelar el viaje en este momento');
+      showToast('No es posible cancelar el viaje en este momento', 'error');
       return;
     }
 
@@ -2371,7 +2310,7 @@ export default function PassengerHomeScreen() {
         ? error.response.data.error.message
         : 'No se pudo cancelar el viaje. Por favor intenta nuevamente.';
 
-      Alert.alert('No se pudo cancelar', errorMessage);
+      showToast(errorMessage, 'error');
     }
   };
 
@@ -2439,16 +2378,13 @@ export default function PassengerHomeScreen() {
         ? error.response.data.error.message
         : 'No se pudo procesar el pago. Por favor intenta nuevamente.';
 
-      Alert.alert('No se pudo completar el pago', errorMessage, [
-        {
-          text: 'Reintentar',
-          onPress: handleProcessPayment,
-        },
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-      ]);
+      showStatus(
+        'error',
+        errorMessage,
+        'No se pudo completar el pago',
+        undefined,
+        { label: 'Reintentar', onPress: handleProcessPayment }
+      );
     }
   };
 
@@ -2477,7 +2413,7 @@ export default function PassengerHomeScreen() {
     monto?: number;
   }) => {
     if (!activeRide) {
-      Alert.alert('Error', 'No hay un viaje activo');
+      showToast('No hay un viaje activo', 'error');
       return;
     }
 
@@ -2494,11 +2430,7 @@ export default function PassengerHomeScreen() {
         setIsRequestingRide(false);
 
         // Mostrar confirmación de éxito
-        Alert.alert(
-          'Pago Confirmado',
-          'Tu Pago Móvil ha sido verificado exitosamente. El conductor ha sido notificado.',
-          [{ text: 'OK' }]
-        );
+        showToast('Tu Pago Móvil ha sido verificado exitosamente. El conductor ha sido notificado.', 'success');
       } else {
         // Legacy payment methods (transfer, cash)
         const response = await paymentAPI.completePayment(activeRide.id, {
@@ -2516,11 +2448,7 @@ export default function PassengerHomeScreen() {
         setIsRequestingRide(false);
 
         // Mostrar confirmación de éxito
-        Alert.alert(
-          'Pago Confirmado',
-          'Tu pago ha sido procesado exitosamente. El conductor ha sido notificado.',
-          [{ text: 'OK' }]
-        );
+        showToast('Tu pago ha sido procesado exitosamente. El conductor ha sido notificado.', 'success');
       }
     } catch (error: any) {
       console.error('❌ Payment processing failed:', error);
@@ -2537,26 +2465,19 @@ export default function PassengerHomeScreen() {
         errorMessage = error.message;
       }
 
-      Alert.alert('Error al Procesar Pago', errorMessage, [
-        {
-          text: 'Reintentar',
-          onPress: () => setShowMobilePaymentModal(true),
-        },
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-      ]);
+      showStatus(
+        'error',
+        errorMessage,
+        'Error al Procesar Pago',
+        undefined,
+        { label: 'Reintentar', onPress: () => setShowMobilePaymentModal(true) }
+      );
     }
   };
 
   const handleMobilePaymentCancel = () => {
     setShowMobilePaymentModal(false);
-    Alert.alert(
-      'Pago Pendiente',
-      'Debes completar el pago para que el conductor inicie el viaje.',
-      [{ text: 'OK' }]
-    );
+    showToast('Debes completar el pago para que el conductor inicie el viaje.', 'info');
   };
 
   /**
@@ -2593,17 +2514,13 @@ export default function PassengerHomeScreen() {
       // Update local ride state (Req. 3.3)
       setActiveRide(prev => prev ? { ...prev, paymentMode: 'pago_movil' } : prev);
 
-      Alert.alert(
-        'Método de Pago Actualizado',
-        'Tu método de pago ha sido cambiado a Pago Móvil. El conductor ha sido notificado.',
-        [{ text: 'OK' }]
-      );
+      showToast('Tu método de pago ha sido cambiado a Pago Móvil. El conductor ha sido notificado.', 'success');
     } catch (error: any) {
       // On failure, keep original method (Req. 3.5)
       const msg =
         error?.response?.data?.message ||
         'No se pudo cambiar el método de pago. Se mantiene el pago en efectivo.';
-      Alert.alert('Error', msg);
+      showToast(msg, 'error');
     } finally {
       setIsChangingPayment(false);
     }
@@ -2615,7 +2532,7 @@ export default function PassengerHomeScreen() {
 
   const handleSubmitRating = async () => {
     if (!activeRide || driverRating === 0) {
-      Alert.alert('Error', 'Por favor selecciona una valoración');
+      showToast('Por favor selecciona una valoración', 'error');
       return;
     }
 
@@ -2631,7 +2548,7 @@ export default function PassengerHomeScreen() {
       setIsSubmittingRating(false);
 
       // Show thank you alert
-      Alert.alert('¡Gracias!', 'Tu valoración ha sido enviada exitosamente.', [{ text: 'OK' }]);
+      showToast('Tu valoración ha sido enviada exitosamente.', 'success');
 
       handleCloseRatingModal();
     } catch (error: any) {
@@ -2644,25 +2561,17 @@ export default function PassengerHomeScreen() {
         ? error.response.data.error.message
         : 'No se pudo enviar la valoración. Por favor intenta nuevamente.';
 
-      Alert.alert('No se pudo enviar', errorMessage);
+      showToast(errorMessage, 'error');
     }
   };
 
   const handleSkipRating = () => {
-    Alert.alert(
-      'Omitir Valoración',
+    showStatus(
+      'info',
       '¿Estás seguro que deseas omitir la valoración del conductor?',
-      [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-        {
-          text: 'Omitir',
-          onPress: handleCloseRatingModal,
-          style: 'destructive',
-        },
-      ]
+      'Omitir Valoración',
+      undefined,
+      { label: 'Omitir', onPress: handleCloseRatingModal }
     );
   };
 

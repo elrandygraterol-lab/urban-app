@@ -36,7 +36,7 @@ export default function DriverHomeScreen() {
   const { isAvailable, isUpdatingAvailability, setIsAvailable, toggleAvailability, balanceVES, balanceUSD, transactions } =
     useDriverStore();
   const { playNotificationSound } = useSound();
-  const { showToast, showError } = useUnifiedNotifications();
+  const { showToast, showError, showStatus } = useUnifiedNotifications();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
@@ -156,10 +156,7 @@ export default function DriverHomeScreen() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
-          'Permiso Denegado',
-          'Se necesita acceso a la ubicación para usar esta función. Por favor habilita los permisos de ubicación en la configuración de tu dispositivo.'
-        );
+        showStatus('warning', 'Se necesita acceso a la ubicación para usar esta función. Por favor habilita los permisos de ubicación en la configuración de tu dispositivo.', 'Permiso Denegado');
         setLoading(false);
         return;
       }
@@ -210,16 +207,7 @@ export default function DriverHomeScreen() {
         setLocation(fallbackCoords);
         setLoading(false);
 
-        Alert.alert(
-          'Ubicación No Disponible',
-          'Los servicios de ubicación están deshabilitados. Se está usando una ubicación de prueba.\n\n' +
-            'Para usar tu ubicación real:\n' +
-            '1. Ve a Configuración de tu dispositivo\n' +
-            '2. Habilita los servicios de ubicación\n' +
-            '3. Asegúrate de que esta app tenga permiso de ubicación\n' +
-            '4. Reinicia la aplicación',
-          [{ text: 'Entendido' }]
-        );
+        showStatus('warning', 'Los servicios de ubicación están deshabilitados. Se está usando una ubicación de prueba.\n\nPara usar tu ubicación real, habilita los servicios de ubicación y reinicia la aplicación.', 'Ubicación No Disponible');
 
         // Send fallback location to server
         const socket = getSocket();
@@ -236,18 +224,7 @@ export default function DriverHomeScreen() {
         setLocation(fallbackCoords);
         setLoading(false);
 
-        Alert.alert(
-          'Tiempo de Espera Agotado',
-          'No se pudo obtener tu ubicación. Se está usando una ubicación de prueba.\n\n' +
-            'Verifica que:\n' +
-            '• Los servicios de ubicación estén habilitados\n' +
-            '• Tengas buena señal GPS\n' +
-            '• Estés en un lugar con visibilidad al cielo',
-          [
-            { text: 'Usar Ubicación de Prueba', style: 'cancel' },
-            { text: 'Reintentar', onPress: () => initializeLocation() },
-          ]
-        );
+        showStatus('warning', 'No se pudo obtener tu ubicación. Se está usando una ubicación de prueba.\n\nVerifica que los servicios de ubicación estén habilitados, tengas buena señal GPS y estés en un lugar con visibilidad al cielo.', 'Tiempo de Espera Agotado', undefined, { label: 'Reintentar', onPress: () => initializeLocation() });
 
         // Send fallback location to server
         const socket = getSocket();
@@ -264,14 +241,7 @@ export default function DriverHomeScreen() {
         setLocation(fallbackCoords);
         setLoading(false);
 
-        Alert.alert(
-          'Error de Ubicación',
-          'No se pudo obtener tu ubicación. Se está usando una ubicación de prueba.\n\n' +
-            'Para usar tu ubicación real, verifica que los servicios de ubicación estén habilitados.',
-          [
-            { text: 'Usar Ubicación de Prueba', style: 'cancel' },
-            { text: 'Reintentar', onPress: () => initializeLocation() },
-          ]
+        showStatus('error', 'No se pudo obtener tu ubicación. Se está usando una ubicación de prueba.\n\nPara usar tu ubicación real, verifica que los servicios de ubicación estén habilitados.', 'Error de Ubicación', undefined, { label: 'Reintentar', onPress: () => initializeLocation() }
         );
 
         // Send fallback location to server
@@ -332,7 +302,7 @@ export default function DriverHomeScreen() {
       }
 
       // Show alert to driver
-      Alert.alert('Viaje Cancelado', message, [{ text: 'Entendido', style: 'default' }]);
+      showStatus('ride_cancelled', message, 'Viaje Cancelado');
     },
     [playNotificationSound]
   );
@@ -810,7 +780,7 @@ export default function DriverHomeScreen() {
             
             <TouchableOpacity 
               style={styles.withdrawButton}
-              onPress={() => Alert.alert('Retiro', 'Funcionalidad de retiro próximamente disponible')}
+              onPress={() => showToast('Funcionalidad de retiro próximamente disponible', 'info')}
             >
               <Text style={styles.withdrawButtonText}>Solicitar Retiro</Text>
             </TouchableOpacity>

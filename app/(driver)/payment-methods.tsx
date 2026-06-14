@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -14,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/theme';
 import { driverAPI } from '../../services/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 
 interface PaymentInfo {
   pagoMovilPhone?: string;
@@ -27,6 +27,7 @@ interface PaymentInfo {
 export default function DriverPaymentMethodsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { showToast, showStatus } = useUnifiedNotifications();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -70,9 +71,9 @@ export default function DriverPaymentMethodsScreen() {
 
   const handleSave = async () => {
     if (!hasPagoMovil && !hasBankTransfer) {
-      Alert.alert(
-        'Error',
-        'Debes configurar al menos un método de pago completo:\n\n• Pago Móvil: teléfono, banco y cédula\n• Transferencia: banco y cuenta'
+      showToast(
+        'Debes configurar al menos un método de pago completo: Pago Móvil (teléfono, banco y cédula) o Transferencia (banco y cuenta)',
+        'error'
       );
       return;
     }
@@ -80,12 +81,10 @@ export default function DriverPaymentMethodsScreen() {
     try {
       setSaving(true);
       await driverAPI.updatePaymentInfo(paymentInfo);
-      Alert.alert('Guardado', 'Métodos de pago actualizados exitosamente', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      showStatus('success', 'Métodos de pago actualizados exitosamente', 'Guardado', undefined, { label: 'OK', onPress: () => router.back() });
     } catch (error: any) {
       const message = error?.response?.data?.error?.message || 'Error al guardar los métodos de pago';
-      Alert.alert('Error', message);
+      showToast(message, 'error');
     } finally {
       setSaving(false);
     }
