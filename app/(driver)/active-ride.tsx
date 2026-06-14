@@ -294,8 +294,8 @@ export default function ActiveRideScreen() {
   const fetchRide = async () => {
     try {
       const response = await api.get(`/api/rides/${rideId}`);
-      // Backend returns { success: true, data: {...} }
-      const rideData = response.data.data || response.data;
+      // Backend returns { success: true, data: { ride: {...} } } or { success: true, data: {...} }
+      const rideData = response.data?.data?.ride || response.data?.data || response.data;
       setRide(rideData);
       // Populate route points state if available
       if (rideData.routePoints && rideData.routePoints.length > 0) {
@@ -770,7 +770,7 @@ export default function ActiveRideScreen() {
 
       // If completing the ride, show rating modal immediately
       if (newStatus === 'completed') {
-        const rideData = response.data.data || response.data;
+        const rideData = response.data?.data?.ride || response.data?.data || response.data;
 
         // Store final fare from response
         const fareValue = rideData.finalFare ?? ride?.estimatedFare ?? 0;
@@ -1642,11 +1642,9 @@ export default function ActiveRideScreen() {
               >
                 <Ionicons name="call" size={20} color="#fff" />
                 <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
-                  {ride.isDelegated
-                    ? 'Beneficiario en el Vehículo'
-                    : ride.status === 'in_progress'
-                      ? 'Pasajero en el Vehículo'
-                      : 'Llamar al Pasajero'}
+                  {ride.status === 'in_progress'
+                    ? (ride.isDelegated ? 'Beneficiario en el Vehículo' : 'Pasajero en el Vehículo')
+                    : (ride.isDelegated ? 'Llamar al Beneficiario' : 'Llamar al Pasajero')}
                 </Text>
               </TouchableOpacity>
             </View>
