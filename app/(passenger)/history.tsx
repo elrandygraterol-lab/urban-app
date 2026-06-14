@@ -15,7 +15,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 // import { useCopilot, walkthroughable, CopilotStep } from 'react-native-copilot';
 import { rideAPI } from '../../services/api';
 import { Ride } from '../../src/types';
-import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/theme';
+import { Colors, Spacing } from '../../constants/theme';
 import { formatCurrency, Currency } from '../../utils/currency';
 import { useSmartTutorial } from '@/hooks/useSmartTutorial';
 import { setActiveTutorialScreen } from '@/utils/tutorialState';
@@ -83,7 +83,11 @@ export default function PassengerHistoryScreen() {
           console.log('✅ [HISTORY] Usando rides (array con', ridesData.length, 'elementos)');
         } else if (Array.isArray(response.data)) {
           ridesData = response.data;
-          console.log('✅ [HISTORY] Usando response.data directamente (array con', ridesData.length, 'elementos)');
+          console.log(
+            '✅ [HISTORY] Usando response.data directamente (array con',
+            ridesData.length,
+            'elementos)'
+          );
         } else {
           console.warn('⚠️ [HISTORY] Respuesta inesperada del API, usando array vacío');
           console.warn('⚠️ [HISTORY] Estructura recibida:', response.data);
@@ -209,9 +213,7 @@ export default function PassengerHistoryScreen() {
       {ride.isDelegated && ride.beneficiaryName && (
         <View style={styles.delegatedBadge}>
           <Ionicons name="gift-outline" size={14} color={Colors.orange} />
-          <Text style={styles.delegatedBadgeText}>
-            Viaje para {ride.beneficiaryName}
-          </Text>
+          <Text style={styles.delegatedBadgeText}>Viaje para {ride.beneficiaryName}</Text>
         </View>
       )}
 
@@ -315,7 +317,10 @@ export default function PassengerHistoryScreen() {
               <View style={styles.detailSection}>
                 <Text style={styles.detailLabel}>Tarifa</Text>
                 <Text style={styles.detailValueLarge}>
-                  {formatCurrencyAmount(selectedRide.finalFare || selectedRide.estimatedFare || 0, selectedRide.currency)}
+                  {formatCurrencyAmount(
+                    selectedRide.finalFare || selectedRide.estimatedFare || 0,
+                    selectedRide.currency
+                  )}
                 </Text>
               </View>
 
@@ -473,22 +478,22 @@ export default function PassengerHistoryScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <View>
-              <Text style={styles.title}>Historial de Viajes</Text>
-              <Text style={styles.subtitle}>
-                {safeRides.length}{' '}
-                {safeRides.length === 1 ? 'viaje completado' : 'viajes completados'}
-              </Text>
-            </View>
-                <TouchableOpacity style={styles.filterIconButton} onPress={() => setShowFilters(true)}>
-                  <Ionicons
-                    name="filter"
-                    size={24}
-                    color={startDate || endDate ? Colors.primary : Colors.darkGray}
-                  />
-                </TouchableOpacity>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.title}>Historial de Viajes</Text>
+            <Text style={styles.subtitle}>
+              {safeRides.length}{' '}
+              {safeRides.length === 1 ? 'viaje completado' : 'viajes completados'}
+            </Text>
           </View>
+          <TouchableOpacity style={styles.filterIconButton} onPress={() => setShowFilters(true)}>
+            <Ionicons
+              name="filter"
+              size={24}
+              color={startDate || endDate ? Colors.primary : Colors.darkGray}
+            />
+          </TouchableOpacity>
+        </View>
 
         {(startDate || endDate) && (
           <View style={styles.activeFilters}>
@@ -508,7 +513,6 @@ export default function PassengerHistoryScreen() {
           </View>
         )}
       </View>
-
 
       {safeRides.length === 0 ? (
         <ScrollView

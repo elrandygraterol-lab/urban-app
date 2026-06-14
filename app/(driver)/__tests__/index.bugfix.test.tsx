@@ -61,8 +61,6 @@ jest.mock('expo-location', () => ({
 }));
 
 jest.mock('react-native-maps', () => {
-  const React = require('react');
-
   const MapView = React.forwardRef((props: any, ref: any) => {
     return React.createElement('MapView', { ...props, ref });
   });

@@ -20,7 +20,6 @@ import {
   Modal,
   TouchableOpacity,
   Animated,
-  Dimensions,
   ScrollView,
   Image,
 } from 'react-native';
@@ -39,8 +38,6 @@ import { getSocket } from '@/services/socket';
 import { Colors } from '@/constants/theme';
 import { useExchangeRate } from '@/hooks/useExchangeRate';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
 // ─── Config per notification type ──────────────────────────────────────────────
 
 interface NotificationConfig {
@@ -52,23 +49,125 @@ interface NotificationConfig {
 }
 
 const NOTIFICATION_CONFIG: Record<NotificationType, NotificationConfig> = {
-  ride_request:      { icon: 'car-sport',        iconColor: '#22c55e', bgColor: '#f0fdf4', borderColor: '#bbf7d0', accentColor: '#16a34a' },
-  ride_accepted:     { icon: 'checkmark-circle', iconColor: '#22c55e', bgColor: '#f0fdf4', borderColor: '#bbf7d0', accentColor: '#16a34a' },
-  ride_cancelled:    { icon: 'close-circle',     iconColor: '#ef4444', bgColor: '#fef2f2', borderColor: '#fecaca', accentColor: '#dc2626' },
-  ride_started:      { icon: 'play-circle',      iconColor: '#3b82f6', bgColor: '#eff6ff', borderColor: '#bfdbfe', accentColor: '#2563eb' },
-  ride_completed:    { icon: 'flag',             iconColor: '#22c55e', bgColor: '#f0fdf4', borderColor: '#bbf7d0', accentColor: '#16a34a' },
-  driver_arrived:    { icon: 'location',         iconColor: '#f59e0b', bgColor: '#fffbeb', borderColor: '#fde68a', accentColor: '#d97706' },
-  payment_completed: { icon: 'cash',             iconColor: '#22c55e', bgColor: '#f0fdf4', borderColor: '#bbf7d0', accentColor: '#16a34a' },
-  payment_failed:    { icon: 'card',             iconColor: '#ef4444', bgColor: '#fef2f2', borderColor: '#fecaca', accentColor: '#dc2626' },
-  commission_credited:{icon: 'wallet',           iconColor: '#8b5cf6', bgColor: '#f5f3ff', borderColor: '#ddd6fe', accentColor: '#7c3aed' },
-  store_approved:    { icon: 'storefront',       iconColor: '#22c55e', bgColor: '#f0fdf4', borderColor: '#bbf7d0', accentColor: '#16a34a' },
-  store_rejected:    { icon: 'storefront',       iconColor: '#ef4444', bgColor: '#fef2f2', borderColor: '#fecaca', accentColor: '#dc2626' },
-  new_review:        { icon: 'star',             iconColor: '#f59e0b', bgColor: '#fffbeb', borderColor: '#fde68a', accentColor: '#d97706' },
-  review_reply:      { icon: 'chatbubble',       iconColor: '#3b82f6', bgColor: '#eff6ff', borderColor: '#bfdbfe', accentColor: '#2563eb' },
-  success:           { icon: 'checkmark-circle', iconColor: '#22c55e', bgColor: '#f0fdf4', borderColor: '#bbf7d0', accentColor: '#16a34a' },
-  warning:           { icon: 'warning',          iconColor: '#f59e0b', bgColor: '#fffbeb', borderColor: '#fde68a', accentColor: '#d97706' },
-  error:             { icon: 'alert-circle',     iconColor: '#ef4444', bgColor: '#fef2f2', borderColor: '#fecaca', accentColor: '#dc2626' },
-  info:              { icon: 'information-circle',iconColor: '#3b82f6', bgColor: '#eff6ff', borderColor: '#bfdbfe', accentColor: '#2563eb' },
+  ride_request: {
+    icon: 'car-sport',
+    iconColor: '#22c55e',
+    bgColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+    accentColor: '#16a34a',
+  },
+  ride_accepted: {
+    icon: 'checkmark-circle',
+    iconColor: '#22c55e',
+    bgColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+    accentColor: '#16a34a',
+  },
+  ride_cancelled: {
+    icon: 'close-circle',
+    iconColor: '#ef4444',
+    bgColor: '#fef2f2',
+    borderColor: '#fecaca',
+    accentColor: '#dc2626',
+  },
+  ride_started: {
+    icon: 'play-circle',
+    iconColor: '#3b82f6',
+    bgColor: '#eff6ff',
+    borderColor: '#bfdbfe',
+    accentColor: '#2563eb',
+  },
+  ride_completed: {
+    icon: 'flag',
+    iconColor: '#22c55e',
+    bgColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+    accentColor: '#16a34a',
+  },
+  driver_arrived: {
+    icon: 'location',
+    iconColor: '#f59e0b',
+    bgColor: '#fffbeb',
+    borderColor: '#fde68a',
+    accentColor: '#d97706',
+  },
+  payment_completed: {
+    icon: 'cash',
+    iconColor: '#22c55e',
+    bgColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+    accentColor: '#16a34a',
+  },
+  payment_failed: {
+    icon: 'card',
+    iconColor: '#ef4444',
+    bgColor: '#fef2f2',
+    borderColor: '#fecaca',
+    accentColor: '#dc2626',
+  },
+  commission_credited: {
+    icon: 'wallet',
+    iconColor: '#8b5cf6',
+    bgColor: '#f5f3ff',
+    borderColor: '#ddd6fe',
+    accentColor: '#7c3aed',
+  },
+  store_approved: {
+    icon: 'storefront',
+    iconColor: '#22c55e',
+    bgColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+    accentColor: '#16a34a',
+  },
+  store_rejected: {
+    icon: 'storefront',
+    iconColor: '#ef4444',
+    bgColor: '#fef2f2',
+    borderColor: '#fecaca',
+    accentColor: '#dc2626',
+  },
+  new_review: {
+    icon: 'star',
+    iconColor: '#f59e0b',
+    bgColor: '#fffbeb',
+    borderColor: '#fde68a',
+    accentColor: '#d97706',
+  },
+  review_reply: {
+    icon: 'chatbubble',
+    iconColor: '#3b82f6',
+    bgColor: '#eff6ff',
+    borderColor: '#bfdbfe',
+    accentColor: '#2563eb',
+  },
+  success: {
+    icon: 'checkmark-circle',
+    iconColor: '#22c55e',
+    bgColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+    accentColor: '#16a34a',
+  },
+  warning: {
+    icon: 'warning',
+    iconColor: '#f59e0b',
+    bgColor: '#fffbeb',
+    borderColor: '#fde68a',
+    accentColor: '#d97706',
+  },
+  error: {
+    icon: 'alert-circle',
+    iconColor: '#ef4444',
+    bgColor: '#fef2f2',
+    borderColor: '#fecaca',
+    accentColor: '#dc2626',
+  },
+  info: {
+    icon: 'information-circle',
+    iconColor: '#3b82f6',
+    bgColor: '#eff6ff',
+    borderColor: '#bfdbfe',
+    accentColor: '#2563eb',
+  },
 };
 
 // ─── Ride Request Card (driver-side) ───────────────────────────────────────────
@@ -109,7 +208,7 @@ const RideRequestCard: React.FC<{
       Animated.timing(opacityAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
     ]).start();
 
-    const total = Math.max(1, secondsRemaining);
+    const total = Math.max(1, Math.ceil((new Date(data.expiresAt).getTime() - Date.now()) / 1000));
     Animated.timing(progressAnim, {
       toValue: 0,
       duration: total * 1000,
@@ -117,7 +216,10 @@ const RideRequestCard: React.FC<{
     }).start();
 
     const interval = setInterval(() => {
-      const remaining = Math.max(0, Math.ceil((new Date(data.expiresAt).getTime() - Date.now()) / 1000));
+      const remaining = Math.max(
+        0,
+        Math.ceil((new Date(data.expiresAt).getTime() - Date.now()) / 1000)
+      );
       setSecondsRemaining(remaining);
       if (remaining <= 0) {
         clearInterval(interval);
@@ -125,17 +227,20 @@ const RideRequestCard: React.FC<{
       }
     }, 500);
     return () => clearInterval(interval);
-  }, []);
+  }, [data.expiresAt, onExpire, opacityAnim, progressAnim, scaleAnim]);
 
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0%', '100%'],
   });
 
-  const urgencyColor = secondsRemaining <= 5 ? '#ef4444' : secondsRemaining <= 15 ? '#f59e0b' : Colors.primary;
+  const urgencyColor =
+    secondsRemaining <= 5 ? '#ef4444' : secondsRemaining <= 15 ? '#f59e0b' : Colors.primary;
 
   return (
-    <Animated.View style={[styles.rideCard, { transform: [{ scale: scaleAnim }], opacity: opacityAnim }]}>
+    <Animated.View
+      style={[styles.rideCard, { transform: [{ scale: scaleAnim }], opacity: opacityAnim }]}
+    >
       {/* Header */}
       <View style={styles.rideCardHeader}>
         <View style={[styles.rideIconCircle, { backgroundColor: '#f0fdf4' }]}>
@@ -145,9 +250,19 @@ const RideRequestCard: React.FC<{
           <Text style={styles.rideCardTitle}>Solicitud de Viaje</Text>
           <View style={styles.timerRow}>
             <View style={styles.progressTrackCard}>
-              <Animated.View style={[styles.progressBarCard, { width: progressWidth, backgroundColor: urgencyColor }]} />
+              <Animated.View
+                style={[
+                  styles.progressBarCard,
+                  { width: progressWidth, backgroundColor: urgencyColor },
+                ]}
+              />
             </View>
-            <Text style={[styles.countdownText, secondsRemaining <= 5 && { color: '#ef4444', fontWeight: '700' }]}>
+            <Text
+              style={[
+                styles.countdownText,
+                secondsRemaining <= 5 && { color: '#ef4444', fontWeight: '700' },
+              ]}
+            >
               {secondsRemaining}s
             </Text>
           </View>
@@ -155,7 +270,12 @@ const RideRequestCard: React.FC<{
       </View>
 
       {/* Scrollable content */}
-      <ScrollView style={styles.cardScroll} contentContainerStyle={styles.cardScrollContent} showsVerticalScrollIndicator={true} bounces={false}>
+      <ScrollView
+        style={styles.cardScroll}
+        contentContainerStyle={styles.cardScrollContent}
+        showsVerticalScrollIndicator={true}
+        bounces={false}
+      >
         {/* Passenger card with photo */}
         <View style={styles.passengerCard}>
           {data.passengerProfilePhoto ? (
@@ -170,7 +290,9 @@ const RideRequestCard: React.FC<{
             <View style={styles.ratingRow}>
               <Text style={styles.starsText}>{renderStars(data.passengerRating || 0)}</Text>
               <Text style={styles.ratingValue}>
-                {typeof data.passengerRating === 'number' ? data.passengerRating.toFixed(1) : 'Nuevo'}
+                {typeof data.passengerRating === 'number'
+                  ? data.passengerRating.toFixed(1)
+                  : 'Nuevo'}
               </Text>
             </View>
           </View>
@@ -220,11 +342,15 @@ const RideRequestCard: React.FC<{
               <Text style={styles.detailGridLabel}>Tarifa est.</Text>
             </View>
             <View style={styles.detailGridCard}>
-              <Text style={styles.detailGridValue}>{typeof data.distance === 'number' ? data.distance.toFixed(1) : '—'} km</Text>
+              <Text style={styles.detailGridValue}>
+                {typeof data.distance === 'number' ? data.distance.toFixed(1) : '—'} km
+              </Text>
               <Text style={styles.detailGridLabel}>Distancia</Text>
             </View>
             <View style={styles.detailGridCard}>
-              <Text style={styles.detailGridValue}>{formatMinutes(data.estimatedDuration || 0)}</Text>
+              <Text style={styles.detailGridValue}>
+                {formatMinutes(data.estimatedDuration || 0)}
+              </Text>
               <Text style={styles.detailGridLabel}>Duración est.</Text>
             </View>
             <View style={styles.detailGridCard}>
@@ -269,6 +395,13 @@ const StatusBanner: React.FC<{
   const config = NOTIFICATION_CONFIG[status.type] || NOTIFICATION_CONFIG.info;
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const animateOut = React.useCallback(() => {
+    Animated.parallel([
+      Animated.timing(translateY, { toValue: -120, duration: 300, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+    ]).start(() => onDismiss());
+  }, [translateY, opacity, onDismiss]);
+
   useEffect(() => {
     // Slide-in animation
     Animated.parallel([
@@ -284,14 +417,7 @@ const StatusBanner: React.FC<{
     return () => {
       if (dismissTimer.current) clearTimeout(dismissTimer.current);
     };
-  }, [status.id]);
-
-  const animateOut = () => {
-    Animated.parallel([
-      Animated.timing(translateY, { toValue: -120, duration: 300, useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-    ]).start(() => onDismiss());
-  };
+  }, [status.id, animateOut, opacity, status.durationMs, translateY]);
 
   return (
     <Animated.View
@@ -320,12 +446,14 @@ const StatusBanner: React.FC<{
         </View>
         <View style={styles.statusTextContainer}>
           {status.title ? <Text style={styles.statusTitle}>{status.title}</Text> : null}
-          <Text style={styles.statusMessage} numberOfLines={2}>{status.message}</Text>
+          <Text style={styles.statusMessage} numberOfLines={2}>
+            {status.message}
+          </Text>
         </View>
         {status.action && (
           <TouchableOpacity
             style={[styles.statusActionBtn, { backgroundColor: config.accentColor }]}
-            onPress={(e) => {
+            onPress={e => {
               e.stopPropagation();
               status.action?.onPress();
               onDismiss();
@@ -334,7 +462,11 @@ const StatusBanner: React.FC<{
             <Text style={styles.statusActionText}>{status.action.label}</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity onPress={animateOut} style={styles.statusClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity
+          onPress={animateOut}
+          style={styles.statusClose}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <Ionicons name="close" size={18} color="#9ca3af" />
         </TouchableOpacity>
       </TouchableOpacity>
@@ -344,7 +476,7 @@ const StatusBanner: React.FC<{
 
 // ─── Toast ─────────────────────────────────────────────────────────────────────
 
-const ToastItem: React.FC<{
+const ToastNotificationItem: React.FC<{
   toast: ToastItem;
   index: number;
   onDismiss: (id: string) => void;
@@ -355,8 +487,8 @@ const ToastItem: React.FC<{
   const typeConfig = {
     success: { icon: 'checkmark-circle' as const, bg: '#16a34a', border: '#15803d' },
     warning: { icon: 'warning' as const, bg: '#d97706', border: '#b45309' },
-    error:   { icon: 'alert-circle' as const, bg: '#dc2626', border: '#b91c1c' },
-    info:    { icon: 'information-circle' as const, bg: '#2563eb', border: '#1d4ed8' },
+    error: { icon: 'alert-circle' as const, bg: '#dc2626', border: '#b91c1c' },
+    info: { icon: 'information-circle' as const, bg: '#2563eb', border: '#1d4ed8' },
   };
   const config = typeConfig[toast.type];
 
@@ -380,7 +512,7 @@ const ToastItem: React.FC<{
     }, toast.durationMs);
 
     return () => clearTimeout(t);
-  }, []);
+  }, [index, onDismiss, opacity, toast.durationMs, toast.id, translateY]);
 
   return (
     <Animated.View
@@ -396,9 +528,15 @@ const ToastItem: React.FC<{
     >
       <View style={styles.toastContent}>
         <Ionicons name={config.icon} size={18} color="#fff" style={{ marginRight: 10 }} />
-        <Text style={styles.toastMessage} numberOfLines={3}>{toast.message}</Text>
+        <Text style={styles.toastMessage} numberOfLines={3}>
+          {toast.message}
+        </Text>
       </View>
-      <TouchableOpacity onPress={() => onDismiss(toast.id)} style={styles.toastClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+      <TouchableOpacity
+        onPress={() => onDismiss(toast.id)}
+        style={styles.toastClose}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
         <Ionicons name="close" size={16} color="rgba(255,255,255,0.8)" />
       </TouchableOpacity>
     </Animated.View>
@@ -465,7 +603,12 @@ export const UnifiedNotificationOverlay: React.FC = () => {
         {toastQueue.length > 0 && (
           <View style={[styles.toastArea, { paddingTop: insets.top }]} pointerEvents="box-none">
             {toastQueue.map((toast, idx) => (
-              <ToastItem key={toast.id} toast={toast} index={idx} onDismiss={dismissToast} />
+              <ToastNotificationItem
+                key={toast.id}
+                toast={toast}
+                index={idx}
+                onDismiss={dismissToast}
+              />
             ))}
           </View>
         )}

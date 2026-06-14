@@ -6,14 +6,13 @@ import {
   ScrollView,
   ActivityIndicator,
   TouchableOpacity,
-  Alert,
   Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/authStore';
-import { getStats } from '@/services/storeApi';
-import { getStoreById } from '@/services/storeApi';
+import { getStats, getStoreById } from '@/services/storeApi';
+
 import { Colors, Typography, BorderRadius, Spacing, Shadows } from '@/constants/theme';
 import type { StoreStatistics, Store } from '@/types/store';
 import { LineChart } from '@/components/stores/LineChart';
@@ -24,7 +23,7 @@ type Period = '7d' | '30d';
 
 /**
  * Store Statistics Screen
- * 
+ *
  * Displays analytics for store owners
  * Requirements: 14.1, 14.2, 14.6, 14.7, 14.8, 14.9
  */
@@ -40,50 +39,50 @@ export default function StoreStatsScreen() {
   const [period, setPeriod] = useState<Period>('7d');
 
   useEffect(() => {
-    if (id) {
-      loadData();
-    }
-  }, [id, period]);
+    if (!id) return;
 
-  const loadData = async () => {
-    setLoading(true);
-    setError(null);
+    const loadData = async () => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      // Fetch store details to verify ownership
-      const storeResponse = await getStoreById(Number(id));
-      const storeData = storeResponse.data;
-      setStore(storeData);
+      try {
+        // Fetch store details to verify ownership
+        const storeResponse = await getStoreById(Number(id));
+        const storeData = storeResponse.data;
+        setStore(storeData);
 
-      // Verify user has "owner" role and owns the store
-      // Requirements: 14.9
-      if (!user || user.role !== 'owner') {
-        setError('Solo los propietarios pueden ver estadísticas');
+        // Verify user has "owner" role and owns the store
+        // Requirements: 14.9
+        if (!user || user.role !== 'owner') {
+          setError('Solo los propietarios pueden ver estadísticas');
+          setLoading(false);
+          return;
+        }
+
+        if (String(storeData.owner_id) !== user.id) {
+          setError('No tienes permiso para ver las estadísticas de esta tienda');
+          setLoading(false);
+          return;
+        }
+
+        // Fetch statistics
+        const statsResponse = await getStats(Number(id), { period });
+        setStats(statsResponse.data);
+      } catch (err: any) {
+        console.error('[StoreStats] Error loading data:', err);
+
+        if (err.response?.status === 403) {
+          setError('No tienes permiso para ver las estadísticas de esta tienda');
+        } else {
+          setError(err.response?.data?.error?.message || 'Error al cargar estadísticas');
+        }
+      } finally {
         setLoading(false);
-        return;
       }
+    };
 
-      if (String(storeData.owner_id) !== user.id) {
-        setError('No tienes permiso para ver las estadísticas de esta tienda');
-        setLoading(false);
-        return;
-      }
-
-      // Fetch statistics
-      const statsResponse = await getStats(Number(id), { period });
-      setStats(statsResponse.data);
-    } catch (err: any) {
-      console.error('[StoreStats] Error loading data:', err);
-      
-      if (err.response?.status === 403) {
-        setError('No tienes permiso para ver las estadísticas de esta tienda');
-      } else {
-        setError(err.response?.data?.error?.message || 'Error al cargar estadísticas');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+    loadData();
+  }, [id, period, user]);
 
   const handlePeriodChange = (newPeriod: Period) => {
     setPeriod(newPeriod);

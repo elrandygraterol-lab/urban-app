@@ -4,8 +4,10 @@ import { StoreFilters, StoreCategory } from '@/types/store';
 
 // Mock Modal to avoid testing library issues
 jest.mock('react-native/Libraries/Modal/Modal', () => {
-  const { View } = require('react-native');
-  return (props: any) => (props.visible ? <View>{props.children}</View> : null);
+  const { View } = jest.requireActual('react-native');
+  const MockModal = (props: any) => (props.visible ? <View>{props.children}</View> : null);
+  MockModal.displayName = 'MockModal';
+  return MockModal;
 });
 
 describe('StoreFilterSheet', () => {
@@ -36,17 +38,6 @@ describe('StoreFilterSheet', () => {
     },
   ];
 
-  const mockFilters: StoreFilters = {
-    categories: [],
-    distanceRange: undefined,
-    ratingRange: undefined,
-    openNow: false,
-  };
-
-  const mockOnApply = jest.fn();
-  const mockOnClear = jest.fn();
-  const mockOnClose = jest.fn();
-
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -64,7 +55,7 @@ describe('StoreFilterSheet', () => {
       ratingRange: undefined,
       openNow: false,
     };
-    
+
     // Test with all filters
     const allFilters: StoreFilters = {
       categories: [1, 2],
@@ -128,8 +119,8 @@ describe('StoreFilterSheet', () => {
       },
     ];
 
-    const activeCategories = allCategories.filter((cat) => cat.is_active);
+    const activeCategories = allCategories.filter(cat => cat.is_active);
     expect(activeCategories.length).toBe(3);
-    expect(activeCategories.every((cat) => cat.is_active)).toBe(true);
+    expect(activeCategories.every(cat => cat.is_active)).toBe(true);
   });
 });

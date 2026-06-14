@@ -4,7 +4,7 @@
  * Usa expo-audio (reemplaza expo-av deprecado en SDK 54)
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useAudioPlayer } from 'expo-audio';
 
 const notificationSound = require('@/assets/sounds/avisar_usuarios.mp3');
@@ -23,7 +23,7 @@ export const useSound = () => {
     };
   }, []);
 
-  const playNotificationSound = async () => {
+  const playNotificationSound = useCallback(async () => {
     try {
       // Seek to start in case it was played before
       player.seekTo(0);
@@ -32,7 +32,7 @@ export const useSound = () => {
     } catch (error) {
       console.error('[SOUND] Error playing notification sound:', error);
     }
-  };
+  }, [player]);
 
   return { playNotificationSound };
 };

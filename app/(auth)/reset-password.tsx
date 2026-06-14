@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -137,86 +136,89 @@ export default function ResetPasswordScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <Text style={styles.logo}>UrbanTaxi</Text>
-          <Text style={styles.tagline}>¿Listo para tu siguiente destino?</Text>
-          <Text style={styles.title}>Restablecer contraseña</Text>
-          <Text style={styles.subtitle}>
-            Ingresa el token de recuperación que recibiste y tu nueva contraseña
-          </Text>
-        </View>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.header}>
+            <Text style={styles.logo}>UrbanTaxi</Text>
+            <Text style={styles.tagline}>¿Listo para tu siguiente destino?</Text>
+            <Text style={styles.title}>Restablecer contraseña</Text>
+            <Text style={styles.subtitle}>
+              Ingresa el token de recuperación que recibiste y tu nueva contraseña
+            </Text>
+          </View>
 
-        <View style={styles.form}>
-          {/* Token field */}
-          <TextInput
-            style={[styles.input, tokenError ? styles.inputError : null]}
-            placeholder="Token de recuperación"
-            placeholderTextColor="#A9A9A9"
-            value={token}
-            onChangeText={validateTokenField}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isLoading}
-          />
-          {tokenError ? <Text style={styles.errorText}>{tokenError}</Text> : null}
+          <View style={styles.form}>
+            {/* Token field */}
+            <TextInput
+              style={[styles.input, tokenError ? styles.inputError : null]}
+              placeholder="Token de recuperación"
+              placeholderTextColor="#A9A9A9"
+              value={token}
+              onChangeText={validateTokenField}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isLoading}
+            />
+            {tokenError ? <Text style={styles.errorText}>{tokenError}</Text> : null}
 
-          {/* New password field */}
-          <TextInput
-            style={[styles.input, newPasswordError ? styles.inputError : null]}
-            placeholder="Nueva contraseña"
-            placeholderTextColor="#A9A9A9"
-            value={newPassword}
-            onChangeText={validateNewPasswordField}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isLoading}
-          />
-          {newPasswordError ? <Text style={styles.errorText}>{newPasswordError}</Text> : null}
+            {/* New password field */}
+            <TextInput
+              style={[styles.input, newPasswordError ? styles.inputError : null]}
+              placeholder="Nueva contraseña"
+              placeholderTextColor="#A9A9A9"
+              value={newPassword}
+              onChangeText={validateNewPasswordField}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isLoading}
+            />
+            {newPasswordError ? <Text style={styles.errorText}>{newPasswordError}</Text> : null}
 
-          {/* Confirm password field */}
-          <TextInput
-            style={[styles.input, confirmPasswordError ? styles.inputError : null]}
-            placeholder="Confirmar nueva contraseña"
-            placeholderTextColor="#A9A9A9"
-            value={confirmPassword}
-            onChangeText={validateConfirmPasswordField}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isLoading}
-          />
-          {confirmPasswordError ? (
-            <Text style={styles.errorText}>{confirmPasswordError}</Text>
-          ) : null}
+            {/* Confirm password field */}
+            <TextInput
+              style={[styles.input, confirmPasswordError ? styles.inputError : null]}
+              placeholder="Confirmar nueva contraseña"
+              placeholderTextColor="#A9A9A9"
+              value={confirmPassword}
+              onChangeText={validateConfirmPasswordField}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isLoading}
+            />
+            {confirmPasswordError ? (
+              <Text style={styles.errorText}>{confirmPasswordError}</Text>
+            ) : null}
 
-          <TouchableOpacity
-            style={[styles.resetButton, isLoading && styles.resetButtonDisabled]}
-            onPress={handleResetPassword}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.resetButtonText}>Restablecer contraseña</Text>
-            )}
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.resetButton, isLoading && styles.resetButtonDisabled]}
+              onPress={handleResetPassword}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.resetButtonText}>Restablecer contraseña</Text>
+              )}
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.push('/(auth)/login' as any)}
-            disabled={isLoading}
-          >
-            <Text style={styles.backButtonText}>Volver al login</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.push('/(auth)/login' as any)}
+              disabled={isLoading}
+            >
+              <Text style={styles.backButtonText}>Volver al login</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

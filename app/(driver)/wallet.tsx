@@ -14,7 +14,8 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Colors as colors } from '@/constants/theme';
-import walletService, {
+import { getMyWallet, getTransactions, getCommissionRate } from '@/services/walletService';
+import type {
   WalletResponseDto,
   WalletTransactionDto,
   CommissionRateResponse,
@@ -35,56 +36,57 @@ export default function WalletScreen() {
   const [offset, setOffset] = useState(0);
   const [commissionRate, setCommissionRate] = useState<CommissionRateResponse | null>(null);
 
-  const loadWalletData = useCallback(async (isRefresh = false) => {
-    try {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
+  const loadWalletData = useCallback(
+    async (isRefresh = false) => {
+      try {
+        if (isRefresh) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
+
+        const [walletData, txData, rateData] = await Promise.all([
+          getMyWallet(),
+          getTransactions(PAGE_SIZE, 0),
+          getCommissionRate().catch(() => null),
+        ]);
+
+        setWallet(walletData);
+        setTransactions(txData.transactions);
+        setTotalTransactions(txData.totalTransactions);
+        setOffset(txData.transactions.length);
+        setCommissionRate(rateData);
+      } catch (error: any) {
+        const message =
+          error?.response?.data?.message ||
+          error?.message ||
+          'No se pudo cargar la información de la billetera';
+        showToast(message, 'error');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-
-      const [walletData, txData, rateData] = await Promise.all([
-        walletService.getMyWallet(),
-        walletService.getTransactions(PAGE_SIZE, 0),
-        walletService.getCommissionRate().catch(() => null),
-      ]);
-
-      setWallet(walletData);
-      setTransactions(txData.transactions);
-      setTotalTransactions(txData.totalTransactions);
-      setOffset(txData.transactions.length);
-      setCommissionRate(rateData);
-    } catch (error: any) {
-      const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        'No se pudo cargar la información de la billetera';
-      showToast(message, 'error');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+    },
+    [showToast]
+  );
 
   const loadMoreTransactions = useCallback(async () => {
     if (loadingMore || transactions.length >= totalTransactions) return;
 
     try {
       setLoadingMore(true);
-      const data = await walletService.getTransactions(PAGE_SIZE, offset);
+      const data = await getTransactions(PAGE_SIZE, offset);
       setTransactions(prev => [...prev, ...data.transactions]);
       setOffset(prev => prev + data.transactions.length);
       setTotalTransactions(data.totalTransactions);
     } catch (error: any) {
       const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        'No se pudo cargar más transacciones';
+        error?.response?.data?.message || error?.message || 'No se pudo cargar más transacciones';
       showToast(message, 'error');
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, transactions.length, totalTransactions, offset]);
+  }, [loadingMore, transactions.length, totalTransactions, offset, showToast]);
 
   useEffect(() => {
     loadWalletData();
@@ -135,9 +137,7 @@ export default function WalletScreen() {
             <Text style={styles.balanceAmount}>
               {formatBalance(wallet.balance, wallet.currency)}
             </Text>
-            {wallet.balance === 0 && (
-              <Text style={styles.noEarningsText}>Sin ganancias aún</Text>
-            )}
+            {wallet.balance === 0 && <Text style={styles.noEarningsText}>Sin ganancias aún</Text>}
           </>
         ) : (
           <Text style={styles.balanceAmount}>Bs. 0.00</Text>
@@ -152,7 +152,11 @@ export default function WalletScreen() {
         <View style={styles.commissionInfo}>
           <View style={styles.commissionDot} />
           <Text style={styles.commissionText}>
-            Ganas el <Text style={styles.commissionHighlight}>{Number(commissionRate.rate).toFixed(1)}%</Text> del total de cada viaje
+            Ganas el{' '}
+            <Text style={styles.commissionHighlight}>
+              {Number(commissionRate.rate).toFixed(1)}%
+            </Text>{' '}
+            del total de cada viaje
           </Text>
         </View>
       )}

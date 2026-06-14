@@ -7,16 +7,16 @@
 
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import SharedRideInvitationModal, {
-  SharedRideInvitation,
-} from '../SharedRideInvitationModal';
+import SharedRideInvitationModal, { SharedRideInvitation } from '../SharedRideInvitationModal';
+import { sharedRidesAPI } from '@/services/api';
+import { reverseGeocode } from '@/services/mapsService';
 import { Alert } from 'react-native';
 import * as Location from 'expo-location';
 
 // Mock dependencies
 jest.mock('expo-location');
 jest.mock('react-native-maps', () => {
-  const { View } = require('react-native');
+  const { View } = jest.requireActual('react-native');
   return {
     __esModule: true,
     default: View,
@@ -30,11 +30,15 @@ jest.mock('@/services/api', () => ({
     reject: jest.fn(),
   },
 }));
-jest.mock('@/services/mapsService', () => ({
-  default: {
-    reverseGeocode: jest.fn(),
-  },
-}));
+jest.mock('@/services/mapsService', () => {
+  const fn = jest.fn();
+  return {
+    reverseGeocode: fn,
+    default: {
+      reverseGeocode: fn,
+    },
+  };
+});
 jest.mock('@/utils/currency', () => ({
   formatCurrency: jest.fn((amount: number) => `Bs. ${amount.toFixed(2)}`),
 }));
@@ -44,12 +48,8 @@ const mockInvitation: SharedRideInvitation = {
   inviterId: 'user-456',
   inviterName: 'Juan Pérez',
   inviterCode: 'USR-A3F7',
-  pickupPoints: [
-    { latitude: 10.5, longitude: -66.9, address: 'Av. Principal, Caracas' },
-  ],
-  destinationPoints: [
-    { latitude: 10.6, longitude: -66.8, address: 'Centro Comercial, Caracas' },
-  ],
+  pickupPoints: [{ latitude: 10.5, longitude: -66.9, address: 'Av. Principal, Caracas' }],
+  destinationPoints: [{ latitude: 10.6, longitude: -66.8, address: 'Centro Comercial, Caracas' }],
   estimatedFare: 50.0,
   currency: 'VES',
   expiresAt: new Date(Date.now() + 60000).toISOString(), // 60 seconds from now
@@ -105,8 +105,7 @@ describe('SharedRideInvitationModal', () => {
   });
 
   it('should call onReject when reject button is pressed', async () => {
-    const { sharedRidesAPI } = require('@/services/api');
-    sharedRidesAPI.reject.mockResolvedValue({});
+    (sharedRidesAPI.reject as jest.Mock).mockResolvedValue({});
 
     const { getByText } = render(
       <SharedRideInvitationModal
@@ -170,21 +169,18 @@ describe('SharedRideInvitationModal', () => {
   });
 
   it('should call onAccept with pickup location when confirmed', async () => {
-    const { sharedRidesAPI } = require('@/services/api');
-    const mapsService = require('@/services/mapsService').default;
-
     (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({
       status: 'granted',
     });
     (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
       coords: { latitude: 10.5, longitude: -66.9 },
     });
-    mapsService.reverseGeocode.mockResolvedValue({
+    (reverseGeocode as jest.Mock).mockResolvedValue({
       latitude: 10.5,
       longitude: -66.9,
       address: 'Mi ubicación actual',
     });
-    sharedRidesAPI.accept.mockResolvedValue({});
+    (sharedRidesAPI.accept as jest.Mock).mockResolvedValue({});
 
     const { getByText } = render(
       <SharedRideInvitationModal
@@ -255,8 +251,7 @@ describe('SharedRideInvitationModal', () => {
   });
 
   it('should handle API errors gracefully', async () => {
-    const { sharedRidesAPI } = require('@/services/api');
-    sharedRidesAPI.reject.mockRejectedValue({
+    (sharedRidesAPI.reject as jest.Mock).mockRejectedValue({
       response: {
         data: {
           error: {

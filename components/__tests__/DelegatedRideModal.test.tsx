@@ -1,6 +1,6 @@
 /**
  * Tests for DelegatedRideModal component
- * 
+ *
  * Validates Requirements: 9.4, 9.5, 9.11
  */
 
@@ -57,35 +57,33 @@ describe('DelegatedRideModal', () => {
 
   it('should render the modal when visible', () => {
     const { getByText } = render(<DelegatedRideModal {...defaultProps} />);
-    
+
     expect(getByText('Pedir Viaje Para Otro')).toBeTruthy();
     expect(getByText('Datos del Beneficiario')).toBeTruthy();
   });
 
   it('should show pickup and destination addresses', () => {
     const { getByText } = render(<DelegatedRideModal {...defaultProps} />);
-    
+
     expect(getByText('Pickup Address')).toBeTruthy();
     expect(getByText('Destination Address')).toBeTruthy();
   });
 
   it('should show estimated fare when both points are set', () => {
     const { getByText } = render(<DelegatedRideModal {...defaultProps} />);
-    
+
     expect(getByText('Tarifa Estimada')).toBeTruthy();
     expect(getByText(/50\.00/)).toBeTruthy();
   });
 
   it('should validate phone number format in real-time', () => {
-    const { getByPlaceholderText, getByText } = render(
-      <DelegatedRideModal {...defaultProps} />
-    );
-    
+    const { getByPlaceholderText, getByText } = render(<DelegatedRideModal {...defaultProps} />);
+
     const phoneInput = getByPlaceholderText('+58 414 1234567');
-    
+
     // Invalid phone
     fireEvent.changeText(phoneInput, '123');
-    
+
     waitFor(() => {
       expect(getByText(/Formato inválido/)).toBeTruthy();
     });
@@ -98,24 +96,22 @@ describe('DelegatedRideModal', () => {
         message: 'Delegated ride created successfully',
       },
     };
-    
+
     (delegatedRidesAPI.create as jest.Mock).mockResolvedValue(mockResponse);
-    
-    const { getByPlaceholderText, getByText } = render(
-      <DelegatedRideModal {...defaultProps} />
-    );
-    
+
+    const { getByPlaceholderText, getByText } = render(<DelegatedRideModal {...defaultProps} />);
+
     // Fill in beneficiary details
     const nameInput = getByPlaceholderText('Ej: Juan Pérez');
     const phoneInput = getByPlaceholderText('+58 414 1234567');
-    
+
     fireEvent.changeText(nameInput, 'Juan Pérez');
     fireEvent.changeText(phoneInput, '+58 414 1234567');
-    
+
     // Confirm the ride
     const confirmButton = getByText('Confirmar Viaje');
     fireEvent.press(confirmButton);
-    
+
     await waitFor(() => {
       expect(delegatedRidesAPI.create).toHaveBeenCalledWith({
         beneficiaryName: 'Juan Pérez',
@@ -130,7 +126,7 @@ describe('DelegatedRideModal', () => {
         },
       });
     });
-    
+
     await waitFor(() => {
       expect(Alert.alert).toHaveBeenCalledWith(
         '✅ Viaje Solicitado',
@@ -151,24 +147,22 @@ describe('DelegatedRideModal', () => {
         },
       },
     };
-    
+
     (delegatedRidesAPI.create as jest.Mock).mockRejectedValue(mockError);
-    
-    const { getByPlaceholderText, getByText } = render(
-      <DelegatedRideModal {...defaultProps} />
-    );
-    
+
+    const { getByPlaceholderText, getByText } = render(<DelegatedRideModal {...defaultProps} />);
+
     // Fill in beneficiary details
     const nameInput = getByPlaceholderText('Ej: Juan Pérez');
     const phoneInput = getByPlaceholderText('+58 414 1234567');
-    
+
     fireEvent.changeText(nameInput, 'Juan Pérez');
     fireEvent.changeText(phoneInput, '+58 414 1234567');
-    
+
     // Confirm the ride
     const confirmButton = getByText('Confirmar Viaje');
     fireEvent.press(confirmButton);
-    
+
     await waitFor(() => {
       expect(Alert.alert).toHaveBeenCalledWith(
         'Error',
@@ -180,28 +174,26 @@ describe('DelegatedRideModal', () => {
 
   it('should disable confirm button when form is invalid', () => {
     const { getByText } = render(<DelegatedRideModal {...defaultProps} />);
-    
+
     const confirmButton = getByText('Confirmar Viaje');
-    
+
     // Button should be disabled when beneficiary details are empty
     expect(confirmButton.props.accessibilityState.disabled).toBe(true);
   });
 
   it('should reset form when modal closes', () => {
-    const { rerender, getByPlaceholderText } = render(
-      <DelegatedRideModal {...defaultProps} />
-    );
-    
+    const { rerender, getByPlaceholderText } = render(<DelegatedRideModal {...defaultProps} />);
+
     // Fill in some data
     const nameInput = getByPlaceholderText('Ej: Juan Pérez');
     fireEvent.changeText(nameInput, 'Test Name');
-    
+
     // Close modal
     rerender(<DelegatedRideModal {...defaultProps} visible={false} />);
-    
+
     // Reopen modal
     rerender(<DelegatedRideModal {...defaultProps} visible={true} />);
-    
+
     // Form should be reset
     const nameInputAfter = getByPlaceholderText('Ej: Juan Pérez');
     expect(nameInputAfter.props.value).toBe('');

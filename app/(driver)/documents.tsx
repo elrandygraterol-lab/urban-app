@@ -1,12 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  Image,
-  ActivityIndicator,
-} from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, ScrollView, Text, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '@/store/authStore';
 import api from '@/services/api';
@@ -32,11 +25,7 @@ export default function DocumentsScreen() {
     'pending' | 'approved' | 'rejected' | null
   >(null);
 
-  useEffect(() => {
-    fetchDocuments();
-  }, []);
-
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.get(`/api/users/drivers/${user?.id}/documents`);
@@ -45,12 +34,16 @@ export default function DocumentsScreen() {
       // Check re-verification status
       const driverResponse = await api.get(`/api/users/drivers/${user?.id}`);
       setReVerificationStatus(driverResponse.data.verification_status);
-    } catch (error) {
+    } catch {
       showToast('Failed to load documents', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id, showToast]);
+
+  useEffect(() => {
+    fetchDocuments();
+  }, [fetchDocuments]);
 
   const pickImage = async (documentType: string) => {
     try {
@@ -64,7 +57,7 @@ export default function DocumentsScreen() {
       if (!result.canceled) {
         uploadDocument(result.assets[0].uri, documentType);
       }
-    } catch (error) {
+    } catch {
       showToast('Failed to pick image', 'error');
     }
   };
@@ -94,10 +87,7 @@ export default function DocumentsScreen() {
       setReVerificationStatus('pending');
       fetchDocuments();
     } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : 'No se pudo subir el documento',
-        'error'
-      );
+      showToast(error instanceof Error ? error.message : 'No se pudo subir el documento', 'error');
     } finally {
       setUploading(false);
     }

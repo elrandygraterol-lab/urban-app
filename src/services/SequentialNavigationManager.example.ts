@@ -1,10 +1,10 @@
 /**
  * SequentialNavigationManager Usage Examples
- * 
+ *
  * This file demonstrates various usage patterns for the SequentialNavigationManager.
  */
 
-import { SequentialNavigationManager, NavigationPhase } from './SequentialNavigationManager';
+import { SequentialNavigationManager } from './SequentialNavigationManager';
 import { Location } from './MapRoutingService';
 
 // Example 1: Basic Sequential Navigation (Pickup → Destination)
@@ -15,8 +15,8 @@ export async function basicSequentialNavigation() {
   };
 
   const pickupLocation: Location = {
-    latitude: 19.4350,
-    longitude: -99.1400,
+    latitude: 19.435,
+    longitude: -99.14,
   };
 
   const destinationLocation: Location = {
@@ -24,25 +24,21 @@ export async function basicSequentialNavigation() {
     longitude: -99.1276,
   };
 
-  const manager = new SequentialNavigationManager(
-    pickupLocation,
-    destinationLocation,
-    {
-      onPhaseChange: (phase, config) => {
-        console.log(`Phase changed to: ${phase}`);
-        console.log(`Distance: ${config.distance.toFixed(2)} km`);
-        console.log(`Duration: ${config.duration.toFixed(0)} minutes`);
-        console.log(`ETA: ${config.eta.toLocaleTimeString()}`);
-      },
-      onStepChange: (stepIndex, step) => {
-        console.log(`Step ${stepIndex + 1}: ${step.instruction}`);
-        console.log(`Distance to next turn: ${step.distance}m`);
-      },
-      onNavigationComplete: () => {
-        console.log('Navigation completed! Trip finished.');
-      },
-    }
-  );
+  const manager = new SequentialNavigationManager(pickupLocation, destinationLocation, {
+    onPhaseChange: (phase, config) => {
+      console.log(`Phase changed to: ${phase}`);
+      console.log(`Distance: ${config.distance.toFixed(2)} km`);
+      console.log(`Duration: ${config.duration.toFixed(0)} minutes`);
+      console.log(`ETA: ${config.eta.toLocaleTimeString()}`);
+    },
+    onStepChange: (stepIndex, step) => {
+      console.log(`Step ${stepIndex + 1}: ${step.instruction}`);
+      console.log(`Distance to next turn: ${step.distance}m`);
+    },
+    onNavigationComplete: () => {
+      console.log('Navigation completed! Trip finished.');
+    },
+  });
 
   // Initialize navigation
   await manager.initialize(currentLocation);
@@ -87,8 +83,8 @@ export async function monitorNavigationState() {
   };
 
   const pickupLocation: Location = {
-    latitude: 19.4350,
-    longitude: -99.1400,
+    latitude: 19.435,
+    longitude: -99.14,
   };
 
   const destinationLocation: Location = {
@@ -96,10 +92,7 @@ export async function monitorNavigationState() {
     longitude: -99.1276,
   };
 
-  const manager = new SequentialNavigationManager(
-    pickupLocation,
-    destinationLocation
-  );
+  const manager = new SequentialNavigationManager(pickupLocation, destinationLocation);
 
   await manager.initialize(currentLocation);
 
@@ -138,8 +131,8 @@ export async function customProximityThreshold() {
   };
 
   const pickupLocation: Location = {
-    latitude: 19.4350,
-    longitude: -99.1400,
+    latitude: 19.435,
+    longitude: -99.14,
   };
 
   const destinationLocation: Location = {
@@ -147,10 +140,7 @@ export async function customProximityThreshold() {
     longitude: -99.1276,
   };
 
-  const manager = new SequentialNavigationManager(
-    pickupLocation,
-    destinationLocation
-  );
+  const manager = new SequentialNavigationManager(pickupLocation, destinationLocation);
 
   // Set custom proximity threshold (default is 50 meters)
   manager.setProximityThreshold(100); // 100 meters
@@ -170,22 +160,18 @@ export async function errorHandling() {
     longitude: -99.1276,
   };
 
-  const manager = new SequentialNavigationManager(
-    undefined,
-    destinationLocation,
-    {
-      onError: (error, phase) => {
-        console.error(`Error in ${phase} phase:`, error.message);
-        
-        // Handle specific error types
-        if (error.message.includes('API')) {
-          console.log('API error - showing fallback route');
-        } else if (error.message.includes('network')) {
-          console.log('Network error - retrying...');
-        }
-      },
-    }
-  );
+  const manager = new SequentialNavigationManager(undefined, destinationLocation, {
+    onError: (error, phase) => {
+      console.error(`Error in ${phase} phase:`, error.message);
+
+      // Handle specific error types
+      if (error.message.includes('API')) {
+        console.log('API error - showing fallback route');
+      } else if (error.message.includes('network')) {
+        console.log('Network error - retrying...');
+      }
+    },
+  });
 
   try {
     await manager.initialize(currentLocation);
@@ -202,8 +188,8 @@ export async function trackPhaseTransitions() {
   };
 
   const pickupLocation: Location = {
-    latitude: 19.4350,
-    longitude: -99.1400,
+    latitude: 19.435,
+    longitude: -99.14,
   };
 
   const destinationLocation: Location = {
@@ -211,22 +197,18 @@ export async function trackPhaseTransitions() {
     longitude: -99.1276,
   };
 
-  const manager = new SequentialNavigationManager(
-    pickupLocation,
-    destinationLocation,
-    {
-      onTransitionStart: (fromPhase, toPhase) => {
-        console.log(`Starting transition from ${fromPhase} to ${toPhase}`);
-        // Show loading indicator
-      },
-      onTransitionComplete: (phase, config) => {
-        console.log(`Transition complete to ${phase}`);
-        console.log(`New route: ${config.distance.toFixed(2)} km`);
-        // Hide loading indicator
-        // Update UI with new route
-      },
-    }
-  );
+  const manager = new SequentialNavigationManager(pickupLocation, destinationLocation, {
+    onTransitionStart: (fromPhase, toPhase) => {
+      console.log(`Starting transition from ${fromPhase} to ${toPhase}`);
+      // Show loading indicator
+    },
+    onTransitionComplete: (phase, config) => {
+      console.log(`Transition complete to ${phase}`);
+      console.log(`New route: ${config.distance.toFixed(2)} km`);
+      // Hide loading indicator
+      // Update UI with new route
+    },
+  });
 
   await manager.initialize(currentLocation);
 }
@@ -234,8 +216,8 @@ export async function trackPhaseTransitions() {
 // Example 7: Real-time Progress Updates
 export async function realTimeProgressUpdates() {
   const pickupLocation: Location = {
-    latitude: 19.4350,
-    longitude: -99.1400,
+    latitude: 19.435,
+    longitude: -99.14,
   };
 
   const destinationLocation: Location = {
@@ -248,16 +230,12 @@ export async function realTimeProgressUpdates() {
     longitude: -99.1332,
   };
 
-  const manager = new SequentialNavigationManager(
-    pickupLocation,
-    destinationLocation,
-    {
-      onStepChange: (stepIndex, step) => {
-        // Update UI with new instruction
-        console.log(`New instruction: ${step.instruction}`);
-      },
-    }
-  );
+  const manager = new SequentialNavigationManager(pickupLocation, destinationLocation, {
+    onStepChange: (stepIndex, step) => {
+      // Update UI with new instruction
+      console.log(`New instruction: ${step.instruction}`);
+    },
+  });
 
   await manager.initialize(currentLocation);
 
@@ -265,13 +243,13 @@ export async function realTimeProgressUpdates() {
   const updateInterval = setInterval(async () => {
     // In a real app, get actual GPS location
     // currentLocation = await getGPSLocation();
-    
+
     await manager.updateProgress(currentLocation);
 
     // Display current navigation info
     const step = manager.getCurrentStep();
     const remaining = manager.getRemainingDistance(currentLocation);
-    
+
     if (step) {
       console.log(`Current: ${step.instruction}`);
       console.log(`Remaining: ${remaining.toFixed(2)} km`);
@@ -293,8 +271,8 @@ export async function manualPhaseTransition() {
   };
 
   const pickupLocation: Location = {
-    latitude: 19.4350,
-    longitude: -99.1400,
+    latitude: 19.435,
+    longitude: -99.14,
   };
 
   const destinationLocation: Location = {
@@ -302,10 +280,7 @@ export async function manualPhaseTransition() {
     longitude: -99.1276,
   };
 
-  const manager = new SequentialNavigationManager(
-    pickupLocation,
-    destinationLocation
-  );
+  const manager = new SequentialNavigationManager(pickupLocation, destinationLocation);
 
   await manager.initialize(currentLocation);
 
@@ -329,10 +304,7 @@ export async function cancelNavigation() {
     longitude: -99.1276,
   };
 
-  const manager = new SequentialNavigationManager(
-    undefined,
-    destinationLocation
-  );
+  const manager = new SequentialNavigationManager(undefined, destinationLocation);
 
   await manager.initialize(currentLocation);
 
@@ -350,25 +322,21 @@ export function useSequentialNavigation(
   destinationLocation: Location
 ) {
   // This would be used in a React component with useState and useEffect
-  
-  const manager = new SequentialNavigationManager(
-    pickupLocation,
-    destinationLocation,
-    {
-      onPhaseChange: (phase, config) => {
-        // Update component state
-        console.log('Phase changed:', phase);
-      },
-      onStepChange: (stepIndex, step) => {
-        // Update current instruction in UI
-        console.log('Step changed:', step.instruction);
-      },
-      onNavigationComplete: () => {
-        // Show completion message
-        console.log('Navigation complete!');
-      },
-    }
-  );
+
+  const manager = new SequentialNavigationManager(pickupLocation, destinationLocation, {
+    onPhaseChange: (phase, config) => {
+      // Update component state
+      console.log('Phase changed:', phase);
+    },
+    onStepChange: (stepIndex, step) => {
+      // Update current instruction in UI
+      console.log('Step changed:', step.instruction);
+    },
+    onNavigationComplete: () => {
+      // Show completion message
+      console.log('Navigation complete!');
+    },
+  });
 
   return manager;
 }

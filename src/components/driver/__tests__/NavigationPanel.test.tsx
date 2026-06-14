@@ -1,6 +1,6 @@
 /**
  * NavigationPanel Unit Tests
- * 
+ *
  * Tests the NavigationPanel component functionality including:
  * - Route calculation and display
  * - Progress tracking
@@ -24,7 +24,7 @@ jest.mock('../../../services/MapRoutingService', () => ({
 describe('NavigationPanel', () => {
   const mockOrigin: Location = {
     latitude: 40.7128,
-    longitude: -74.0060,
+    longitude: -74.006,
   };
 
   const mockDestination: Location = {
@@ -34,7 +34,7 @@ describe('NavigationPanel', () => {
 
   const mockPickupLocation: Location = {
     latitude: 40.7489,
-    longitude: -73.9680,
+    longitude: -73.968,
   };
 
   const mockNavigationSteps: NavigationStep[] = [
@@ -43,22 +43,22 @@ describe('NavigationPanel', () => {
       distance: 500,
       duration: 60,
       startLocation: mockOrigin,
-      endLocation: { latitude: 40.7178, longitude: -74.0060 },
+      endLocation: { latitude: 40.7178, longitude: -74.006 },
       maneuver: 'straight',
     },
     {
       instruction: 'Turn right onto 5th Ave',
       distance: 800,
       duration: 120,
-      startLocation: { latitude: 40.7178, longitude: -74.0060 },
-      endLocation: { latitude: 40.7228, longitude: -73.9960 },
+      startLocation: { latitude: 40.7178, longitude: -74.006 },
+      endLocation: { latitude: 40.7228, longitude: -73.996 },
       maneuver: 'turn-right',
     },
     {
       instruction: 'Turn left onto E 42nd St',
       distance: 300,
       duration: 45,
-      startLocation: { latitude: 40.7228, longitude: -73.9960 },
+      startLocation: { latitude: 40.7228, longitude: -73.996 },
       endLocation: mockDestination,
       maneuver: 'turn-left',
     },
@@ -79,10 +79,7 @@ describe('NavigationPanel', () => {
   describe('Basic Rendering', () => {
     it('should render loading state initially', () => {
       const { getByText } = render(
-        <NavigationPanel
-          currentLocation={mockOrigin}
-          destination={mockDestination}
-        />
+        <NavigationPanel currentLocation={mockOrigin} destination={mockDestination} />
       );
 
       expect(getByText('Calculating route...')).toBeTruthy();
@@ -90,10 +87,7 @@ describe('NavigationPanel', () => {
 
     it('should render navigation instructions after route calculation', async () => {
       const { getByText } = render(
-        <NavigationPanel
-          currentLocation={mockOrigin}
-          destination={mockDestination}
-        />
+        <NavigationPanel currentLocation={mockOrigin} destination={mockDestination} />
       );
 
       await waitFor(() => {
@@ -103,10 +97,7 @@ describe('NavigationPanel', () => {
 
     it('should display distance to next maneuver', async () => {
       const { getByText } = render(
-        <NavigationPanel
-          currentLocation={mockOrigin}
-          destination={mockDestination}
-        />
+        <NavigationPanel currentLocation={mockOrigin} destination={mockDestination} />
       );
 
       await waitFor(() => {
@@ -116,10 +107,7 @@ describe('NavigationPanel', () => {
 
     it('should display ETA', async () => {
       const { getByText } = render(
-        <NavigationPanel
-          currentLocation={mockOrigin}
-          destination={mockDestination}
-        />
+        <NavigationPanel currentLocation={mockOrigin} destination={mockDestination} />
       );
 
       await waitFor(() => {
@@ -130,12 +118,7 @@ describe('NavigationPanel', () => {
 
   describe('Route Calculation', () => {
     it('should call calculateTaxiRoute with correct parameters', async () => {
-      render(
-        <NavigationPanel
-          currentLocation={mockOrigin}
-          destination={mockDestination}
-        />
-      );
+      render(<NavigationPanel currentLocation={mockOrigin} destination={mockDestination} />);
 
       await waitFor(() => {
         expect(mapRoutingService.calculateTaxiRoute).toHaveBeenCalledWith(
@@ -157,24 +140,15 @@ describe('NavigationPanel', () => {
       );
 
       await waitFor(() => {
-        expect(onRouteCalculated).toHaveBeenCalledWith(
-          mockNavigationSteps,
-          5.2,
-          15
-        );
+        expect(onRouteCalculated).toHaveBeenCalledWith(mockNavigationSteps, 5.2, 15);
       });
     });
 
     it('should handle route calculation errors', async () => {
-      (mapRoutingService.calculateTaxiRoute as jest.Mock).mockRejectedValue(
-        new Error('API Error')
-      );
+      (mapRoutingService.calculateTaxiRoute as jest.Mock).mockRejectedValue(new Error('API Error'));
 
       const { getByText } = render(
-        <NavigationPanel
-          currentLocation={mockOrigin}
-          destination={mockDestination}
-        />
+        <NavigationPanel currentLocation={mockOrigin} destination={mockDestination} />
       );
 
       await waitFor(() => {
@@ -186,10 +160,7 @@ describe('NavigationPanel', () => {
   describe('Progress Tracking', () => {
     it('should display progress bar', async () => {
       const { getByText } = render(
-        <NavigationPanel
-          currentLocation={mockOrigin}
-          destination={mockDestination}
-        />
+        <NavigationPanel currentLocation={mockOrigin} destination={mockDestination} />
       );
 
       await waitFor(() => {
@@ -199,10 +170,7 @@ describe('NavigationPanel', () => {
 
     it('should update progress when location changes', async () => {
       const { rerender, getByText } = render(
-        <NavigationPanel
-          currentLocation={mockOrigin}
-          destination={mockDestination}
-        />
+        <NavigationPanel currentLocation={mockOrigin} destination={mockDestination} />
       );
 
       await waitFor(() => {
@@ -213,7 +181,7 @@ describe('NavigationPanel', () => {
       act(() => {
         rerender(
           <NavigationPanel
-            currentLocation={{ latitude: 40.7178, longitude: -74.0060 }}
+            currentLocation={{ latitude: 40.7178, longitude: -74.006 }}
             destination={mockDestination}
           />
         );
@@ -333,10 +301,7 @@ describe('NavigationPanel', () => {
   describe('Next Maneuver Display', () => {
     it('should display next maneuver', async () => {
       const { getByText } = render(
-        <NavigationPanel
-          currentLocation={mockOrigin}
-          destination={mockDestination}
-        />
+        <NavigationPanel currentLocation={mockOrigin} destination={mockDestination} />
       );
 
       await waitFor(() => {
@@ -347,10 +312,7 @@ describe('NavigationPanel', () => {
 
     it('should display upcoming steps', async () => {
       const { getByText } = render(
-        <NavigationPanel
-          currentLocation={mockOrigin}
-          destination={mockDestination}
-        />
+        <NavigationPanel currentLocation={mockOrigin} destination={mockDestination} />
       );
 
       await waitFor(() => {
@@ -362,10 +324,7 @@ describe('NavigationPanel', () => {
   describe('Maneuver Icons', () => {
     it('should display correct icon for turn-right maneuver', async () => {
       const { getByText } = render(
-        <NavigationPanel
-          currentLocation={mockOrigin}
-          destination={mockDestination}
-        />
+        <NavigationPanel currentLocation={mockOrigin} destination={mockDestination} />
       );
 
       await waitFor(() => {
@@ -376,10 +335,7 @@ describe('NavigationPanel', () => {
 
     it('should display correct icon for turn-left maneuver', async () => {
       const { getByText } = render(
-        <NavigationPanel
-          currentLocation={mockOrigin}
-          destination={mockDestination}
-        />
+        <NavigationPanel currentLocation={mockOrigin} destination={mockDestination} />
       );
 
       await waitFor(() => {
@@ -391,10 +347,7 @@ describe('NavigationPanel', () => {
   describe('Distance and Duration Formatting', () => {
     it('should format distances under 1km in meters', async () => {
       const { getByText } = render(
-        <NavigationPanel
-          currentLocation={mockOrigin}
-          destination={mockDestination}
-        />
+        <NavigationPanel currentLocation={mockOrigin} destination={mockDestination} />
       );
 
       await waitFor(() => {
@@ -420,10 +373,7 @@ describe('NavigationPanel', () => {
       (mapRoutingService.calculateTaxiRoute as jest.Mock).mockResolvedValue(mockLongRoute);
 
       const { getByText } = render(
-        <NavigationPanel
-          currentLocation={mockOrigin}
-          destination={mockDestination}
-        />
+        <NavigationPanel currentLocation={mockOrigin} destination={mockDestination} />
       );
 
       await waitFor(() => {
@@ -433,10 +383,7 @@ describe('NavigationPanel', () => {
 
     it('should format duration in minutes', async () => {
       const { getByText } = render(
-        <NavigationPanel
-          currentLocation={mockOrigin}
-          destination={mockDestination}
-        />
+        <NavigationPanel currentLocation={mockOrigin} destination={mockDestination} />
       );
 
       await waitFor(() => {
@@ -453,10 +400,7 @@ describe('NavigationPanel', () => {
       );
 
       const { getByText } = render(
-        <NavigationPanel
-          currentLocation={mockOrigin}
-          destination={mockDestination}
-        />
+        <NavigationPanel currentLocation={mockOrigin} destination={mockDestination} />
       );
 
       await waitFor(() => {
@@ -475,10 +419,7 @@ describe('NavigationPanel', () => {
       (mapRoutingService.calculateTaxiRoute as jest.Mock).mockResolvedValue(emptyRoute);
 
       const { getByText } = render(
-        <NavigationPanel
-          currentLocation={mockOrigin}
-          destination={mockDestination}
-        />
+        <NavigationPanel currentLocation={mockOrigin} destination={mockDestination} />
       );
 
       // Should not crash, might show loading or error state

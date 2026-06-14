@@ -1,13 +1,5 @@
 import React, { useState } from 'react';
-import {
-  TextInput,
-  View,
-  StyleSheet,
-  ViewStyle,
-  TextStyle,
-  TouchableOpacity,
-  Text,
-} from 'react-native';
+import { TextInput, View, ViewStyle, TextStyle, TouchableOpacity, Text } from 'react-native';
 import { Colors, Typography, BorderRadius, Spacing } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -132,34 +124,3 @@ export const Input: React.FC<InputProps> = ({
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    marginBottom: Spacing.md,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: BorderRadius.md,
-    borderWidth: 2,
-    borderColor: Colors.inputBorder,
-    backgroundColor: Colors.white,
-    paddingHorizontal: Spacing.md,
-    height: 56,
-  },
-  input: {
-    ...Typography.input,
-    flex: 1,
-    color: Colors.textPrimary,
-  },
-  label: {
-    ...Typography.bodySmall,
-    marginBottom: Spacing.sm,
-    color: Colors.textPrimary,
-  },
-  error: {
-    ...Typography.caption,
-    color: Colors.error,
-    marginTop: Spacing.xs,
-  },
-});

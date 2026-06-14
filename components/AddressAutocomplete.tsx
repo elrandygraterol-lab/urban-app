@@ -14,7 +14,7 @@ import {
   Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import mapsService from '@/services/mapsService';
+import { searchPlaces } from '@/services/mapsService';
 import { Colors } from '@/constants/theme';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -58,7 +58,12 @@ export default function AddressAutocomplete({
   const [suggestions, setSuggestions] = useState<Place[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [dropdownLayout, setDropdownLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [dropdownLayout, setDropdownLayout] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const [maxDropdownHeight, setMaxDropdownHeight] = useState<number>(300);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const containerRef = useRef<View>(null);
@@ -84,7 +89,7 @@ export default function AddressAutocomplete({
     debounceTimer.current = setTimeout(async () => {
       setIsLoading(true);
       try {
-        const results = await mapsService.searchPlaces(
+        const results = await searchPlaces(
           value,
           currentLocation?.latitude,
           currentLocation?.longitude
@@ -111,17 +116,17 @@ export default function AddressAutocomplete({
       containerRef.current.measureInWindow((x, y, width, height) => {
         // Calcular el espacio disponible debajo del input
         const spaceBelow = SCREEN_HEIGHT - (y + height) - TAB_BAR_HEIGHT - 20; // 20px de margen
-        
+
         // Calcular altura máxima basada en el número de sugerencias
         const suggestionsCount = suggestions.length || MAX_VISIBLE_SUGGESTIONS;
         const idealHeight = Math.min(
           suggestionsCount * SUGGESTION_ITEM_HEIGHT,
           MAX_VISIBLE_SUGGESTIONS * SUGGESTION_ITEM_HEIGHT
         );
-        
+
         // Usar el menor entre el espacio disponible y la altura ideal
         const calculatedMaxHeight = Math.min(spaceBelow, idealHeight, 300);
-        
+
         setMaxDropdownHeight(Math.max(calculatedMaxHeight, 150)); // Mínimo 150px
         setDropdownLayout({ x, y, width, height });
       });
@@ -181,11 +186,20 @@ export default function AddressAutocomplete({
         }
       }}
     >
-      <Ionicons name="location-outline" size={18} color={Colors.mediumGray} style={styles.suggestionIcon} />
+      <Ionicons
+        name="location-outline"
+        size={18}
+        color={Colors.mediumGray}
+        style={styles.suggestionIcon}
+      />
       <View style={styles.suggestionTextContainer}>
-        <Text style={styles.suggestionName} numberOfLines={1} ellipsizeMode="tail">{item.name}</Text>
+        <Text style={styles.suggestionName} numberOfLines={1} ellipsizeMode="tail">
+          {item.name}
+        </Text>
         {item.description ? (
-          <Text style={styles.suggestionDescription} numberOfLines={2} ellipsizeMode="tail">{item.description}</Text>
+          <Text style={styles.suggestionDescription} numberOfLines={2} ellipsizeMode="tail">
+            {item.description}
+          </Text>
         ) : null}
       </View>
     </TouchableOpacity>
@@ -194,21 +208,22 @@ export default function AddressAutocomplete({
   const showDropdown = bare && showSuggestions && suggestions.length > 0;
 
   return (
-    <View
-      ref={containerRef}
-      style={[styles.container, style]}
-      onLayout={measureContainer}
-    >
+    <View ref={containerRef} style={[styles.container, style]} onLayout={measureContainer}>
       {/* Input field */}
       <View style={bare ? styles.inputContainerBare : styles.inputContainer}>
         {!bare && (
-          <Ionicons name="search-outline" size={20} color={Colors.mediumGray} style={styles.searchIcon} />
+          <Ionicons
+            name="search-outline"
+            size={20}
+            color={Colors.mediumGray}
+            style={styles.searchIcon}
+          />
         )}
         <TextInput
           ref={inputRef}
           style={styles.input}
           value={value}
-          onChangeText={(text) => {
+          onChangeText={text => {
             onChangeText(text);
             setTimeout(measureContainer, 50);
           }}
@@ -231,7 +246,7 @@ export default function AddressAutocomplete({
         <View style={[styles.suggestionsContainer, { maxHeight: maxDropdownHeight }]}>
           <FlatList
             data={suggestions}
-            keyExtractor={(item) => item.id}
+            keyExtractor={item => item.id}
             renderItem={renderSuggestionItem}
             keyboardShouldPersistTaps="always"
             keyboardDismissMode="none"
@@ -268,7 +283,7 @@ export default function AddressAutocomplete({
                 >
                   <FlatList
                     data={suggestions}
-                    keyExtractor={(item) => item.id}
+                    keyExtractor={item => item.id}
                     renderItem={renderSuggestionItem}
                     keyboardShouldPersistTaps="always"
                     keyboardDismissMode="none"

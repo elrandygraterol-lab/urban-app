@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
@@ -48,9 +47,9 @@ interface MobilePaymentModalProps {
     referencia?: string;
     fecha?: string;
     banco?: string;
-    telefonoP?: string;  // Usar telefonoP según documentación VOB
-    identificacion?: string;  // Usar identificacion según documentación VOB
-    pagador?: string;  // Usar pagador según documentación VOB
+    telefonoP?: string; // Usar telefonoP según documentación VOB
+    identificacion?: string; // Usar identificacion según documentación VOB
+    pagador?: string; // Usar pagador según documentación VOB
   }) => void;
   onCancel: () => void;
 }
@@ -85,8 +84,6 @@ export default function MobilePaymentModal({
 }: MobilePaymentModalProps) {
   const insets = useSafeAreaInsets();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mobile');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [referenceNumber, setReferenceNumber] = useState('');
   const [selectedBank, setSelectedBank] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showTestData, setShowTestData] = useState(true);
@@ -172,7 +169,19 @@ export default function MobilePaymentModal({
               clearInterval(timerRef.current);
             }
             setIsTimerActive(false);
-            handleTimeExpired();
+            Alert.alert(
+              'Tiempo Agotado',
+              'El tiempo para completar el pago ha expirado. El viaje será cancelado.',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    resetForm();
+                    onCancel();
+                  },
+                },
+              ]
+            );
             return 0;
           }
           return prev - 1;
@@ -185,23 +194,7 @@ export default function MobilePaymentModal({
         }
       };
     }
-  }, [isTimerActive, paymentMethod]);
-
-  const handleTimeExpired = () => {
-    Alert.alert(
-      'Tiempo Agotado',
-      'El tiempo para completar el pago ha expirado. El viaje será cancelado.',
-      [
-        {
-          text: 'OK',
-          onPress: () => {
-            resetForm();
-            onCancel();
-          },
-        },
-      ]
-    );
-  };
+  }, [isTimerActive, paymentMethod, onCancel]);
 
   const handleExtendTime = () => {
     if (extensionsUsed >= MAX_EXTENSIONS) {
@@ -258,8 +251,6 @@ export default function MobilePaymentModal({
   };
 
   const resetForm = () => {
-    setPhoneNumber('');
-    setReferenceNumber('');
     setSelectedBank('');
     setShowTestData(true);
     setPaymentMethod('mobile');
@@ -322,7 +313,11 @@ export default function MobilePaymentModal({
       // Validar que la fecha sea real
       const [day, month, year] = fecha.split('/').map(Number);
       const dateObj = new Date(year, month - 1, day);
-      if (dateObj.getFullYear() !== year || dateObj.getMonth() !== month - 1 || dateObj.getDate() !== day) {
+      if (
+        dateObj.getFullYear() !== year ||
+        dateObj.getMonth() !== month - 1 ||
+        dateObj.getDate() !== day
+      ) {
         Alert.alert('Error', 'La fecha ingresada no es válida');
         return;
       }
@@ -391,7 +386,7 @@ export default function MobilePaymentModal({
       }
     } catch (error: any) {
       console.error('Payment processing error:', error);
-      
+
       // Handle different error responses according to requirements
       let errorMessage = 'Error procesando el pago. Por favor intenta nuevamente.';
       let showRetry = true;
@@ -404,7 +399,8 @@ export default function MobilePaymentModal({
           case 422:
             // Pago rechazado (Requisitos 2.3, 2.6, 2.7, 2.8)
             // Handles: status="R"/"RM", E001, E010, E021 errors
-            errorMessage = data.message || 'Pago rechazado por el banco. Verifica los datos ingresados.';
+            errorMessage =
+              data.message || 'Pago rechazado por el banco. Verifica los datos ingresados.';
             showRetry = false;
             break;
           case 409:
@@ -430,9 +426,7 @@ export default function MobilePaymentModal({
         }
       }
 
-      const alertButtons: any[] = [
-        { text: 'OK', style: 'cancel' as const },
-      ];
+      const alertButtons: any[] = [{ text: 'OK', style: 'cancel' as const }];
 
       if (showRetry) {
         alertButtons.unshift({
@@ -508,9 +502,7 @@ export default function MobilePaymentModal({
                 <Text style={styles.amountEquivalent}>
                   {formatCurrency(equivalentAmount, otherCurrency)}
                   {'  '}
-                  <Text style={styles.amountRate}>
-                    (@ {exchangeRate!.toFixed(2)})
-                  </Text>
+                  <Text style={styles.amountRate}>(@ {exchangeRate!.toFixed(2)})</Text>
                 </Text>
               )}
             </View>
@@ -542,9 +534,7 @@ export default function MobilePaymentModal({
                   >
                     Pago Móvil
                   </Text>
-                  <Text style={styles.paymentMethodSubtext}>
-                    Verificación automática
-                  </Text>
+                  <Text style={styles.paymentMethodSubtext}>Verificación automática</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -567,9 +557,7 @@ export default function MobilePaymentModal({
                   >
                     Efectivo
                   </Text>
-                  <Text style={styles.paymentMethodSubtext}>
-                    Pagar al conductor
-                  </Text>
+                  <Text style={styles.paymentMethodSubtext}>Pagar al conductor</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -606,9 +594,7 @@ export default function MobilePaymentModal({
                       <Ionicons name="phone-portrait" size={20} color={Colors.primary} />
                       <Text style={styles.destinationTitle}>Paga con Pago Móvil a:</Text>
                     </View>
-                    <Text style={styles.destinationText}>
-                      {platformMethod.mobileBank}
-                    </Text>
+                    <Text style={styles.destinationText}>{platformMethod.mobileBank}</Text>
                     <Text style={styles.destinationDetail}>
                       Teléfono: {platformMethod.mobilePhone}
                     </Text>
@@ -616,9 +602,7 @@ export default function MobilePaymentModal({
                       Cédula: {platformMethod.mobileCedula}
                     </Text>
                     {platformMethod.description && (
-                      <Text style={styles.destinationDetail}>
-                        {platformMethod.description}
-                      </Text>
+                      <Text style={styles.destinationDetail}>{platformMethod.description}</Text>
                     )}
                   </View>
                 )}
@@ -630,9 +614,7 @@ export default function MobilePaymentModal({
                       <Ionicons name="business" size={20} color={Colors.primary} />
                       <Text style={styles.destinationTitle}>Transfiere a:</Text>
                     </View>
-                    <Text style={styles.destinationText}>
-                      {platformMethod.transferBank}
-                    </Text>
+                    <Text style={styles.destinationText}>{platformMethod.transferBank}</Text>
                     <Text style={styles.destinationDetail}>
                       Cuenta: {platformMethod.accountNumber}
                     </Text>
@@ -643,9 +625,7 @@ export default function MobilePaymentModal({
                       Cédula/RIF: {platformMethod.transferCedula}
                     </Text>
                     {platformMethod.description && (
-                      <Text style={styles.destinationDetail}>
-                        {platformMethod.description}
-                      </Text>
+                      <Text style={styles.destinationDetail}>{platformMethod.description}</Text>
                     )}
                   </View>
                 )}
@@ -707,11 +687,13 @@ export default function MobilePaymentModal({
                       style={styles.input}
                       placeholder="15/12/2024"
                       value={fecha}
-                      onChangeText={(text) => {
+                      onChangeText={text => {
                         // Auto-format: insert slashes automatically
                         let formatted = text.replace(/[^0-9]/g, '');
-                        if (formatted.length > 2) formatted = formatted.slice(0, 2) + '/' + formatted.slice(2);
-                        if (formatted.length > 5) formatted = formatted.slice(0, 5) + '/' + formatted.slice(5);
+                        if (formatted.length > 2)
+                          formatted = formatted.slice(0, 2) + '/' + formatted.slice(2);
+                        if (formatted.length > 5)
+                          formatted = formatted.slice(0, 5) + '/' + formatted.slice(5);
                         setFecha(formatted.slice(0, 10));
                       }}
                       keyboardType="number-pad"
@@ -777,7 +759,7 @@ export default function MobilePaymentModal({
               <View style={styles.infoBox}>
                 <Ionicons name="information-circle-outline" size={20} color={Colors.primary} />
                 <Text style={styles.infoText}>
-                  El pago móvil será verificado automáticamente con el banco VOB. Asegúrate de 
+                  El pago móvil será verificado automáticamente con el banco VOB. Asegúrate de
                   ingresar los datos exactos de tu transacción.
                 </Text>
               </View>

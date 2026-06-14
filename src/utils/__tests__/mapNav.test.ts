@@ -1,9 +1,5 @@
 import * as fc from 'fast-check';
-import {
-  haversineDistance,
-  computeNearestStepIndex,
-  computeNearestRouteIndex,
-} from '../mapNav';
+import { haversineDistance, computeNearestStepIndex, computeNearestRouteIndex } from '../mapNav';
 
 // ─── Unit tests ───────────────────────────────────────────────────────────────
 
@@ -28,7 +24,7 @@ describe('computeNearestStepIndex', () => {
   });
 
   it('steps sin location → 0', () => {
-    const steps: Array<{ location?: { latitude: number; longitude: number } }> = [{}, {}];
+    const steps: { location?: { latitude: number; longitude: number } }[] = [{}, {}];
     expect(computeNearestStepIndex(steps, { latitude: 10, longitude: 10 })).toBe(0);
   });
 

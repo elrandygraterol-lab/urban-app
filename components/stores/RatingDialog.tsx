@@ -51,11 +51,11 @@ export default function RatingDialog({
     try {
       setLoading(true);
       await onSubmit(rating, comment || undefined);
-      
+
       // Reset form
       setRating(0);
       setComment('');
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'No se pudo enviar la calificación');
     } finally {
       setLoading(false);
@@ -94,39 +94,33 @@ export default function RatingDialog({
         >
           {/* Title */}
           <Text
-            style={{ 
-              fontSize: 18, 
-              fontWeight: 'bold', 
-              color: colors.darkGray, 
-              marginBottom: 8 
+            style={{
+              fontSize: 18,
+              fontWeight: 'bold',
+              color: colors.darkGray,
+              marginBottom: 8,
             }}
           >
             {existingReview ? 'Editar Calificación' : 'Calificar Tienda'}
           </Text>
           <Text style={{ fontSize: 14, color: colors.lightGray, marginBottom: 24 }}>
-            {existingReview 
-              ? 'Actualiza tu calificación y comentario' 
+            {existingReview
+              ? 'Actualiza tu calificación y comentario'
               : '¿Cómo fue tu experiencia?'}
           </Text>
 
           {/* Star Rating */}
           <View
-            style={{ 
-              flexDirection: 'row', 
-              justifyContent: 'center', 
-              gap: 12, 
-              marginBottom: 24 
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'center',
+              gap: 12,
+              marginBottom: 24,
             }}
           >
             {[1, 2, 3, 4, 5].map(star => (
-              <TouchableOpacity 
-                key={star} 
-                onPress={() => setRating(star)}
-                disabled={loading}
-              >
-                <Text style={{ fontSize: 32 }}>
-                  {star <= rating ? '⭐' : '☆'}
-                </Text>
+              <TouchableOpacity key={star} onPress={() => setRating(star)} disabled={loading}>
+                <Text style={{ fontSize: 32 }}>{star <= rating ? '⭐' : '☆'}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -179,9 +173,7 @@ export default function RatingDialog({
                 alignItems: 'center',
               }}
             >
-              <Text style={{ color: colors.primary, fontWeight: '600' }}>
-                Cancelar
-              </Text>
+              <Text style={{ color: colors.primary, fontWeight: '600' }}>Cancelar</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleSubmit}
@@ -190,9 +182,8 @@ export default function RatingDialog({
                 flex: 1,
                 paddingVertical: 12,
                 borderRadius: 8,
-                backgroundColor: (loading || rating === 0 || isCommentTooLong) 
-                  ? '#CCCCCC' 
-                  : colors.primary,
+                backgroundColor:
+                  loading || rating === 0 || isCommentTooLong ? '#CCCCCC' : colors.primary,
                 alignItems: 'center',
               }}
             >

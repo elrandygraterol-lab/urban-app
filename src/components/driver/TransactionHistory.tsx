@@ -93,20 +93,16 @@ const TransactionItem = React.memo(
     return (
       <View style={styles.transactionItem}>
         {/* Icon */}
-        <View style={[styles.iconContainer, { backgroundColor: isEarning ? '#dcfce7' : '#fef3c7' }]}>
-          <Ionicons
-            name={getTransactionIcon(transaction.type)}
-            size={20}
-            color={amountColor}
-          />
+        <View
+          style={[styles.iconContainer, { backgroundColor: isEarning ? '#dcfce7' : '#fef3c7' }]}
+        >
+          <Ionicons name={getTransactionIcon(transaction.type)} size={20} color={amountColor} />
         </View>
 
         {/* Transaction Details */}
         <View style={styles.transactionDetails}>
           <View style={styles.transactionHeader}>
-            <Text style={styles.transactionType}>
-              {getTransactionTypeLabel(transaction.type)}
-            </Text>
+            <Text style={styles.transactionType}>{getTransactionTypeLabel(transaction.type)}</Text>
             <Text style={[styles.transactionAmount, { color: amountColor }]}>
               +{formatAmount(transaction.amount, currency)}
             </Text>
@@ -185,9 +181,7 @@ const EmptyState = () => (
   <View style={styles.emptyContainer}>
     <Ionicons name="wallet-outline" size={48} color={colors.lightGray} />
     <Text style={styles.emptyTitle}>No hay transacciones</Text>
-    <Text style={styles.emptySubtitle}>
-      Tus ganancias aparecerán aquí cuando completes viajes
-    </Text>
+    <Text style={styles.emptySubtitle}>Tus ganancias aparecerán aquí cuando completes viajes</Text>
   </View>
 );
 
@@ -215,9 +209,7 @@ export default function TransactionHistory({
   const keyExtractor = useCallback((item: WalletTransactionDto) => item.id, []);
 
   const renderFooter = useCallback(
-    () => (
-      <ListFooter loadingMore={loadingMore} hasMore={hasMore} onLoadMore={onLoadMore} />
-    ),
+    () => <ListFooter loadingMore={loadingMore} hasMore={hasMore} onLoadMore={onLoadMore} />,
     [loadingMore, hasMore, onLoadMore]
   );
 

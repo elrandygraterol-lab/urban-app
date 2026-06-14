@@ -123,7 +123,7 @@ const GlobalNotificationModal: React.FC = () => {
         useNativeDriver: true,
       }).start();
     }
-  }, [currentNotification]);
+  }, [currentNotification, slideAnim]);
 
   if (!currentNotification) {
     return null;

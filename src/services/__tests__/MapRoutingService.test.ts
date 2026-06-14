@@ -1,6 +1,6 @@
 /**
  * MapRoutingService Tests
- * 
+ *
  * Unit tests for Google Maps Directions API integration
  */
 
@@ -37,16 +37,16 @@ describe('MapRoutingService', () => {
                     html_instructions: 'Head <b>north</b> on Main St',
                     distance: { value: 1000 },
                     duration: { value: 120 },
-                    start_location: { lat: 40.7128, lng: -74.0060 },
-                    end_location: { lat: 40.7228, lng: -74.0060 },
+                    start_location: { lat: 40.7128, lng: -74.006 },
+                    end_location: { lat: 40.7228, lng: -74.006 },
                     maneuver: 'turn-left',
                   },
                 ],
               },
             ],
             bounds: {
-              northeast: { lat: 40.7228, lng: -74.0060 },
-              southwest: { lat: 40.7128, lng: -74.0060 },
+              northeast: { lat: 40.7228, lng: -74.006 },
+              southwest: { lat: 40.7128, lng: -74.006 },
             },
           },
         ],
@@ -57,8 +57,8 @@ describe('MapRoutingService', () => {
         json: async () => mockResponse,
       });
 
-      const origin = { latitude: 40.7128, longitude: -74.0060 };
-      const destination = { latitude: 40.7228, longitude: -74.0060 };
+      const origin = { latitude: 40.7128, longitude: -74.006 };
+      const destination = { latitude: 40.7228, longitude: -74.006 };
 
       const result = await mapRoutingService.calculateRoute(origin, destination);
 
@@ -80,8 +80,8 @@ describe('MapRoutingService', () => {
         }),
       });
 
-      const origin = { latitude: 40.7128, longitude: -74.0060 };
-      const destination = { latitude: 40.7228, longitude: -74.0060 };
+      const origin = { latitude: 40.7128, longitude: -74.006 };
+      const destination = { latitude: 40.7228, longitude: -74.006 };
 
       const result = await mapRoutingService.calculateRoute(origin, destination);
 
@@ -106,8 +106,8 @@ describe('MapRoutingService', () => {
               },
             ],
             bounds: {
-              northeast: { lat: 40.7228, lng: -74.0060 },
-              southwest: { lat: 40.7128, lng: -74.0060 },
+              northeast: { lat: 40.7228, lng: -74.006 },
+              southwest: { lat: 40.7128, lng: -74.006 },
             },
           },
         ],
@@ -118,8 +118,8 @@ describe('MapRoutingService', () => {
         json: async () => mockResponse,
       });
 
-      const origin = { latitude: 40.7128, longitude: -74.0060 };
-      const destination = { latitude: 40.7228, longitude: -74.0060 };
+      const origin = { latitude: 40.7128, longitude: -74.006 };
+      const destination = { latitude: 40.7228, longitude: -74.006 };
 
       await mapRoutingService.calculateRoute(origin, destination, {
         avoidTolls: true,
@@ -146,8 +146,8 @@ describe('MapRoutingService', () => {
               },
             ],
             bounds: {
-              northeast: { lat: 40.7228, lng: -74.0060 },
-              southwest: { lat: 40.7128, lng: -74.0060 },
+              northeast: { lat: 40.7228, lng: -74.006 },
+              southwest: { lat: 40.7128, lng: -74.006 },
             },
           },
         ],
@@ -158,8 +158,8 @@ describe('MapRoutingService', () => {
         json: async () => mockResponse,
       });
 
-      const origin = { latitude: 40.7128, longitude: -74.0060 };
-      const destination = { latitude: 40.7228, longitude: -74.0060 };
+      const origin = { latitude: 40.7128, longitude: -74.006 };
+      const destination = { latitude: 40.7228, longitude: -74.006 };
 
       await mapRoutingService.calculateTaxiRoute(origin, destination);
 
@@ -200,8 +200,8 @@ describe('MapRoutingService', () => {
 
   describe('getFallbackRoute', () => {
     it('should return straight-line route as fallback', () => {
-      const origin = { latitude: 40.7128, longitude: -74.0060 };
-      const destination = { latitude: 40.7228, longitude: -74.0060 };
+      const origin = { latitude: 40.7128, longitude: -74.006 };
+      const destination = { latitude: 40.7228, longitude: -74.006 };
 
       const result = mapRoutingService.getFallbackRoute(origin, destination);
 
@@ -224,7 +224,7 @@ describe('MapRoutingService', () => {
 
     it('should validate route with single coordinate', async () => {
       const result = await mapRoutingService.validateRoute([
-        { latitude: 40.7128, longitude: -74.0060 },
+        { latitude: 40.7128, longitude: -74.006 },
       ]);
       expect(result).toBe(false);
     });

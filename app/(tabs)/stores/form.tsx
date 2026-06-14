@@ -15,7 +15,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { Colors, Typography, Spacing, BorderRadius, Shadows } from '@/constants/theme';
+import { Colors, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import { BusinessHoursEditor } from '@/components/stores/BusinessHoursEditor';
 import { CategoryPicker } from '@/components/stores/CategoryPicker';
@@ -23,7 +23,7 @@ import { useStoreStore } from '@/store/storeStore';
 import { useAuthStore } from '@/store/authStore';
 import { uploadImage } from '@/services/storeApi';
 import { compressImage, validateImageSize, formatFileSize, getImageSize } from '@/utils/imageUtils';
-import type { BusinessHours, DayHours, CreateStoreRequest } from '@/types/store';
+import type { BusinessHours, CreateStoreRequest } from '@/types/store';
 
 // Default business hours
 const DEFAULT_BUSINESS_HOURS: BusinessHours = {
@@ -48,9 +48,17 @@ export default function StoreFormScreen() {
   const storeId = params.storeId ? Number(params.storeId) : null;
   const isEditMode = !!storeId;
 
-  const { user } = useAuthStore();
+  useAuthStore();
   const { showToast, showStatus } = useUnifiedNotifications();
-  const { categories, fetchCategories, createStore, updateStore, fetchStoreById, selectedStore, loading } = useStoreStore();
+  const {
+    categories,
+    fetchCategories,
+    createStore,
+    updateStore,
+    fetchStoreById,
+    selectedStore,
+    loading,
+  } = useStoreStore();
 
   // Multi-step state
   const [currentStep, setCurrentStep] = useState(1);
@@ -60,71 +68,56 @@ export default function StoreFormScreen() {
   const [name, setName] = useState('');
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [description, setDescription] = useState('');
-  
+
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [website, setWebsite] = useState('');
   const [address, setAddress] = useState('');
   const [latitude, setLatitude] = useState<number | undefined>();
   const [longitude, setLongitude] = useState<number | undefined>();
-  
+
   const [businessHours, setBusinessHours] = useState<BusinessHours>(DEFAULT_BUSINESS_HOURS);
-  
+
   const [logo, setLogo] = useState<ImageAsset | null>(null);
   const [photos, setPhotos] = useState<ImageAsset[]>([]);
   const [menuImages, setMenuImages] = useState<ImageAsset[]>([]);
-  
+
   // Existing images from server (for edit mode)
-  const [existingImages, setExistingImages] = useState<{ id: number; url: string; type: 'logo' | 'photo' }[]>([]);
+  const [existingImages, setExistingImages] = useState<
+    { id: number; url: string; type: 'logo' | 'photo' }[]
+  >([]);
   const [imagesToDelete, setImagesToDelete] = useState<number[]>([]);
 
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
-  
+
   // Loading state for initial data fetch
   const [isLoadingStore, setIsLoadingStore] = useState(false);
 
   // Load categories on mount
   useEffect(() => {
     fetchCategories();
-  }, []);
+  }, [fetchCategories]);
 
   // Load existing store data in edit mode
   useEffect(() => {
-    if (isEditMode && storeId) {
-      loadStoreData();
-    }
-  }, [isEditMode, storeId]);
+    if (!isEditMode || !storeId) return;
 
-  // Verify user has owner role
-  useEffect(() => {
-    // Note: The backend will verify the role, but we can show a warning here
-    // In a real implementation, you'd check user.role === 'owner'
-    // For now, we'll let the backend handle the verification
-  }, [user]);
+    const loadStoreData = async () => {
+      setIsLoadingStore(true);
+      try {
+        await fetchStoreById(storeId);
+      } catch (error) {
+        console.error('Error loading store data:', error);
+        showToast('No se pudo cargar la información de la tienda', 'error');
+        router.back();
+      } finally {
+        setIsLoadingStore(false);
+      }
+    };
 
-  // ============================================================================
-  // Load Store Data for Edit Mode
-  // ============================================================================
-
-  const loadStoreData = async () => {
-    if (!storeId) return;
-    
-    setIsLoadingStore(true);
-    try {
-      await fetchStoreById(storeId);
-      
-      // Wait for selectedStore to be updated
-      // Note: In a real implementation, you might want to use a callback or promise
-      // For now, we'll access it directly after the fetch
-    } catch (error) {
-      console.error('Error loading store data:', error);
-      showToast('No se pudo cargar la información de la tienda', 'error');
-      router.back();
-    } finally {
-      setIsLoadingStore(false);
-    }
-  };
+    loadStoreData();
+  }, [isEditMode, storeId, fetchStoreById, showToast, router]);
 
   // Pre-fill form when store data is loaded
   useEffect(() => {
@@ -133,7 +126,7 @@ export default function StoreFormScreen() {
       setName(selectedStore.name);
       setCategoryId(selectedStore.category_id);
       setDescription(selectedStore.description);
-      
+
       // Contact & location
       setPhone(selectedStore.phone);
       setEmail(selectedStore.email || '');
@@ -141,12 +134,12 @@ export default function StoreFormScreen() {
       setAddress(selectedStore.address);
       setLatitude(selectedStore.latitude);
       setLongitude(selectedStore.longitude);
-      
+
       // Business hours
       if (selectedStore.business_hours) {
         setBusinessHours(selectedStore.business_hours);
       }
-      
+
       // Existing images
       if (selectedStore.images && selectedStore.images.length > 0) {
         const images = selectedStore.images.map(img => ({
@@ -268,7 +261,7 @@ export default function StoreFormScreen() {
 
   const pickLogo = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
+
     if (status !== 'granted') {
       showToast('Necesitamos acceso a tu galería para seleccionar el logo', 'error');
       return;
@@ -283,39 +276,43 @@ export default function StoreFormScreen() {
 
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
-      
+
       // Validate image size (max 5MB)
       const isValid = await validateImageSize(asset.uri);
       if (!isValid) {
         const size = await getImageSize(asset.uri);
-        showStatus('info', `La imagen seleccionada (${formatFileSize(size)}) excede el límite de 5MB. Por favor, selecciona una imagen más pequeña.`, 'Imagen muy grande');
+        showStatus(
+          'info',
+          `La imagen seleccionada (${formatFileSize(size)}) excede el límite de 5MB. Por favor, selecciona una imagen más pequeña.`,
+          'Imagen muy grande'
+        );
         return;
       }
-      
+
       // Compress the image
       console.log('[StoreForm] Compressing logo image...');
       const compressedUri = await compressImage(asset.uri, {
         type: 'logo',
         quality: 'high',
       });
-      
+
       setLogo({
         uri: compressedUri,
         name: `logo_${Date.now()}.jpg`,
         type: 'image/jpeg',
       });
-      
+
       // If replacing existing logo, mark it for deletion
       const existingLogo = existingImages.find(img => img.type === 'logo');
       if (existingLogo) {
         setImagesToDelete([...imagesToDelete, existingLogo.id]);
         setExistingImages(existingImages.filter(img => img.id !== existingLogo.id));
       }
-      
+
       console.log('[StoreForm] Logo compressed and ready for upload');
     }
   };
-  
+
   const removeExistingImage = (imageId: number) => {
     setImagesToDelete([...imagesToDelete, imageId]);
     setExistingImages(existingImages.filter(img => img.id !== imageId));
@@ -323,7 +320,7 @@ export default function StoreFormScreen() {
 
   const pickPhotos = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
+
     if (status !== 'granted') {
       showToast('Necesitamos acceso a tu galería para seleccionar fotos', 'error');
       return;
@@ -331,7 +328,7 @@ export default function StoreFormScreen() {
 
     const existingPhotoCount = existingImages.filter(img => img.type === 'photo').length;
     const totalPhotoCount = existingPhotoCount + photos.length;
-    
+
     if (totalPhotoCount >= 10) {
       showStatus('info', 'Solo puedes tener un máximo de 10 fotos', 'Límite alcanzado');
       return;
@@ -346,10 +343,14 @@ export default function StoreFormScreen() {
     if (!result.canceled) {
       const totalPhotos = totalPhotoCount + result.assets.length;
       if (totalPhotos > 10) {
-        showStatus('info', `Solo puedes tener 10 fotos. Tienes ${totalPhotoCount}, intentas agregar ${result.assets.length}`, 'Límite excedido');
+        showStatus(
+          'info',
+          `Solo puedes tener 10 fotos. Tienes ${totalPhotoCount}, intentas agregar ${result.assets.length}`,
+          'Límite excedido'
+        );
         return;
       }
-      
+
       // Compress all selected photos
       console.log(`[StoreForm] Compressing ${result.assets.length} photos...`);
       const compressedPhotos = await Promise.all(
@@ -358,16 +359,18 @@ export default function StoreFormScreen() {
           const isValid = await validateImageSize(asset.uri);
           if (!isValid) {
             const size = await getImageSize(asset.uri);
-            console.warn(`[StoreForm] Photo ${index + 1} is too large (${formatFileSize(size)}), skipping`);
+            console.warn(
+              `[StoreForm] Photo ${index + 1} is too large (${formatFileSize(size)}), skipping`
+            );
             return null;
           }
-          
+
           // Compress the image
           const compressedUri = await compressImage(asset.uri, {
             type: 'photo',
             quality: 'medium',
           });
-          
+
           return {
             uri: compressedUri,
             name: `photo_${Date.now()}_${index}.jpg`,
@@ -375,12 +378,16 @@ export default function StoreFormScreen() {
           };
         })
       );
-      
+
       // Filter out null values (images that were too large)
       const validPhotos = compressedPhotos.filter(photo => photo !== null) as ImageAsset[];
-      
+
       if (validPhotos.length < result.assets.length) {
-        showStatus('info', `${result.assets.length - validPhotos.length} imagen(es) excedieron el límite de 5MB y no se agregaron.`, 'Algunas imágenes no se agregaron');
+        showStatus(
+          'info',
+          `${result.assets.length - validPhotos.length} imagen(es) excedieron el límite de 5MB y no se agregaron.`,
+          'Algunas imágenes no se agregaron'
+        );
       }
 
       setPhotos([...photos, ...validPhotos]);
@@ -414,7 +421,11 @@ export default function StoreFormScreen() {
     if (!result.canceled) {
       const totalMenuImages = menuImages.length + result.assets.length;
       if (totalMenuImages > 10) {
-        showStatus('info', `Solo puedes tener 10 imágenes de menú. Tienes ${menuImages.length}, intentas agregar ${result.assets.length}`, 'Límite excedido');
+        showStatus(
+          'info',
+          `Solo puedes tener 10 imágenes de menú. Tienes ${menuImages.length}, intentas agregar ${result.assets.length}`,
+          'Límite excedido'
+        );
         return;
       }
 
@@ -426,7 +437,9 @@ export default function StoreFormScreen() {
           const isValid = await validateImageSize(asset.uri);
           if (!isValid) {
             const size = await getImageSize(asset.uri);
-            console.warn(`[StoreForm] Menu image ${index + 1} is too large (${formatFileSize(size)}), skipping`);
+            console.warn(
+              `[StoreForm] Menu image ${index + 1} is too large (${formatFileSize(size)}), skipping`
+            );
             return null;
           }
 
@@ -448,11 +461,17 @@ export default function StoreFormScreen() {
       const validMenuImages = compressedMenuImages.filter(img => img !== null) as ImageAsset[];
 
       if (validMenuImages.length < result.assets.length) {
-        showStatus('info', `${result.assets.length - validMenuImages.length} imagen(es) excedieron el límite de 5MB y no se agregaron.`, 'Algunas imágenes no se agregaron');
+        showStatus(
+          'info',
+          `${result.assets.length - validMenuImages.length} imagen(es) excedieron el límite de 5MB y no se agregaron.`,
+          'Algunas imágenes no se agregaron'
+        );
       }
 
       setMenuImages([...menuImages, ...validMenuImages]);
-      console.log(`[StoreForm] ${validMenuImages.length} menu images compressed and ready for upload`);
+      console.log(
+        `[StoreForm] ${validMenuImages.length} menu images compressed and ready for upload`
+      );
     }
   };
 
@@ -466,28 +485,32 @@ export default function StoreFormScreen() {
 
   // Auto-capture GPS when entering step 2 (new store only, no existing coords)
   useEffect(() => {
-    if (currentStep === 2 && !isEditMode && !latitude && !longitude) {
-      captureLocationAutomatically();
-    }
-  }, [currentStep]);
+    if (currentStep !== 2 || isEditMode || latitude || longitude) return;
 
-  const captureLocationAutomatically = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      showStatus('info', 'Permiso de ubicación denegado. Ingrese las coordenadas manualmente', 'Ubicación no disponible');
-      return;
-    }
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
-    setLatitude(location.coords.latitude);
-    setLongitude(location.coords.longitude);
-  };
+    const captureLocationAutomatically = async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        showStatus(
+          'info',
+          'Permiso de ubicación denegado. Ingrese las coordenadas manualmente',
+          'Ubicación no disponible'
+        );
+        return;
+      }
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      setLatitude(location.coords.latitude);
+      setLongitude(location.coords.longitude);
+    };
+
+    captureLocationAutomatically();
+  }, [currentStep, isEditMode, latitude, longitude, showStatus]);
 
   const getCurrentLocation = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      
+
       if (status !== 'granted') {
         showToast('Necesitamos acceso a tu ubicación para obtener las coordenadas', 'error');
         return;
@@ -496,8 +519,12 @@ export default function StoreFormScreen() {
       const location = await Location.getCurrentPositionAsync({});
       setLatitude(location.coords.latitude);
       setLongitude(location.coords.longitude);
-      
-      showStatus('info', 'Se han guardado las coordenadas de tu ubicación actual', 'Ubicación obtenida');
+
+      showStatus(
+        'info',
+        'Se han guardado las coordenadas de tu ubicación actual',
+        'Ubicación obtenida'
+      );
     } catch (error) {
       console.error('Error getting location:', error);
       showToast('No se pudo obtener la ubicación', 'error');
@@ -534,12 +561,11 @@ export default function StoreFormScreen() {
         // Update existing store
         await updateStore(storeId, storeData);
         resultStoreId = storeId;
-        
+
         // Delete marked images
         // Note: Image deletion would be done here using the deleteImage API
         // For now, we'll skip this as it requires proper error handling
         // In a real implementation, you'd call deleteImage for each imageId in imagesToDelete
-        
       } else {
         // Create new store
         resultStoreId = await createStore(storeData);
@@ -575,17 +601,31 @@ export default function StoreFormScreen() {
         }
       }
 
-      showStatus('success', isEditMode 
+      showStatus(
+        'success',
+        isEditMode
           ? 'Tu tienda ha sido actualizada exitosamente'
-          : 'Tu tienda ha sido registrada y está pendiente de aprobación', 'Éxito', undefined, { label: 'OK', onPress: () => router.push('/(tabs)/stores/my-stores') });
+          : 'Tu tienda ha sido registrada y está pendiente de aprobación',
+        'Éxito',
+        undefined,
+        { label: 'OK', onPress: () => router.push('/(tabs)/stores/my-stores') }
+      );
     } catch (error: any) {
       console.error('Error saving store:', error);
-      
+
       // Check for role verification error
       if (error.response?.status === 403) {
-        showStatus('info', 'Solo los usuarios con rol de Propietario pueden gestionar tiendas. Por favor, contacta al administrador.', 'Acceso denegado');
+        showStatus(
+          'info',
+          'Solo los usuarios con rol de Propietario pueden gestionar tiendas. Por favor, contacta al administrador.',
+          'Acceso denegado'
+        );
       } else {
-        showToast(error.response?.data?.error?.message || `No se pudo ${isEditMode ? 'actualizar' : 'crear'} la tienda. Intenta de nuevo.`, 'error');
+        showToast(
+          error.response?.data?.error?.message ||
+            `No se pudo ${isEditMode ? 'actualizar' : 'crear'} la tienda. Intenta de nuevo.`,
+          'error'
+        );
       }
     }
   };
@@ -596,7 +636,7 @@ export default function StoreFormScreen() {
 
   const renderProgressIndicator = () => (
     <View style={styles.progressContainer}>
-      {[1, 2, 3, 4].map((step) => (
+      {[1, 2, 3, 4].map(step => (
         <View key={step} style={styles.progressStepContainer}>
           <View
             style={[
@@ -620,10 +660,7 @@ export default function StoreFormScreen() {
           </View>
           {step < totalSteps && (
             <View
-              style={[
-                styles.progressLine,
-                step < currentStep && styles.progressLineCompleted,
-              ]}
+              style={[styles.progressLine, step < currentStep && styles.progressLineCompleted]}
             />
           )}
         </View>
@@ -634,9 +671,7 @@ export default function StoreFormScreen() {
   const renderStep1 = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Información Básica</Text>
-      <Text style={styles.stepSubtitle}>
-        Proporciona los datos principales de tu tienda
-      </Text>
+      <Text style={styles.stepSubtitle}>Proporciona los datos principales de tu tienda</Text>
 
       {/* Name Input */}
       <View style={styles.inputGroup}>
@@ -690,9 +725,7 @@ export default function StoreFormScreen() {
   const renderStep2 = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Contacto y Ubicación</Text>
-      <Text style={styles.stepSubtitle}>
-        Información para que los clientes puedan contactarte
-      </Text>
+      <Text style={styles.stepSubtitle}>Información para que los clientes puedan contactarte</Text>
 
       {/* Phone Input */}
       <View style={styles.inputGroup}>
@@ -770,9 +803,7 @@ export default function StoreFormScreen() {
   const renderStep3 = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Horario de Atención</Text>
-      <Text style={styles.stepSubtitle}>
-        Configura los horarios de tu tienda (opcional)
-      </Text>
+      <Text style={styles.stepSubtitle}>Configura los horarios de tu tienda (opcional)</Text>
 
       <BusinessHoursEditor hours={businessHours} onChange={setBusinessHours} />
     </View>
@@ -781,9 +812,7 @@ export default function StoreFormScreen() {
   const renderStep4 = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Imágenes</Text>
-      <Text style={styles.stepSubtitle}>
-        Agrega fotos de tu tienda para atraer más clientes
-      </Text>
+      <Text style={styles.stepSubtitle}>Agrega fotos de tu tienda para atraer más clientes</Text>
 
       {/* Logo */}
       <View style={styles.inputGroup}>
@@ -792,23 +821,22 @@ export default function StoreFormScreen() {
           {logo ? (
             <View style={styles.logoPreview}>
               <Image source={{ uri: logo.uri }} style={styles.logoImage} resizeMode="cover" />
-              <TouchableOpacity
-                style={styles.removeImageButton}
-                onPress={() => setLogo(null)}
-              >
+              <TouchableOpacity style={styles.removeImageButton} onPress={() => setLogo(null)}>
                 <Ionicons name="close-circle" size={24} color={Colors.error} />
               </TouchableOpacity>
             </View>
           ) : existingImages.find(img => img.type === 'logo') ? (
             <View style={styles.logoPreview}>
-              <Image 
-                source={{ uri: existingImages.find(img => img.type === 'logo')!.url }} 
-                style={styles.logoImage} 
-                resizeMode="cover" 
+              <Image
+                source={{ uri: existingImages.find(img => img.type === 'logo')!.url }}
+                style={styles.logoImage}
+                resizeMode="cover"
               />
               <TouchableOpacity
                 style={styles.removeImageButton}
-                onPress={() => removeExistingImage(existingImages.find(img => img.type === 'logo')!.id)}
+                onPress={() =>
+                  removeExistingImage(existingImages.find(img => img.type === 'logo')!.id)
+                }
               >
                 <Ionicons name="close-circle" size={24} color={Colors.error} />
               </TouchableOpacity>
@@ -825,7 +853,8 @@ export default function StoreFormScreen() {
       {/* Photos */}
       <View style={styles.inputGroup}>
         <Text style={styles.label}>
-          Fotos (máximo 10) - {existingImages.filter(img => img.type === 'photo').length + photos.length}/10
+          Fotos (máximo 10) -{' '}
+          {existingImages.filter(img => img.type === 'photo').length + photos.length}/10
         </Text>
         <TouchableOpacity
           style={styles.imagePickerButton}
@@ -834,26 +863,26 @@ export default function StoreFormScreen() {
         >
           <View style={styles.imagePickerContent}>
             <Ionicons name="images-outline" size={40} color={Colors.mediumGray} />
-            <Text style={styles.imagePickerText}>
-              Agregar fotos
-            </Text>
+            <Text style={styles.imagePickerText}>Agregar fotos</Text>
           </View>
         </TouchableOpacity>
 
         {/* Existing Photo Previews */}
         {existingImages.filter(img => img.type === 'photo').length > 0 && (
           <View style={styles.photoGrid}>
-            {existingImages.filter(img => img.type === 'photo').map((image) => (
-              <View key={image.id} style={styles.photoPreview}>
-                <Image source={{ uri: image.url }} style={styles.photoImage} resizeMode="cover" />
-                <TouchableOpacity
-                  style={styles.removeImageButton}
-                  onPress={() => removeExistingImage(image.id)}
-                >
-                  <Ionicons name="close-circle" size={24} color={Colors.error} />
-                </TouchableOpacity>
-              </View>
-            ))}
+            {existingImages
+              .filter(img => img.type === 'photo')
+              .map(image => (
+                <View key={image.id} style={styles.photoPreview}>
+                  <Image source={{ uri: image.url }} style={styles.photoImage} resizeMode="cover" />
+                  <TouchableOpacity
+                    style={styles.removeImageButton}
+                    onPress={() => removeExistingImage(image.id)}
+                  >
+                    <Ionicons name="close-circle" size={24} color={Colors.error} />
+                  </TouchableOpacity>
+                </View>
+              ))}
           </View>
         )}
 
@@ -879,9 +908,7 @@ export default function StoreFormScreen() {
 
       {/* Menu Images */}
       <View style={styles.inputGroup}>
-        <Text style={styles.label}>
-          Imágenes de Menú (máximo 10) - {menuImages.length}/10
-        </Text>
+        <Text style={styles.label}>Imágenes de Menú (máximo 10) - {menuImages.length}/10</Text>
         <TouchableOpacity
           style={styles.imagePickerButton}
           onPress={pickMenuImages}
@@ -889,9 +916,7 @@ export default function StoreFormScreen() {
         >
           <View style={styles.imagePickerContent}>
             <Ionicons name="restaurant-outline" size={40} color={Colors.mediumGray} />
-            <Text style={styles.imagePickerText}>
-              Agregar imágenes de menú
-            </Text>
+            <Text style={styles.imagePickerText}>Agregar imágenes de menú</Text>
           </View>
         </TouchableOpacity>
 
@@ -925,9 +950,7 @@ export default function StoreFormScreen() {
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={Colors.darkGray} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          {isEditMode ? 'Editar Tienda' : 'Nueva Tienda'}
-        </Text>
+        <Text style={styles.headerTitle}>{isEditMode ? 'Editar Tienda' : 'Nueva Tienda'}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -957,11 +980,7 @@ export default function StoreFormScreen() {
           {/* Navigation Buttons */}
           <View style={styles.footer}>
             {currentStep < totalSteps ? (
-              <TouchableOpacity
-                style={styles.nextButton}
-                onPress={handleNext}
-                disabled={loading}
-              >
+              <TouchableOpacity style={styles.nextButton} onPress={handleNext} disabled={loading}>
                 <Text style={styles.nextButtonText}>Siguiente</Text>
                 <Ionicons name="arrow-forward" size={20} color={Colors.white} />
               </TouchableOpacity>

@@ -117,13 +117,19 @@ export default function VerificationStatusScreen() {
 
       <View style={styles.buttonContainer}>
         {status === 'pending' && (
-          <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/(driver)/' as any)}>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => router.push('/(driver)/' as any)}
+          >
             <Text style={styles.primaryButtonText}>Volver al Inicio</Text>
           </TouchableOpacity>
         )}
 
         {status === 'verified' && (
-          <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/(driver)/' as any)}>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => router.push('/(driver)/' as any)}
+          >
             <Text style={styles.primaryButtonText}>Ir al Dashboard</Text>
           </TouchableOpacity>
         )}

@@ -1,13 +1,12 @@
 /**
  * SequentialNavigationManager Unit Tests
- * 
+ *
  * Tests the sequential navigation manager for pickup → destination navigation.
  * Requirements: 2.5
  */
 
-import { SequentialNavigationManager, NavigationPhase } from '../SequentialNavigationManager';
-import { Location, NavigationStep } from '../MapRoutingService';
-import { mapRoutingService } from '../MapRoutingService';
+import { SequentialNavigationManager } from '../SequentialNavigationManager';
+import { Location, NavigationStep, mapRoutingService } from '../MapRoutingService';
 
 // Mock MapRoutingService
 jest.mock('../MapRoutingService', () => ({
@@ -25,8 +24,8 @@ describe('SequentialNavigationManager', () => {
   };
 
   const mockPickupLocation: Location = {
-    latitude: 19.4350,
-    longitude: -99.1400,
+    latitude: 19.435,
+    longitude: -99.14,
   };
 
   const mockDestinationLocation: Location = {
@@ -40,14 +39,14 @@ describe('SequentialNavigationManager', () => {
       distance: 500,
       duration: 60,
       startLocation: mockCurrentLocation,
-      endLocation: { latitude: 19.4330, longitude: -99.1332 },
+      endLocation: { latitude: 19.433, longitude: -99.1332 },
       maneuver: 'straight',
     },
     {
       instruction: 'Turn right onto Calle 5',
       distance: 300,
       duration: 45,
-      startLocation: { latitude: 19.4330, longitude: -99.1332 },
+      startLocation: { latitude: 19.433, longitude: -99.1332 },
       endLocation: mockPickupLocation,
       maneuver: 'turn-right',
     },
@@ -55,7 +54,7 @@ describe('SequentialNavigationManager', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     // Default mock implementation
     (mapRoutingService.calculateTaxiRoute as jest.Mock).mockResolvedValue({
       coordinates: [mockCurrentLocation, mockPickupLocation],
@@ -67,10 +66,7 @@ describe('SequentialNavigationManager', () => {
 
   describe('Initialization', () => {
     it('should initialize with pickup phase when pickup location is provided', async () => {
-      const manager = new SequentialNavigationManager(
-        mockPickupLocation,
-        mockDestinationLocation
-      );
+      const manager = new SequentialNavigationManager(mockPickupLocation, mockDestinationLocation);
 
       await manager.initialize(mockCurrentLocation);
 
@@ -78,10 +74,7 @@ describe('SequentialNavigationManager', () => {
     });
 
     it('should initialize with destination phase when no pickup location', async () => {
-      const manager = new SequentialNavigationManager(
-        undefined,
-        mockDestinationLocation
-      );
+      const manager = new SequentialNavigationManager(undefined, mockDestinationLocation);
 
       await manager.initialize(mockCurrentLocation);
 
@@ -90,12 +83,10 @@ describe('SequentialNavigationManager', () => {
 
     it('should call onPhaseChange callback on initialization', async () => {
       const onPhaseChange = jest.fn();
-      
-      const manager = new SequentialNavigationManager(
-        mockPickupLocation,
-        mockDestinationLocation,
-        { onPhaseChange }
-      );
+
+      const manager = new SequentialNavigationManager(mockPickupLocation, mockDestinationLocation, {
+        onPhaseChange,
+      });
 
       await manager.initialize(mockCurrentLocation);
 
@@ -111,10 +102,7 @@ describe('SequentialNavigationManager', () => {
     });
 
     it('should calculate route using MapRoutingService', async () => {
-      const manager = new SequentialNavigationManager(
-        mockPickupLocation,
-        mockDestinationLocation
-      );
+      const manager = new SequentialNavigationManager(mockPickupLocation, mockDestinationLocation);
 
       await manager.initialize(mockCurrentLocation);
 
@@ -127,14 +115,12 @@ describe('SequentialNavigationManager', () => {
     it('should handle initialization errors', async () => {
       const onError = jest.fn();
       const error = new Error('API Error');
-      
+
       (mapRoutingService.calculateTaxiRoute as jest.Mock).mockRejectedValue(error);
 
-      const manager = new SequentialNavigationManager(
-        mockPickupLocation,
-        mockDestinationLocation,
-        { onError }
-      );
+      const manager = new SequentialNavigationManager(mockPickupLocation, mockDestinationLocation, {
+        onError,
+      });
 
       await expect(manager.initialize(mockCurrentLocation)).rejects.toThrow('API Error');
       expect(onError).toHaveBeenCalledWith(error, 'pickup');
@@ -143,15 +129,12 @@ describe('SequentialNavigationManager', () => {
 
   describe('Phase Configuration', () => {
     it('should return current phase config', async () => {
-      const manager = new SequentialNavigationManager(
-        mockPickupLocation,
-        mockDestinationLocation
-      );
+      const manager = new SequentialNavigationManager(mockPickupLocation, mockDestinationLocation);
 
       await manager.initialize(mockCurrentLocation);
 
       const config = manager.getCurrentPhaseConfig();
-      
+
       expect(config).toBeDefined();
       expect(config?.phase).toBe('pickup');
       expect(config?.target).toEqual(mockPickupLocation);
@@ -159,16 +142,13 @@ describe('SequentialNavigationManager', () => {
     });
 
     it('should enhance instructions with phase context', async () => {
-      const manager = new SequentialNavigationManager(
-        mockPickupLocation,
-        mockDestinationLocation
-      );
+      const manager = new SequentialNavigationManager(mockPickupLocation, mockDestinationLocation);
 
       await manager.initialize(mockCurrentLocation);
 
       const config = manager.getCurrentPhaseConfig();
       const firstInstruction = config?.instructions[0].instruction;
-      
+
       expect(firstInstruction).toContain('[To Pickup]');
     });
   });
@@ -176,46 +156,38 @@ describe('SequentialNavigationManager', () => {
   describe('Progress Updates', () => {
     it('should update current step based on location', async () => {
       const onStepChange = jest.fn();
-      
-      const manager = new SequentialNavigationManager(
-        mockPickupLocation,
-        mockDestinationLocation,
-        { onStepChange }
-      );
+
+      const manager = new SequentialNavigationManager(mockPickupLocation, mockDestinationLocation, {
+        onStepChange,
+      });
 
       await manager.initialize(mockCurrentLocation);
 
       // Move to second step location
-      const newLocation = { latitude: 19.4330, longitude: -99.1332 };
+      const newLocation = { latitude: 19.433, longitude: -99.1332 };
       await manager.updateProgress(newLocation);
 
       expect(onStepChange).toHaveBeenCalled();
     });
 
     it('should calculate remaining distance correctly', async () => {
-      const manager = new SequentialNavigationManager(
-        mockPickupLocation,
-        mockDestinationLocation
-      );
+      const manager = new SequentialNavigationManager(mockPickupLocation, mockDestinationLocation);
 
       await manager.initialize(mockCurrentLocation);
 
       const remaining = manager.getRemainingDistance(mockCurrentLocation);
-      
+
       expect(remaining).toBeGreaterThan(0);
       expect(remaining).toBeLessThanOrEqual(2.5);
     });
 
     it('should calculate remaining duration correctly', async () => {
-      const manager = new SequentialNavigationManager(
-        mockPickupLocation,
-        mockDestinationLocation
-      );
+      const manager = new SequentialNavigationManager(mockPickupLocation, mockDestinationLocation);
 
       await manager.initialize(mockCurrentLocation);
 
       const remaining = manager.getRemainingDuration(mockCurrentLocation);
-      
+
       expect(remaining).toBeGreaterThan(0);
       expect(remaining).toBeLessThanOrEqual(8);
     });
@@ -242,11 +214,11 @@ describe('SequentialNavigationManager', () => {
           steps: mockNavigationSteps,
         });
 
-      const manager = new SequentialNavigationManager(
-        mockPickupLocation,
-        mockDestinationLocation,
-        { onTransitionStart, onTransitionComplete, onPhaseChange }
-      );
+      const manager = new SequentialNavigationManager(mockPickupLocation, mockDestinationLocation, {
+        onTransitionStart,
+        onTransitionComplete,
+        onPhaseChange,
+      });
 
       await manager.initialize(mockCurrentLocation);
 
@@ -291,12 +263,10 @@ describe('SequentialNavigationManager', () => {
 
     it('should not update during transition', async () => {
       const onStepChange = jest.fn();
-      
-      const manager = new SequentialNavigationManager(
-        mockPickupLocation,
-        mockDestinationLocation,
-        { onStepChange }
-      );
+
+      const manager = new SequentialNavigationManager(mockPickupLocation, mockDestinationLocation, {
+        onStepChange,
+      });
 
       await manager.initialize(mockCurrentLocation);
 
@@ -309,7 +279,7 @@ describe('SequentialNavigationManager', () => {
 
       // onStepChange should not be called during transition
       expect(onStepChange).not.toHaveBeenCalled();
-      
+
       // State should remain transitioning
       expect((manager as any).state.isTransitioning).toBe(true);
     });
@@ -319,11 +289,9 @@ describe('SequentialNavigationManager', () => {
     it('should use default proximity threshold of 50 meters', async () => {
       const onNavigationComplete = jest.fn();
 
-      const manager = new SequentialNavigationManager(
-        undefined,
-        mockDestinationLocation,
-        { onNavigationComplete }
-      );
+      const manager = new SequentialNavigationManager(undefined, mockDestinationLocation, {
+        onNavigationComplete,
+      });
 
       await manager.initialize(mockCurrentLocation);
 
@@ -341,11 +309,9 @@ describe('SequentialNavigationManager', () => {
     it('should allow custom proximity threshold', async () => {
       const onNavigationComplete = jest.fn();
 
-      const manager = new SequentialNavigationManager(
-        undefined,
-        mockDestinationLocation,
-        { onNavigationComplete }
-      );
+      const manager = new SequentialNavigationManager(undefined, mockDestinationLocation, {
+        onNavigationComplete,
+      });
 
       manager.setProximityThreshold(200); // 200 meters
 
@@ -366,10 +332,7 @@ describe('SequentialNavigationManager', () => {
 
   describe('State Management', () => {
     it('should return current state', async () => {
-      const manager = new SequentialNavigationManager(
-        mockPickupLocation,
-        mockDestinationLocation
-      );
+      const manager = new SequentialNavigationManager(mockPickupLocation, mockDestinationLocation);
 
       await manager.initialize(mockCurrentLocation);
 
@@ -385,10 +348,7 @@ describe('SequentialNavigationManager', () => {
     });
 
     it('should return current step', async () => {
-      const manager = new SequentialNavigationManager(
-        mockPickupLocation,
-        mockDestinationLocation
-      );
+      const manager = new SequentialNavigationManager(mockPickupLocation, mockDestinationLocation);
 
       await manager.initialize(mockCurrentLocation);
 
@@ -417,11 +377,9 @@ describe('SequentialNavigationManager', () => {
           steps: mockNavigationSteps,
         });
 
-      const manager = new SequentialNavigationManager(
-        mockPickupLocation,
-        mockDestinationLocation,
-        { onPhaseChange }
-      );
+      const manager = new SequentialNavigationManager(mockPickupLocation, mockDestinationLocation, {
+        onPhaseChange,
+      });
 
       await manager.initialize(mockCurrentLocation);
 
@@ -436,10 +394,7 @@ describe('SequentialNavigationManager', () => {
 
   describe('Cancellation', () => {
     it('should cancel navigation', async () => {
-      const manager = new SequentialNavigationManager(
-        mockPickupLocation,
-        mockDestinationLocation
-      );
+      const manager = new SequentialNavigationManager(mockPickupLocation, mockDestinationLocation);
 
       await manager.initialize(mockCurrentLocation);
 
@@ -465,11 +420,9 @@ describe('SequentialNavigationManager', () => {
         })
         .mockRejectedValueOnce(new Error('Network error'));
 
-      const manager = new SequentialNavigationManager(
-        mockPickupLocation,
-        mockDestinationLocation,
-        { onError }
-      );
+      const manager = new SequentialNavigationManager(mockPickupLocation, mockDestinationLocation, {
+        onError,
+      });
 
       await manager.initialize(mockCurrentLocation);
 
@@ -480,10 +433,7 @@ describe('SequentialNavigationManager', () => {
       };
 
       await expect(manager.updateProgress(nearPickup)).rejects.toThrow('Network error');
-      expect(onError).toHaveBeenCalledWith(
-        expect.any(Error),
-        'destination'
-      );
+      expect(onError).toHaveBeenCalledWith(expect.any(Error), 'destination');
     });
   });
 });

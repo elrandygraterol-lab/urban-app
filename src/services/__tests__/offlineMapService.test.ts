@@ -239,7 +239,7 @@ describe('Offline Map Service', () => {
     it('should cache a route successfully', async () => {
       mockedAsyncStorage.setItem.mockResolvedValueOnce(undefined);
 
-      const coordinates: Array<[number, number]> = [
+      const coordinates: [number, number][] = [
         [-74.006, 40.7128],
         [-73.9855, 40.758],
       ];
@@ -253,7 +253,7 @@ describe('Offline Map Service', () => {
     it('should handle caching errors', async () => {
       mockedAsyncStorage.setItem.mockRejectedValueOnce(new Error('Storage error'));
 
-      const coordinates: Array<[number, number]> = [
+      const coordinates: [number, number][] = [
         [-74.006, 40.7128],
         [-73.9855, 40.758],
       ];
@@ -266,7 +266,7 @@ describe('Offline Map Service', () => {
     it('should store route with correct structure', async () => {
       mockedAsyncStorage.setItem.mockResolvedValueOnce(undefined);
 
-      const coordinates: Array<[number, number]> = [
+      const coordinates: [number, number][] = [
         [-74.006, 40.7128],
         [-73.9855, 40.758],
       ];

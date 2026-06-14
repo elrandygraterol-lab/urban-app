@@ -16,7 +16,7 @@ export const computeBearing = (
 };
 
 export const computeNearestRouteIndex = (
-  coords: Array<{ latitude: number; longitude: number }>,
+  coords: { latitude: number; longitude: number }[],
   point: { latitude: number; longitude: number }
 ) => {
   let idx = 0;
@@ -34,7 +34,7 @@ export const computeNearestRouteIndex = (
 };
 
 export const bearingAlongRoute = (
-  coords: Array<{ latitude: number; longitude: number }>,
+  coords: { latitude: number; longitude: number }[],
   point: { latitude: number; longitude: number }
 ) => {
   if (coords.length < 2) return 0;
@@ -98,7 +98,7 @@ export const haversineDistance = (
  * Si no tienen location, retorna 0.
  */
 export const computeNearestStepIndex = (
-  steps: Array<{ location?: { latitude: number; longitude: number } }>,
+  steps: { location?: { latitude: number; longitude: number } }[],
   point: { latitude: number; longitude: number }
 ): number => {
   if (steps.length === 0) return 0;

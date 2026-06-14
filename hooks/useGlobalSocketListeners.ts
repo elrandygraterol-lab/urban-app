@@ -62,7 +62,14 @@ export const useGlobalSocketListeners = ({
       playNotificationSound();
 
       // Show ride request modal via notification manager (deduplication handled by context)
-      showRideRequest(data);
+      // Backend socket only sends a subset of RideRequestData fields;
+      // supply defaults for fields not included in the event payload
+      showRideRequest({
+        ...data,
+        passengerRating: 0,
+        estimatedDuration: 0,
+        vehicleType: 'taxi',
+      });
     },
     [user?.role, playNotificationSound, showRideRequest]
   );
@@ -161,7 +168,7 @@ export const useGlobalSocketListeners = ({
       // Show status notification for cancellation
       showStatus('ride_cancelled', message, undefined, { rideId: data.rideId, cancelledBy: data.cancelledBy });
     },
-    [user, showStatus]
+    [user?.id, user?.role, showStatus]
   );
 
   // ── PASSENGER-SIDE HANDLERS ────────────────────────────────────────────────

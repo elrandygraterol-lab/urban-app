@@ -11,7 +11,7 @@
 
 import { useState, useCallback } from 'react';
 import axios from 'axios';
-import logger from '../utils/logger';
+import { logger } from '../utils/logger';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
 
@@ -24,7 +24,7 @@ interface Location {
 interface RouteInfo {
   distance: number; // km
   duration: number; // minutos
-  polyline: Array<[number, number]>;
+  polyline: [number, number][];
   steps?: any[];
 }
 
@@ -134,7 +134,9 @@ export const useMapbox = () => {
           }
         } catch (hybridErr) {
           // Fallback al endpoint legacy
-          logger.warn('Hybrid search unavailable, falling back to legacy endpoint', { error: hybridErr });
+          logger.warn('Hybrid search unavailable, falling back to legacy endpoint', {
+            error: hybridErr,
+          });
         }
 
         // Fallback: endpoint legacy /maps/search-places

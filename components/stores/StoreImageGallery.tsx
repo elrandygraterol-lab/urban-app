@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { GestureHandlerRootView, PinchGestureHandler, PinchGestureHandlerGestureEvent } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, PinchGestureHandler } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -20,7 +20,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { StoreImage } from '@/types/store';
-import { Colors, Typography, BorderRadius, Spacing, Shadows } from '@/constants/theme';
+import { Colors, Typography, BorderRadius, Spacing } from '@/constants/theme';
 import { getOptimizedImageUrl, getDefaultBlurhash } from '@/utils/imageUtils';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -44,12 +44,6 @@ export const StoreImageGallery: React.FC<StoreImageGalleryProps> = ({
 
   // Sort images by display_order
   const sortedImages = [...images].sort((a, b) => a.display_order - b.display_order);
-
-  // Handle thumbnail press
-  const handleThumbnailPress = (index: number) => {
-    setCurrentIndex(index);
-    flatListRef.current?.scrollToIndex({ index, animated: true });
-  };
 
   // Handle full-screen open
   const handleOpenFullScreen = (index: number) => {
@@ -82,10 +76,7 @@ export const StoreImageGallery: React.FC<StoreImageGalleryProps> = ({
 
     return (
       <TouchableOpacity
-        style={[
-          styles.thumbnailContainer,
-          isActive && styles.thumbnailActive,
-        ]}
+        style={[styles.thumbnailContainer, isActive && styles.thumbnailActive]}
         onPress={() => handleOpenFullScreen(index)}
         activeOpacity={0.8}
       >
@@ -98,9 +89,7 @@ export const StoreImageGallery: React.FC<StoreImageGalleryProps> = ({
           cachePolicy="memory-disk"
           priority={isActive ? 'high' : 'normal'}
         />
-        {isActive && (
-          <View style={styles.activeBorder} />
-        )}
+        {isActive && <View style={styles.activeBorder} />}
       </TouchableOpacity>
     );
   };
@@ -126,7 +115,7 @@ export const StoreImageGallery: React.FC<StoreImageGalleryProps> = ({
         ref={flatListRef}
         data={sortedImages}
         renderItem={renderThumbnail}
-        keyExtractor={(item) => item.image_id.toString()}
+        keyExtractor={item => item.image_id.toString()}
         horizontal
         showsHorizontalScrollIndicator={false}
         pagingEnabled={false}
@@ -159,7 +148,7 @@ export const StoreImageGallery: React.FC<StoreImageGalleryProps> = ({
       >
         <GestureHandlerRootView style={styles.fullScreenContainer}>
           <StatusBar hidden={Platform.OS !== 'web'} />
-          
+
           {/* Close button */}
           <TouchableOpacity
             style={styles.closeButton}
@@ -181,7 +170,7 @@ export const StoreImageGallery: React.FC<StoreImageGalleryProps> = ({
             ref={fullScreenFlatListRef}
             data={sortedImages}
             renderItem={renderFullScreenImage}
-            keyExtractor={(item) => `fullscreen-${item.image_id}`}
+            keyExtractor={item => `fullscreen-${item.image_id}`}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
@@ -233,17 +222,18 @@ const ZoomableImage: React.FC<{ imageUrl: string }> = ({ imageUrl }) => {
 
   return (
     <View style={styles.fullScreenImageContainer}>
-      <PinchGestureHandler onGestureEvent={(event: any) => {
-        if (event.nativeEvent) {
-          scale.value = Math.max(1, Math.min(3, event.nativeEvent.scale));
-        }
-      }} onHandlerStateChange={(e: any) => { if (e.nativeEvent.state === 5) onPinchEnd(); }}>
+      <PinchGestureHandler
+        onGestureEvent={(event: any) => {
+          if (event.nativeEvent) {
+            scale.value = Math.max(1, Math.min(3, event.nativeEvent.scale));
+          }
+        }}
+        onHandlerStateChange={(e: any) => {
+          if (e.nativeEvent.state === 5) onPinchEnd();
+        }}
+      >
         <Animated.View style={[styles.zoomableContainer, animatedStyle]}>
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={handleDoubleTap}
-            style={styles.imageWrapper}
-          >
+          <TouchableOpacity activeOpacity={1} onPress={handleDoubleTap} style={styles.imageWrapper}>
             <Image
               source={{ uri: getOptimizedImageUrl(imageUrl, 'fullscreen') }}
               style={styles.fullScreenImage}

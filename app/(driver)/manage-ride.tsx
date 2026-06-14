@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,14 +7,13 @@ import {
   TextInput,
   ActivityIndicator,
   Animated,
-  ScrollView,
   Modal,
   FlatList,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline, Region } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Colors } from '@/constants/theme';
@@ -65,22 +64,32 @@ export default function ManageRideScreen() {
   const { showToast } = useUnifiedNotifications();
   const panelAnim = useRef(new Animated.Value(0)).current;
 
-  const [pickup, setPickup] = useState<{ latitude: number; longitude: number; address: string } | null>(null);
-  const [destination, setDestination] = useState<{ latitude: number; longitude: number; address: string } | null>(null);
+  const [pickup, setPickup] = useState<{
+    latitude: number;
+    longitude: number;
+    address: string;
+  } | null>(null);
+  const [destination, setDestination] = useState<{
+    latitude: number;
+    longitude: number;
+    address: string;
+  } | null>(null);
   const [mapRegion, setMapRegion] = useState<Region | null>(null);
   const [isPanelExpanded, setIsPanelExpanded] = useState(false);
 
   // Route
-  const [routeCoordinates, setRouteCoordinates] = useState<Array<{ latitude: number; longitude: number }>>([]);
+  const [routeCoordinates, setRouteCoordinates] = useState<
+    { latitude: number; longitude: number }[]
+  >([]);
   const [routeDistance, setRouteDistance] = useState<number | null>(null);
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
-  const [loadingRoute, setLoadingRoute] = useState(false);
+  const [, setLoadingRoute] = useState(false);
 
   // Fare estimate
   const [estimatedFare, setEstimatedFare] = useState<number | null>(null);
   const [fareCurrency, setFareCurrency] = useState<Currency>('VES');
   const [exchangeRate, setExchangeRate] = useState<number>(0);
-  const [loadingFare, setLoadingFare] = useState(false);
+  const [, setLoadingFare] = useState(false);
 
   // Payment
   const [paymentMode, setPaymentMode] = useState<'cash' | 'pago_movil'>('cash');
@@ -103,7 +112,7 @@ export default function ManageRideScreen() {
       tension: 50,
       friction: 9,
     }).start();
-  }, [isPanelExpanded]);
+  }, [isPanelExpanded, panelAnim]);
 
   // Initialize pickup from GPS + get exchange rate
   useEffect(() => {
@@ -118,21 +127,43 @@ export default function ManageRideScreen() {
 
       try {
         const res = await api.post('/api/maps/reverse-geocode', {
-          latitude: coords.latitude, longitude: coords.longitude,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
         });
         const data = res.data?.data;
         if (data?.displayName) {
-          setPickup(prev => prev ? { ...prev, address: data.displayName } : null);
+          setPickup(prev => (prev ? { ...prev, address: data.displayName } : null));
         }
-      } catch (_) {}
+      } catch {}
 
       try {
         const rateRes = await api.get('/api/fares/exchange-rate');
         const bcv = rateRes.data?.data?.bcv || rateRes.data?.bcv;
         if (bcv) setExchangeRate(Number(bcv));
-      } catch (_) {}
+      } catch {}
     })();
   }, []);
+
+  // Reset ephemeral form state every time the screen gains focus (tab is a persistent navigator)
+  useFocusEffect(
+    useCallback(() => {
+      setDestination(null);
+      setRouteCoordinates([]);
+      setRouteDistance(null);
+      setRouteDuration(null);
+      setEstimatedFare(null);
+      setPaymentMode('cash');
+      setPagoMovilRef('');
+      setPagoMovilPhone('');
+      setPagoMovilCedula('');
+      setBeneficiaryName('');
+      setDestSearchText('');
+      setShowBankPicker(false);
+      setIsPanelExpanded(false);
+      setLoadingRoute(false);
+      setLoadingFare(false);
+    }, [])
+  );
 
   // Fetch route + fare when destination changes
   useEffect(() => {
@@ -142,7 +173,7 @@ export default function ManageRideScreen() {
     setLoadingFare(true);
 
     getRoute(pickup, destination)
-      .then((data) => {
+      .then(data => {
         if (data.coordinates?.length > 0) {
           const dest = { latitude: destination.latitude, longitude: destination.longitude };
           setRouteCoordinates([...data.coordinates, dest]);
@@ -161,20 +192,23 @@ export default function ManageRideScreen() {
 
     // Fare estimate using zone fare matrix engine (same as passenger)
     const distKm = haversineDistance(
-      pickup.latitude, pickup.longitude,
-      destination.latitude, destination.longitude
+      pickup.latitude,
+      pickup.longitude,
+      destination.latitude,
+      destination.longitude
     );
     const durationHours = (distKm * 3) / 60;
 
-    api.post('/api/fares/estimate', {
-      pickupLat: pickup.latitude,
-      pickupLng: pickup.longitude,
-      destinationLat: destination.latitude,
-      destinationLng: destination.longitude,
-      distanceKm: distKm,
-      durationHours,
-    })
-      .then((res) => {
+    api
+      .post('/api/fares/estimate', {
+        pickupLat: pickup.latitude,
+        pickupLng: pickup.longitude,
+        destinationLat: destination.latitude,
+        destinationLng: destination.longitude,
+        distanceKm: distKm,
+        durationHours,
+      })
+      .then(res => {
         const data = res.data?.data || res.data;
         if (data?.totalPrice) {
           setEstimatedFare(Number(data.totalPrice));
@@ -183,7 +217,7 @@ export default function ManageRideScreen() {
       })
       .catch(() => {})
       .finally(() => setLoadingFare(false));
-  }, [destination]);
+  }, [destination, pickup]);
 
   const handleMapPress = (e: any) => {
     const coord = e.nativeEvent.coordinate;
@@ -195,15 +229,18 @@ export default function ManageRideScreen() {
       address: `${coord.latitude.toFixed(5)}, ${coord.longitude.toFixed(5)}`,
     });
 
-    api.post('/api/maps/reverse-geocode', {
-      latitude: coord.latitude,
-      longitude: coord.longitude,
-    }).then(res => {
-      const data = res.data?.data;
-      if (data?.displayName) {
-        setDestination(prev => prev ? { ...prev, address: data.displayName } : null);
-      }
-    }).catch(() => {});
+    api
+      .post('/api/maps/reverse-geocode', {
+        latitude: coord.latitude,
+        longitude: coord.longitude,
+      })
+      .then(res => {
+        const data = res.data?.data;
+        if (data?.displayName) {
+          setDestination(prev => (prev ? { ...prev, address: data.displayName } : null));
+        }
+      })
+      .catch(() => {});
   };
 
   const handleSubmit = async () => {
@@ -250,7 +287,8 @@ export default function ManageRideScreen() {
           });
           showToast('Pago verificado exitosamente', 'success');
         } catch (verifyErr: any) {
-          const errorMsg = verifyErr?.response?.data?.message || verifyErr?.message || 'Pago no encontrado';
+          const errorMsg =
+            verifyErr?.response?.data?.message || verifyErr?.message || 'Pago no encontrado';
           showToast(errorMsg, 'error');
           setSubmitting(false);
           return;
@@ -297,7 +335,7 @@ export default function ManageRideScreen() {
         setPagoMovilCedula('');
         setBeneficiaryName('');
         setPaymentMode('cash');
-        router.push(`/(driver)/active-ride?rideId=${rideData.rideId}` as any);
+        router.push(`/(driver)/active-ride?rideId=${rideData.rideId}&source=manual` as any);
       }
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Error al crear el viaje';
@@ -312,11 +350,14 @@ export default function ManageRideScreen() {
   // Recenter map on driver's pickup location
   const handleRecenter = () => {
     if (pickup && mapRef.current) {
-      mapRef.current.animateToRegion({
-        ...pickup,
-        latitudeDelta: 0.02,
-        longitudeDelta: 0.02,
-      }, 500);
+      mapRef.current.animateToRegion(
+        {
+          ...pickup,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
+        },
+        500
+      );
     }
   };
 
@@ -365,7 +406,13 @@ export default function ManageRideScreen() {
               moveOnMarkerPress={false}
             >
               {pickup && (
-                <Marker coordinate={pickup} title="Mi ubicación" anchor={{ x: 0.5, y: 0.5 }} flat={false} rotation={0}>
+                <Marker
+                  coordinate={pickup}
+                  title="Mi ubicación"
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  flat={false}
+                  rotation={0}
+                >
                   <DriverTaxiIcon />
                 </Marker>
               )}
@@ -375,16 +422,18 @@ export default function ManageRideScreen() {
                 </Marker>
               )}
               {routeCoordinates.length > 0 && (
-                <Polyline coordinates={routeCoordinates} strokeColor="#FF8C00" strokeWidth={4} lineCap="round" />
+                <Polyline
+                  coordinates={routeCoordinates}
+                  strokeColor="#FF8C00"
+                  strokeWidth={4}
+                  lineCap="round"
+                />
               )}
             </MapView>
           )}
 
           {/* Recenter Button */}
-          <CenterLocationButton
-            onPress={handleRecenter}
-            disabled={!pickup}
-          />
+          <CenterLocationButton onPress={handleRecenter} disabled={!pickup} />
 
           {/* Route info + Map hint */}
           {routeDistance != null && (
@@ -418,10 +467,14 @@ export default function ManageRideScreen() {
                 {destination ? (
                   <>
                     <Ionicons name="flag" size={14} color="#ef4444" />
-                    <Text style={styles.panelHandleAddress} numberOfLines={1}>{destination.address}</Text>
+                    <Text style={styles.panelHandleAddress} numberOfLines={1}>
+                      {destination.address}
+                    </Text>
                   </>
                 ) : (
-                  <Text style={styles.panelHandlePlaceholder}>Selecciona un destino en el mapa</Text>
+                  <Text style={styles.panelHandlePlaceholder}>
+                    Selecciona un destino en el mapa
+                  </Text>
                 )}
               </View>
               <View style={styles.panelHandleRight}>
@@ -446,131 +499,209 @@ export default function ManageRideScreen() {
               style={styles.panelScroll}
               keyboardOpeningTime={0}
             >
-                {/* Destination search */}
-                <Text style={styles.sectionLabel}>Buscar destino</Text>
-                <AddressAutocomplete
-                  value={destSearchText}
-                  onChangeText={setDestSearchText}
-                  onSelectPlace={(place) => {
-                    setDestination({
-                      latitude: place.latitude,
-                      longitude: place.longitude,
-                      address: place.description || place.name,
-                    });
-                    setDestSearchText(place.name);
-                  }}
-                  placeholder="Buscar dirección..."
-                  currentLocation={pickup ?? undefined}
-                  bare
-                />
+              {/* Destination search */}
+              <Text style={styles.sectionLabel}>Buscar destino</Text>
+              <AddressAutocomplete
+                value={destSearchText}
+                onChangeText={setDestSearchText}
+                onSelectPlace={place => {
+                  setDestination({
+                    latitude: place.latitude,
+                    longitude: place.longitude,
+                    address: place.description || place.name,
+                  });
+                  setDestSearchText(place.name);
+                }}
+                placeholder="Buscar dirección..."
+                currentLocation={pickup ?? undefined}
+                bare
+              />
 
-                {/* Fare detail (shown only when route is calculated) */}
-                {estimatedFare != null && (
-                  <View style={styles.fareCard}>
-                    <View style={styles.fareCardRow}>
-                      <View style={styles.fareCardItem}>
-                        <Text style={styles.fareCardLabel}>Tarifa estimada</Text>
-                        <Text style={styles.fareCardValue}>{formatCurrency(estimatedFare, fareCurrency)}</Text>
-                      </View>
-                      {hasDual && secondaryFare != null && (
-                        <View style={styles.fareCardItem}>
-                          <Text style={styles.fareCardLabel}>Equivalente</Text>
-                          <Text style={[styles.fareCardValue, { color: '#6b7280' }]}>
-                            {formatCurrency(secondaryFare, secondaryCurrency)}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    {routeDistance != null && (
-                      <Text style={styles.fareCardDetail}>
-                        {routeDistance.toFixed(1)} km · ~{Math.round(routeDuration || 0)} min
+              {/* Fare detail (shown only when route is calculated) */}
+              {estimatedFare != null && (
+                <View style={styles.fareCard}>
+                  <View style={styles.fareCardRow}>
+                    <View style={styles.fareCardItem}>
+                      <Text style={styles.fareCardLabel}>Tarifa estimada</Text>
+                      <Text style={styles.fareCardValue}>
+                        {formatCurrency(estimatedFare, fareCurrency)}
                       </Text>
-                    )}
-                  </View>
-                )}
-
-                {/* Payment method */}
-                <Text style={[styles.sectionLabel, { marginTop: 16 }]}>Método de pago</Text>
-                <View style={styles.paymentRow}>
-                  <TouchableOpacity
-                    style={[styles.paymentOption, paymentMode === 'cash' && styles.paymentOptionActive]}
-                    onPress={() => setPaymentMode('cash')}
-                  >
-                    <Ionicons name="cash-outline" size={20} color={paymentMode === 'cash' ? '#fff' : Colors.primary} />
-                    <Text style={[styles.paymentOptionText, paymentMode === 'cash' && styles.paymentOptionTextActive]}>Efectivo</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.paymentOption, paymentMode === 'pago_movil' && styles.paymentOptionActive]}
-                    onPress={() => setPaymentMode('pago_movil')}
-                  >
-                    <Ionicons name="phone-portrait-outline" size={20} color={paymentMode === 'pago_movil' ? '#fff' : Colors.primary} />
-                    <Text style={[styles.paymentOptionText, paymentMode === 'pago_movil' && styles.paymentOptionTextActive]}>Pago Móvil</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {paymentMode === 'pago_movil' && (
-                  <View style={styles.pagoMovilFields}>
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Referencia (6 dígitos)</Text>
-                      <TextInput style={styles.input} placeholder="123456" placeholderTextColor="#9ca3af" value={pagoMovilRef} onChangeText={setPagoMovilRef} keyboardType="number-pad" maxLength={12} />
                     </View>
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Teléfono del pagador</Text>
-                      <TextInput style={styles.input} placeholder="0412xxxxxxx" placeholderTextColor="#9ca3af" value={pagoMovilPhone} onChangeText={setPagoMovilPhone} keyboardType="phone-pad" />
-                    </View>
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Cédula del pagador</Text>
-                      <TextInput style={styles.input} placeholder="V12345678" placeholderTextColor="#9ca3af" value={pagoMovilCedula} onChangeText={setPagoMovilCedula} autoCapitalize="characters" />
-                    </View>
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Banco</Text>
-                      <TouchableOpacity
-                        style={styles.bankSelector}
-                        onPress={() => setShowBankPicker(true)}
-                      >
-                        <Text style={styles.bankSelectorText}>
-                          {BANCOS_VENEZUELA.find(b => b.code === pagoMovilBank)?.name || 'Seleccionar banco'}
-                        </Text>
-                        <Text style={styles.bankSelectorCode}>{pagoMovilBank}</Text>
-                        <Ionicons name="chevron-down" size={16} color="#9ca3af" />
-                      </TouchableOpacity>
-                    </View>
-                    {estimatedFare != null && (
-                      <View style={styles.vesAmountInfo}>
-                        <Ionicons name="information-circle-outline" size={14} color="#6b7280" />
-                        <Text style={styles.vesAmountText}>
-                          Monto verificado: {' '}
-                          {fareCurrency === 'USD' && exchangeRate > 0
-                            ? formatCurrency(Math.round(estimatedFare * exchangeRate * 100) / 100, 'VES')
-                            : formatCurrency(estimatedFare, 'VES')}
+                    {hasDual && secondaryFare != null && (
+                      <View style={styles.fareCardItem}>
+                        <Text style={styles.fareCardLabel}>Equivalente</Text>
+                        <Text style={[styles.fareCardValue, { color: '#6b7280' }]}>
+                          {formatCurrency(secondaryFare, secondaryCurrency)}
                         </Text>
                       </View>
                     )}
                   </View>
-                )}
-
-                <Text style={[styles.sectionLabel, { marginTop: 16 }]}>Pasajero (opcional)</Text>
-                <TextInput style={styles.input} placeholder="Nombre del pasajero" placeholderTextColor="#9ca3af" value={beneficiaryName} onChangeText={setBeneficiaryName} />
-
-                <TouchableOpacity style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]} onPress={handleSubmit} disabled={!canSubmit}>
-                  {submitting ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <>
-                      <Ionicons name="car-sport" size={20} color="#fff" />
-                      <Text style={styles.submitBtnText}>Iniciar Viaje Manual</Text>
-                    </>
+                  {routeDistance != null && (
+                    <Text style={styles.fareCardDetail}>
+                      {routeDistance.toFixed(1)} km · ~{Math.round(routeDuration || 0)} min
+                    </Text>
                   )}
+                </View>
+              )}
+
+              {/* Payment method */}
+              <Text style={[styles.sectionLabel, { marginTop: 16 }]}>Método de pago</Text>
+              <View style={styles.paymentRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.paymentOption,
+                    paymentMode === 'cash' && styles.paymentOptionActive,
+                  ]}
+                  onPress={() => setPaymentMode('cash')}
+                >
+                  <Ionicons
+                    name="cash-outline"
+                    size={20}
+                    color={paymentMode === 'cash' ? '#fff' : Colors.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.paymentOptionText,
+                      paymentMode === 'cash' && styles.paymentOptionTextActive,
+                    ]}
+                  >
+                    Efectivo
+                  </Text>
                 </TouchableOpacity>
-              </KeyboardAwareScrollView>
+                <TouchableOpacity
+                  style={[
+                    styles.paymentOption,
+                    paymentMode === 'pago_movil' && styles.paymentOptionActive,
+                  ]}
+                  onPress={() => setPaymentMode('pago_movil')}
+                >
+                  <Ionicons
+                    name="phone-portrait-outline"
+                    size={20}
+                    color={paymentMode === 'pago_movil' ? '#fff' : Colors.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.paymentOptionText,
+                      paymentMode === 'pago_movil' && styles.paymentOptionTextActive,
+                    ]}
+                  >
+                    Pago Móvil
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {paymentMode === 'pago_movil' && (
+                <View style={styles.pagoMovilFields}>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Referencia (6 dígitos)</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="123456"
+                      placeholderTextColor="#9ca3af"
+                      value={pagoMovilRef}
+                      onChangeText={setPagoMovilRef}
+                      keyboardType="number-pad"
+                      maxLength={12}
+                    />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Teléfono del pagador</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="0412xxxxxxx"
+                      placeholderTextColor="#9ca3af"
+                      value={pagoMovilPhone}
+                      onChangeText={setPagoMovilPhone}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Cédula del pagador</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="V12345678"
+                      placeholderTextColor="#9ca3af"
+                      value={pagoMovilCedula}
+                      onChangeText={setPagoMovilCedula}
+                      autoCapitalize="characters"
+                    />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Banco</Text>
+                    <TouchableOpacity
+                      style={styles.bankSelector}
+                      onPress={() => setShowBankPicker(true)}
+                    >
+                      <Text style={styles.bankSelectorText}>
+                        {BANCOS_VENEZUELA.find(b => b.code === pagoMovilBank)?.name ||
+                          'Seleccionar banco'}
+                      </Text>
+                      <Text style={styles.bankSelectorCode}>{pagoMovilBank}</Text>
+                      <Ionicons name="chevron-down" size={16} color="#9ca3af" />
+                    </TouchableOpacity>
+                  </View>
+                  {estimatedFare != null && (
+                    <View style={styles.vesAmountInfo}>
+                      <Ionicons name="information-circle-outline" size={14} color="#6b7280" />
+                      <Text style={styles.vesAmountText}>
+                        Monto verificado:{' '}
+                        {fareCurrency === 'USD' && exchangeRate > 0
+                          ? formatCurrency(
+                              Math.round(estimatedFare * exchangeRate * 100) / 100,
+                              'VES'
+                            )
+                          : formatCurrency(estimatedFare, 'VES')}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              <Text style={[styles.sectionLabel, { marginTop: 16 }]}>Pasajero (opcional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nombre del pasajero"
+                placeholderTextColor="#9ca3af"
+                value={beneficiaryName}
+                onChangeText={setBeneficiaryName}
+              />
+
+              <TouchableOpacity
+                style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
+                onPress={handleSubmit}
+                disabled={!canSubmit}
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="car-sport" size={20} color="#fff" />
+                    <Text style={styles.submitBtnText}>Iniciar Viaje Manual</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </KeyboardAwareScrollView>
           )}
         </Animated.View>
       </View>
 
       {/* Bank Picker Modal */}
-      <Modal visible={showBankPicker} transparent animationType="slide" onRequestClose={() => setShowBankPicker(false)}>
-        <TouchableOpacity style={{ flex: 1, justifyContent: 'flex-end' }} activeOpacity={1} onPress={() => setShowBankPicker(false)}>
-          <TouchableOpacity activeOpacity={1} style={[styles.bankModal, { paddingBottom: insets.bottom + 16 }]}>
+      <Modal
+        visible={showBankPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowBankPicker(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+          activeOpacity={1}
+          onPress={() => setShowBankPicker(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={[styles.bankModal, { paddingBottom: insets.bottom + 16 }]}
+          >
             <View style={styles.bankModalHeader}>
               <Text style={styles.bankModalTitle}>Seleccionar Banco</Text>
               <TouchableOpacity onPress={() => setShowBankPicker(false)}>
@@ -584,22 +715,42 @@ export default function ManageRideScreen() {
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[styles.bankItem, pagoMovilBank === item.code && styles.bankItemActive]}
-                  onPress={() => { setPagoMovilBank(item.code); setShowBankPicker(false); }}
+                  onPress={() => {
+                    setPagoMovilBank(item.code);
+                    setShowBankPicker(false);
+                  }}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.bankItemName, pagoMovilBank === item.code && { color: Colors.primary }]}>
+                    <Text
+                      style={[
+                        styles.bankItemName,
+                        pagoMovilBank === item.code && { color: Colors.primary },
+                      ]}
+                    >
                       {item.name}
                     </Text>
                   </View>
-                  <Text style={[styles.bankItemCode, pagoMovilBank === item.code && { color: Colors.primary, fontWeight: '700' }]}>
+                  <Text
+                    style={[
+                      styles.bankItemCode,
+                      pagoMovilBank === item.code && { color: Colors.primary, fontWeight: '700' },
+                    ]}
+                  >
                     {item.code}
                   </Text>
                   {pagoMovilBank === item.code && (
-                    <Ionicons name="checkmark-circle" size={20} color={Colors.primary} style={{ marginLeft: 8 }} />
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={20}
+                      color={Colors.primary}
+                      style={{ marginLeft: 8 }}
+                    />
                   )}
                 </TouchableOpacity>
               )}
-              ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />}
+              ItemSeparatorComponent={() => (
+                <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
+              )}
             />
           </TouchableOpacity>
         </TouchableOpacity>
@@ -628,23 +779,49 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
   },
-  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#111' },
   mapContainer: { flex: 1, position: 'relative' },
   map: { flex: 1 },
   routeInfoOverlay: {
-    position: 'absolute', top: 12, left: 12,
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, gap: 6,
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 6,
   },
   routeInfoText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   mapHint: {
-    position: 'absolute', top: 12, alignSelf: 'center',
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7, gap: 6,
+    position: 'absolute',
+    top: 12,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    gap: 6,
   },
   mapHintText: { color: '#fff', fontSize: 12, fontWeight: '600' },
 
@@ -704,10 +881,34 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 32,
   },
-  sectionLabel: { fontSize: 13, fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#374151',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
   searchRow: { flexDirection: 'row', gap: 8 },
-  searchInput: { flex: 1, height: 44, borderWidth: 1.5, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 12, fontSize: 14, color: '#111', backgroundColor: '#f9fafb' },
-  searchBtn: { width: 44, height: 44, borderRadius: 10, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' },
+  searchInput: {
+    flex: 1,
+    height: 44,
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    color: '#111',
+    backgroundColor: '#f9fafb',
+  },
+  searchBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
   // Fare card
   fareCard: {
@@ -744,44 +945,99 @@ const styles = StyleSheet.create({
   },
 
   paymentRow: { flexDirection: 'row', gap: 10 },
-  paymentOption: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 10, borderWidth: 1.5, borderColor: '#e5e7eb', backgroundColor: '#f9fafb' },
+  paymentOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#f9fafb',
+  },
   paymentOptionActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   paymentOptionText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
   paymentOptionTextActive: { color: '#fff' },
   pagoMovilFields: { marginTop: 12, gap: 10 },
   inputGroup: { gap: 4 },
   inputLabel: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
-  input: { height: 44, borderWidth: 1.5, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 12, fontSize: 14, color: '#111', backgroundColor: '#f9fafb' },
+  input: {
+    height: 44,
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    color: '#111',
+    backgroundColor: '#f9fafb',
+  },
   bankSelector: {
-    height: 44, borderWidth: 1.5, borderColor: '#e5e7eb', borderRadius: 10,
-    paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#f9fafb', gap: 8,
+    height: 44,
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+    gap: 8,
   },
   bankSelectorText: { flex: 1, fontSize: 14, color: '#111' },
   bankSelectorCode: { fontSize: 12, color: '#9ca3af', fontWeight: '600' },
   bankModal: {
-    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    paddingBottom: 20, maxHeight: '60%',
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 20,
+    maxHeight: '60%',
   },
   bankModalHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
   },
   bankModalTitle: { fontSize: 18, fontWeight: '700', color: '#111' },
   bankItem: {
-    flexDirection: 'row', alignItems: 'center', paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
     paddingHorizontal: 16,
   },
   bankItemActive: { backgroundColor: '#f0fdf4' },
   bankItemName: { fontSize: 15, color: '#111', fontWeight: '500' },
   bankItemCode: { fontSize: 13, color: '#9ca3af', fontWeight: '500' },
   vesAmountInfo: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#fef3c7', padding: 10, borderRadius: 8,
-    marginTop: 4, borderWidth: 1, borderColor: '#fde68a',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fef3c7',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#fde68a',
   },
   vesAmountText: { fontSize: 12, color: '#92400e', fontWeight: '600', flex: 1 },
-  submitBtn: { marginTop: 20, height: 52, borderRadius: 12, backgroundColor: Colors.primary, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  submitBtn: {
+    marginTop: 20,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
   submitBtnDisabled: { backgroundColor: '#d1d5db', shadowOpacity: 0, elevation: 0 },
   submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

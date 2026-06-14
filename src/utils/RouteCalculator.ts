@@ -1,10 +1,10 @@
 /**
  * RouteCalculator
- * 
+ *
  * Provides road-based route calculations using real road network data.
  * Replaces haversine distance calculations with accurate road-based distances.
  * Integrates real-time traffic data for accurate travel time estimates.
- * 
+ *
  * Requirements: 2.6
  * Bug_Condition: isBugCondition(input) where input.routeCalculation == 'INCORRECT' AND hasValidRoadNetwork(input)
  * Expected_Behavior: Accurate road-based distance and time calculations
@@ -23,11 +23,11 @@ export interface RouteCalculationOptions {
 export interface TrafficData {
   congestionLevel: 'low' | 'moderate' | 'high' | 'severe';
   delayMinutes: number;
-  affectedSegments: Array<{
+  affectedSegments: {
     startLocation: Location;
     endLocation: Location;
     speedKmh: number;
-  }>;
+  }[];
 }
 
 export interface RouteCalculationResult {
@@ -47,7 +47,7 @@ export interface RouteCalculationResult {
 class RouteCalculator {
   /**
    * Calculate distance between two points using road network data
-   * 
+   *
    * @param origin - Starting location
    * @param destination - Ending location
    * @param options - Calculation options
@@ -89,7 +89,7 @@ class RouteCalculator {
       };
     } catch (error) {
       console.error('[RouteCalculator] Error calculating road-based distance:', error);
-      
+
       // Return fallback calculation (this should be avoided in production)
       console.warn('[RouteCalculator] Falling back to haversine calculation');
       return this.getFallbackCalculation(origin, destination);
@@ -98,7 +98,7 @@ class RouteCalculator {
 
   /**
    * Calculate travel time between two points with real-time traffic data
-   * 
+   *
    * @param origin - Starting location
    * @param destination - Ending location
    * @param options - Calculation options
@@ -120,7 +120,7 @@ class RouteCalculator {
   /**
    * Validate route against actual road networks
    * Ensures the route follows real roads and respects physical constraints
-   * 
+   *
    * @param route - Route to validate
    * @returns Promise with validation result
    */
@@ -141,7 +141,9 @@ class RouteCalculator {
 
       // Road distance should be at least equal to straight-line (usually 1.2-1.5x longer)
       if (route.distance < straightLineDistance * 0.95) {
-        console.warn('[RouteCalculator] Route distance is suspiciously short (possible straight-line)');
+        console.warn(
+          '[RouteCalculator] Route distance is suspiciously short (possible straight-line)'
+        );
         return false;
       }
 
@@ -152,7 +154,10 @@ class RouteCalculator {
       }
 
       // If route has only one step, it might be a straight-line fallback
-      if (route.steps.length === 1 && route.steps[0].instruction.includes('Proceed to destination')) {
+      if (
+        route.steps.length === 1 &&
+        route.steps[0].instruction.includes('Proceed to destination')
+      ) {
         console.warn('[RouteCalculator] Route appears to be straight-line fallback');
         return false;
       }
@@ -167,7 +172,7 @@ class RouteCalculator {
 
   /**
    * Get real-time traffic data for a route
-   * 
+   *
    * @param route - Route to get traffic data for
    * @returns Promise with traffic data
    */
@@ -175,9 +180,10 @@ class RouteCalculator {
     try {
       // In a real implementation, this would call a traffic data API
       // For now, we'll estimate based on time of day and route characteristics
-      
+
       const currentHour = new Date().getHours();
-      const isRushHour = (currentHour >= 7 && currentHour <= 9) || (currentHour >= 17 && currentHour <= 19);
+      const isRushHour =
+        (currentHour >= 7 && currentHour <= 9) || (currentHour >= 17 && currentHour <= 19);
       const isHighway = route.distance > 10; // Assume longer routes use highways
 
       let congestionLevel: TrafficData['congestionLevel'] = 'low';
@@ -197,11 +203,12 @@ class RouteCalculator {
       }
 
       // Create affected segments from route steps
-      const affectedSegments = route.steps?.map(step => ({
-        startLocation: step.startLocation,
-        endLocation: step.endLocation,
-        speedKmh: this.estimateSpeedFromCongestion(congestionLevel),
-      })) || [];
+      const affectedSegments =
+        route.steps?.map(step => ({
+          startLocation: step.startLocation,
+          endLocation: step.endLocation,
+          speedKmh: this.estimateSpeedFromCongestion(congestionLevel),
+        })) || [];
 
       return {
         congestionLevel,
@@ -210,7 +217,7 @@ class RouteCalculator {
       };
     } catch (error) {
       console.error('[RouteCalculator] Error getting traffic data:', error);
-      
+
       // Return default traffic data
       return {
         congestionLevel: 'low',
@@ -240,44 +247,32 @@ class RouteCalculator {
 
   /**
    * Check if route respects traffic restrictions and road closures
-   * 
+   *
    * @param route - Route to check
    * @returns Promise with check result
    */
   async checkTrafficRestrictions(route: RouteResult): Promise<{
     hasRestrictions: boolean;
-    restrictions: Array<{
+    restrictions: {
       type: 'closure' | 'restriction' | 'construction';
       location: Location;
       description: string;
-    }>;
+    }[];
   }> {
-    try {
-      // In a real implementation, this would check against a traffic restrictions database
-      // For now, return no restrictions
-      
-      return {
-        hasRestrictions: false,
-        restrictions: [],
-      };
-    } catch (error) {
-      console.error('[RouteCalculator] Error checking traffic restrictions:', error);
-      
-      return {
-        hasRestrictions: false,
-        restrictions: [],
-      };
-    }
+    // In a real implementation, this would check against a traffic restrictions database
+    // For now, return no restrictions
+
+    return {
+      hasRestrictions: false,
+      restrictions: [],
+    };
   }
 
   /**
    * Get fallback calculation using haversine formula
    * Only used when road network data is unavailable
    */
-  private getFallbackCalculation(
-    origin: Location,
-    destination: Location
-  ): RouteCalculationResult {
+  private getFallbackCalculation(origin: Location, destination: Location): RouteCalculationResult {
     console.warn('[RouteCalculator] Using fallback haversine calculation - NOT ROAD-BASED');
 
     const distance = this.calculateHaversineDistance(origin, destination);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,16 +15,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/theme';
+import { Colors, Spacing } from '../../constants/theme';
 import { useAuthStore } from '../../store/authStore';
 import { useDriverStore } from '../../store/driverStore';
 import { useLanguage } from '../../hooks/useLanguage';
 import { translations } from '../../i18n/translations';
 import { userAPI, notificationAPI, driverAPI } from '../../services/api';
-import { getSocket, addConnectionListener, removeConnectionListener, reconnectSocket, getSocketDiagnostics } from '@/services/socket';
+import {
+  getSocket,
+  addConnectionListener,
+  removeConnectionListener,
+  reconnectSocket,
+  getSocketDiagnostics,
+} from '@/services/socket';
 import { resolveFileUrl } from '@/services/fileUrl';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
-
 
 interface NotificationPreferences {
   rideRequests?: boolean;
@@ -45,7 +50,8 @@ interface PaymentInfo {
 export default function DriverProfileScreen() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
-  const { isAvailable, isUpdatingAvailability, setIsAvailable, toggleAvailability } = useDriverStore();
+  const { isAvailable, isUpdatingAvailability, setIsAvailable, toggleAvailability } =
+    useDriverStore();
   const { language, setLanguage } = useLanguage();
   const t = translations[language].profile;
   const { showToast, showStatus } = useUnifiedNotifications();
@@ -84,52 +90,7 @@ export default function DriverProfileScreen() {
     promotions: true,
   });
 
-  useEffect(() => {
-    loadUserData();
-    
-    // Usar addConnectionListener en lugar de getSocket() directo
-    // Esto funciona aunque el socket aún no se haya inicializado
-    const connectionListener = (connected: boolean) => {
-      console.log('[DRIVER PROFILE] 🔌 Socket connection state:', connected ? 'Conectado' : 'Desconectado');
-      setIsSocketConnected(connected);
-      
-      // Update diagnostic info whenever state changes
-      const diag = getSocketDiagnostics();
-      setSocketRetryCount(diag.reconnectAttempts);
-      setSocketTransport(diag.lastTransport);
-      setSocketLastError(diag.lastError);
-    };
-    addConnectionListener(connectionListener);
-    
-    // Listen for availability changes from other sources (e.g., home screen toggle)
-    // Solo si el socket ya está disponible; si no, se escuchará tras reconexión
-    const socket = getSocket();
-    if (socket) {
-      const handleAvailabilityChanged = (data: { driverId: string; isAvailable: boolean; timestamp: string }) => {
-        console.log('[DRIVER PROFILE] ========================================');
-        console.log('[DRIVER PROFILE] Availability changed event received');
-        console.log('[DRIVER PROFILE]    Driver ID:', data.driverId);
-        console.log('[DRIVER PROFILE]    Is Available:', data.isAvailable);
-        console.log('[DRIVER PROFILE]    Timestamp:', data.timestamp);
-        console.log('[DRIVER PROFILE] ========================================');
-        
-        // Update the availability state
-        setIsAvailable(data.isAvailable);
-      };
-      socket.on('driver:availability_changed', handleAvailabilityChanged);
-      
-      return () => {
-        removeConnectionListener(connectionListener);
-        socket.off('driver:availability_changed', handleAvailabilityChanged);
-      };
-    }
-    
-    return () => {
-      removeConnectionListener(connectionListener);
-    };
-  }, []);
-
-  const loadUserData = async () => {
+  const loadUserData = useCallback(async () => {
     try {
       setIsLoading(true);
 
@@ -145,13 +106,14 @@ export default function DriverProfileScreen() {
       const userData = userResponse.data.data;
 
       // Update auth store with fresh data (including profilePhotoUrl)
-      if (user) {
+      const currentUser = useAuthStore.getState().user;
+      if (currentUser) {
         useAuthStore.getState().setUser({
-          ...user,
-          name: userData.name || user.name,
-          phone: userData.phone || user.phone,
-          email: userData.email || user.email,
-          profilePhotoUrl: userData.profilePhotoUrl || user.profilePhotoUrl,
+          ...currentUser,
+          name: userData.name || currentUser.name,
+          phone: userData.phone || currentUser.phone,
+          email: userData.email || currentUser.email,
+          profilePhotoUrl: userData.profilePhotoUrl || currentUser.profilePhotoUrl,
         });
       }
 
@@ -166,7 +128,7 @@ export default function DriverProfileScreen() {
         if (profile && profile.isAvailable !== undefined) {
           setIsAvailable(profile.isAvailable);
         }
-        
+
         // Load payment information
         if (profile) {
           setPaymentInfo({
@@ -188,7 +150,7 @@ export default function DriverProfileScreen() {
         if (prefsResponse.data && prefsResponse.data.preferences) {
           setNotificationPrefs(prefsResponse.data.preferences);
         }
-      } catch (error) {
+      } catch {
         console.log('No notification preferences found, using defaults');
       }
     } catch (error) {
@@ -197,7 +159,59 @@ export default function DriverProfileScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showToast, setIsAvailable, t]);
+
+  useEffect(() => {
+    loadUserData();
+
+    // Usar addConnectionListener en lugar de getSocket() directo
+    // Esto funciona aunque el socket aún no se haya inicializado
+    const connectionListener = (connected: boolean) => {
+      console.log(
+        '[DRIVER PROFILE] 🔌 Socket connection state:',
+        connected ? 'Conectado' : 'Desconectado'
+      );
+      setIsSocketConnected(connected);
+
+      // Update diagnostic info whenever state changes
+      const diag = getSocketDiagnostics();
+      setSocketRetryCount(diag.reconnectAttempts);
+      setSocketTransport(diag.lastTransport);
+      setSocketLastError(diag.lastError);
+    };
+    addConnectionListener(connectionListener);
+
+    // Listen for availability changes from other sources (e.g., home screen toggle)
+    // Solo si el socket ya está disponible; si no, se escuchará tras reconexión
+    const socket = getSocket();
+    if (socket) {
+      const handleAvailabilityChanged = (data: {
+        driverId: string;
+        isAvailable: boolean;
+        timestamp: string;
+      }) => {
+        console.log('[DRIVER PROFILE] ========================================');
+        console.log('[DRIVER PROFILE] Availability changed event received');
+        console.log('[DRIVER PROFILE]    Driver ID:', data.driverId);
+        console.log('[DRIVER PROFILE]    Is Available:', data.isAvailable);
+        console.log('[DRIVER PROFILE]    Timestamp:', data.timestamp);
+        console.log('[DRIVER PROFILE] ========================================');
+
+        // Update the availability state
+        setIsAvailable(data.isAvailable);
+      };
+      socket.on('driver:availability_changed', handleAvailabilityChanged);
+
+      return () => {
+        removeConnectionListener(connectionListener);
+        socket.off('driver:availability_changed', handleAvailabilityChanged);
+      };
+    }
+
+    return () => {
+      removeConnectionListener(connectionListener);
+    };
+  }, [loadUserData, setIsAvailable]);
 
   const handleSaveProfile = async () => {
     try {
@@ -216,11 +230,15 @@ export default function DriverProfileScreen() {
   const handleSavePaymentInfo = async () => {
     try {
       // Validar que al menos un método esté configurado
-      const hasPagoMovil = paymentInfo.pagoMovilPhone && paymentInfo.pagoMovilBank && paymentInfo.pagoMovilCedula;
+      const hasPagoMovil =
+        paymentInfo.pagoMovilPhone && paymentInfo.pagoMovilBank && paymentInfo.pagoMovilCedula;
       const hasBankTransfer = paymentInfo.bankTransferBank && paymentInfo.bankTransferAccount;
 
       if (!hasPagoMovil && !hasBankTransfer) {
-        showToast('Debes configurar al menos un método de pago completo:\n\n• Pago Móvil: teléfono, banco y cédula\n• Transferencia: banco y cuenta', 'error');
+        showToast(
+          'Debes configurar al menos un método de pago completo:\n\n• Pago Móvil: teléfono, banco y cédula\n• Transferencia: banco y cuenta',
+          'error'
+        );
         return;
       }
 
@@ -230,7 +248,8 @@ export default function DriverProfileScreen() {
       setIsPaymentSectionExpanded(false);
     } catch (error: any) {
       console.error('Error updating payment info:', error);
-      const errorMessage = error?.response?.data?.error?.message || 'Error al actualizar información de pago';
+      const errorMessage =
+        error?.response?.data?.error?.message || 'Error al actualizar información de pago';
       showToast(errorMessage, 'error');
     } finally {
       setIsSavingPayment(false);
@@ -246,7 +265,11 @@ export default function DriverProfileScreen() {
     key: keyof NotificationPreferences,
     value: boolean
   ) => {
-    showStatus('info', 'Esta opción estará disponible en una futura actualización. Por ahora, las notificaciones permanecen activadas por defecto.', 'En desarrollo');
+    showStatus(
+      'info',
+      'Esta opción estará disponible en una futura actualización. Por ahora, las notificaciones permanecen activadas por defecto.',
+      'En desarrollo'
+    );
   };
 
   const handleLanguageChange = async (newLanguage: 'es' | 'en') => {
@@ -366,544 +389,564 @@ export default function DriverProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {/* Driver Availability Section - FIRST */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Disponibilidad</Text>
+      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+        {/* Driver Availability Section - FIRST */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Disponibilidad</Text>
 
-        <View style={styles.card}>
-          {/* Servidor — estado de conexión, toca para reconectar */}
-          <TouchableOpacity
-            style={styles.settingItem}
-            activeOpacity={isSocketConnected ? 1 : 0.6}
-            onPress={async () => {
-              if (!isSocketConnected && !isReconnectingSocket) {
-                setIsReconnectingSocket(true);
-                setSocketLastError(null);
-                try {
-                  await reconnectSocket();
-                } catch (error) {
-                  console.error('[PROFILE] Manual reconnection failed:', error);
-                } finally {
-                  setIsReconnectingSocket(false);
+          <View style={styles.card}>
+            {/* Servidor — estado de conexión, toca para reconectar */}
+            <TouchableOpacity
+              style={styles.settingItem}
+              activeOpacity={isSocketConnected ? 1 : 0.6}
+              onPress={async () => {
+                if (!isSocketConnected && !isReconnectingSocket) {
+                  setIsReconnectingSocket(true);
+                  setSocketLastError(null);
+                  try {
+                    await reconnectSocket();
+                  } catch (error) {
+                    console.error('[PROFILE] Manual reconnection failed:', error);
+                  } finally {
+                    setIsReconnectingSocket(false);
+                  }
                 }
-              }
-            }}
-          >
-            <View style={styles.settingLeft}>
-              <View style={[styles.iconContainer, isSocketConnected && styles.iconContainerActive]}>
-                <Ionicons
-                  name={isSocketConnected ? 'wifi' : isReconnectingSocket ? 'sync' : 'wifi-outline'}
-                  size={22}
-                  color={isSocketConnected ? Colors.primary : Colors.mediumGray}
-                />
-              </View>
-              <View style={styles.availabilityTextContainer}>
-                <Text style={styles.settingLabel}>
-                  {isReconnectingSocket ? 'Reconectando...' : 'Servidor'}
-                </Text>
-                <Text style={styles.availabilitySubtext}>
-                  {isReconnectingSocket
-                    ? 'Conectando...'
-                    : isSocketConnected
-                      ? socketTransport
-                        ? `Conectado (${socketTransport})`
-                        : 'Conectado'
-                      : socketLastError
-                        ? `Error: ${socketLastError.substring(0, 40)}`
-                        : 'Toca para reconectar'}
-                </Text>
-                {!isSocketConnected && socketRetryCount > 0 && (
-                  <Text style={styles.availabilitySubtext}>
-                    {socketRetryCount} intentos
+              }}
+            >
+              <View style={styles.settingLeft}>
+                <View
+                  style={[styles.iconContainer, isSocketConnected && styles.iconContainerActive]}
+                >
+                  <Ionicons
+                    name={
+                      isSocketConnected ? 'wifi' : isReconnectingSocket ? 'sync' : 'wifi-outline'
+                    }
+                    size={22}
+                    color={isSocketConnected ? Colors.primary : Colors.mediumGray}
+                  />
+                </View>
+                <View style={styles.availabilityTextContainer}>
+                  <Text style={styles.settingLabel}>
+                    {isReconnectingSocket ? 'Reconectando...' : 'Servidor'}
                   </Text>
-                )}
+                  <Text style={styles.availabilitySubtext}>
+                    {isReconnectingSocket
+                      ? 'Conectando...'
+                      : isSocketConnected
+                        ? socketTransport
+                          ? `Conectado (${socketTransport})`
+                          : 'Conectado'
+                        : socketLastError
+                          ? `Error: ${socketLastError.substring(0, 40)}`
+                          : 'Toca para reconectar'}
+                  </Text>
+                  {!isSocketConnected && socketRetryCount > 0 && (
+                    <Text style={styles.availabilitySubtext}>{socketRetryCount} intentos</Text>
+                  )}
+                </View>
               </View>
-            </View>
-            {isReconnectingSocket ? (
-              <ActivityIndicator size="small" color={Colors.primary} />
-            ) : (
-              <View
-                style={[
-                  styles.statusIndicator,
-                  isSocketConnected ? styles.statusConnected : styles.statusDisconnected,
-                ]}
+              {isReconnectingSocket ? (
+                <ActivityIndicator size="small" color={Colors.primary} />
+              ) : (
+                <View
+                  style={[
+                    styles.statusIndicator,
+                    isSocketConnected ? styles.statusConnected : styles.statusDisconnected,
+                  ]}
+                />
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            {/* Driver Availability Toggle */}
+            <View style={styles.availabilityItem}>
+              <View style={styles.settingLeft}>
+                <View style={[styles.iconContainer, isAvailable && styles.iconContainerActive]}>
+                  <Ionicons
+                    name={isAvailable ? 'checkmark-circle' : 'close-circle'}
+                    size={22}
+                    color={isAvailable ? Colors.primary : Colors.mediumGray}
+                  />
+                </View>
+                <View style={styles.availabilityTextContainer}>
+                  <Text style={styles.availabilityLabel}>
+                    {isAvailable ? 'En Línea' : 'Fuera de Línea'}
+                  </Text>
+                  <Text style={styles.availabilitySubtext}>
+                    {isAvailable ? 'Recibiendo solicitudes' : 'No recibiendo solicitudes'}
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={isAvailable}
+                onValueChange={handleToggleAvailability}
+                disabled={isUpdatingAvailability}
+                trackColor={{ false: Colors.lightGray, true: Colors.light }}
+                thumbColor={isAvailable ? Colors.primary : Colors.white}
               />
+            </View>
+          </View>
+        </View>
+
+        {/* Personal Information Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t.personalInfo}</Text>
+            {!isEditing && (
+              <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editButton}>
+                <Ionicons name="pencil" size={20} color={Colors.primary} />
+                <Text style={styles.editButtonText}>{t.edit}</Text>
+              </TouchableOpacity>
             )}
+          </View>
+
+          <View style={styles.card}>
+            {/* Profile Photo */}
+            <View style={styles.avatarSection}>
+              <TouchableOpacity onPress={handleChangePhoto} style={styles.avatarContainer}>
+                {resolveFileUrl(user?.profilePhotoUrl) ? (
+                  <Image
+                    source={{ uri: resolveFileUrl(user?.profilePhotoUrl) }}
+                    style={styles.avatarImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.avatarPlaceholder}>
+                    <Ionicons name="person" size={40} color={Colors.primary} />
+                  </View>
+                )}
+                <View style={styles.avatarBadge}>
+                  <Ionicons name="camera" size={14} color={Colors.white} />
+                </View>
+              </TouchableOpacity>
+              <Text style={styles.avatarName}>{user?.name || ''}</Text>
+              <Text style={styles.avatarRole}>
+                {user?.role === 'driver' ? 'Conductor' : user?.role || ''}
+              </Text>
+              <TouchableOpacity onPress={handleChangePhoto} style={styles.changePhotoButton}>
+                <Ionicons name="camera-outline" size={16} color={Colors.primary} />
+                <Text style={styles.changePhotoText}>Cambiar foto</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.avatarDivider} />
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t.name}</Text>
+              <TextInput
+                style={[styles.input, !isEditing && styles.inputDisabled]}
+                value={name}
+                onChangeText={setName}
+                editable={isEditing}
+                placeholder={t.name}
+                placeholderTextColor={Colors.placeholder}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t.email}</Text>
+              <TextInput
+                style={[styles.input, styles.inputDisabled]}
+                value={email}
+                editable={false}
+                placeholder={t.email}
+                placeholderTextColor={Colors.placeholder}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t.phone}</Text>
+              <TextInput
+                style={[styles.input, !isEditing && styles.inputDisabled]}
+                value={phone}
+                onChangeText={setPhone}
+                editable={isEditing}
+                placeholder={t.phone}
+                placeholderTextColor={Colors.placeholder}
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            {isEditing && (
+              <View style={styles.editActions}>
+                <TouchableOpacity
+                  style={[styles.button, styles.cancelButton]}
+                  onPress={() => {
+                    setIsEditing(false);
+                    setName(user?.name || '');
+                    setPhone(user?.phone || '');
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>{t.cancel}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.button, styles.saveButton]}
+                  onPress={handleSaveProfile}
+                  disabled={isSaving}
+                >
+                  {isSaving ? (
+                    <ActivityIndicator color={Colors.white} />
+                  ) : (
+                    <Text style={styles.saveButtonText}>{t.save}</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Payment Methods Section */}
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            onPress={() => setIsPaymentSectionExpanded(!isPaymentSectionExpanded)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.sectionTitle}>Métodos de Pago</Text>
+            <Ionicons
+              name={isPaymentSectionExpanded ? 'chevron-up' : 'chevron-down'}
+              size={24}
+              color={Colors.primary}
+            />
           </TouchableOpacity>
 
-          <View style={styles.divider} />
-
-          {/* Driver Availability Toggle */}
-          <View style={styles.availabilityItem}>
-            <View style={styles.settingLeft}>
-              <View style={[styles.iconContainer, isAvailable && styles.iconContainerActive]}>
-                <Ionicons
-                  name={isAvailable ? 'checkmark-circle' : 'close-circle'}
-                  size={22}
-                  color={isAvailable ? Colors.primary : Colors.mediumGray}
-                />
-              </View>
-              <View style={styles.availabilityTextContainer}>
-                <Text style={styles.availabilityLabel}>
-                  {isAvailable ? 'En Línea' : 'Fuera de Línea'}
-                </Text>
-                <Text style={styles.availabilitySubtext}>
-                  {isAvailable ? 'Recibiendo solicitudes' : 'No recibiendo solicitudes'}
-                </Text>
-              </View>
-            </View>
-            <Switch
-              value={isAvailable}
-              onValueChange={handleToggleAvailability}
-              disabled={isUpdatingAvailability}
-              trackColor={{ false: Colors.lightGray, true: Colors.light }}
-              thumbColor={isAvailable ? Colors.primary : Colors.white}
-            />
-          </View>
-        </View>
-      </View>
-
-      {/* Personal Information Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t.personalInfo}</Text>
-          {!isEditing && (
-            <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editButton}>
-              <Ionicons name="pencil" size={20} color={Colors.primary} />
-              <Text style={styles.editButtonText}>{t.edit}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <View style={styles.card}>
-          {/* Profile Photo */}
-          <View style={styles.avatarSection}>
-            <TouchableOpacity onPress={handleChangePhoto} style={styles.avatarContainer}>
-              {resolveFileUrl(user?.profilePhotoUrl) ? (
-                <Image source={{ uri: resolveFileUrl(user?.profilePhotoUrl) }} style={styles.avatarImage} resizeMode="cover" />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Ionicons name="person" size={40} color={Colors.primary} />
+          {isPaymentSectionExpanded && (
+            <View style={styles.card}>
+              {/* Pago Móvil Section */}
+              <View style={styles.paymentMethodSection}>
+                <View style={styles.paymentMethodHeader}>
+                  <View style={styles.settingLeft}>
+                    <View style={styles.iconContainer}>
+                      <Ionicons name="phone-portrait" size={22} color={Colors.primary} />
+                    </View>
+                    <Text style={styles.paymentMethodTitle}>Pago Móvil</Text>
+                  </View>
+                  {paymentInfo.pagoMovilPhone &&
+                    paymentInfo.pagoMovilBank &&
+                    paymentInfo.pagoMovilCedula && (
+                      <View style={styles.configuredBadge}>
+                        <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
+                        <Text style={styles.configuredText}>Configurado</Text>
+                      </View>
+                    )}
                 </View>
-              )}
-              <View style={styles.avatarBadge}>
-                <Ionicons name="camera" size={14} color={Colors.white} />
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Cédula *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={paymentInfo.pagoMovilCedula}
+                    onChangeText={text => setPaymentInfo({ ...paymentInfo, pagoMovilCedula: text })}
+                    placeholder="V-12345678"
+                    placeholderTextColor={Colors.placeholder}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Teléfono *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={paymentInfo.pagoMovilPhone}
+                    onChangeText={text => setPaymentInfo({ ...paymentInfo, pagoMovilPhone: text })}
+                    placeholder="0414-1234567"
+                    placeholderTextColor={Colors.placeholder}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Banco *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={paymentInfo.pagoMovilBank}
+                    onChangeText={text => setPaymentInfo({ ...paymentInfo, pagoMovilBank: text })}
+                    placeholder="Ej: Banco de Venezuela"
+                    placeholderTextColor={Colors.placeholder}
+                  />
+                </View>
               </View>
-            </TouchableOpacity>
-            <Text style={styles.avatarName}>{user?.name || ''}</Text>
-            <Text style={styles.avatarRole}>
-              {user?.role === 'driver' ? 'Conductor' : user?.role || ''}
-            </Text>
-            <TouchableOpacity onPress={handleChangePhoto} style={styles.changePhotoButton}>
-              <Ionicons name="camera-outline" size={16} color={Colors.primary} />
-              <Text style={styles.changePhotoText}>Cambiar foto</Text>
-            </TouchableOpacity>
-          </View>
 
-          <View style={styles.avatarDivider} />
+              <View style={styles.divider} />
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>{t.name}</Text>
-            <TextInput
-              style={[styles.input, !isEditing && styles.inputDisabled]}
-              value={name}
-              onChangeText={setName}
-              editable={isEditing}
-              placeholder={t.name}
-              placeholderTextColor={Colors.placeholder}
-            />
-          </View>
+              {/* Transferencia Bancaria Section */}
+              <View style={styles.paymentMethodSection}>
+                <View style={styles.paymentMethodHeader}>
+                  <View style={styles.settingLeft}>
+                    <View style={styles.iconContainer}>
+                      <Ionicons name="business" size={22} color={Colors.primary} />
+                    </View>
+                    <Text style={styles.paymentMethodTitle}>Transferencia Bancaria</Text>
+                  </View>
+                  {paymentInfo.bankTransferAccount && paymentInfo.bankTransferBank && (
+                    <View style={styles.configuredBadge}>
+                      <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
+                      <Text style={styles.configuredText}>Configurado</Text>
+                    </View>
+                  )}
+                </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>{t.email}</Text>
-            <TextInput
-              style={[styles.input, styles.inputDisabled]}
-              value={email}
-              editable={false}
-              placeholder={t.email}
-              placeholderTextColor={Colors.placeholder}
-            />
-          </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Banco</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={paymentInfo.bankTransferBank}
+                    onChangeText={text =>
+                      setPaymentInfo({ ...paymentInfo, bankTransferBank: text })
+                    }
+                    placeholder="Ej: Banco de Venezuela"
+                    placeholderTextColor={Colors.placeholder}
+                  />
+                </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>{t.phone}</Text>
-            <TextInput
-              style={[styles.input, !isEditing && styles.inputDisabled]}
-              value={phone}
-              onChangeText={setPhone}
-              editable={isEditing}
-              placeholder={t.phone}
-              placeholderTextColor={Colors.placeholder}
-              keyboardType="phone-pad"
-            />
-          </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Número de Cuenta</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={paymentInfo.bankTransferAccount}
+                    onChangeText={text =>
+                      setPaymentInfo({ ...paymentInfo, bankTransferAccount: text })
+                    }
+                    placeholder="0102-1234-5678-9012"
+                    placeholderTextColor={Colors.placeholder}
+                    keyboardType="number-pad"
+                  />
+                </View>
 
-          {isEditing && (
-            <View style={styles.editActions}>
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={() => {
-                  setIsEditing(false);
-                  setName(user?.name || '');
-                  setPhone(user?.phone || '');
-                }}
-              >
-                <Text style={styles.cancelButtonText}>{t.cancel}</Text>
-              </TouchableOpacity>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Tipo de Cuenta</Text>
+                  <View style={styles.accountTypeButtons}>
+                    <TouchableOpacity
+                      style={[
+                        styles.accountTypeButton,
+                        paymentInfo.bankTransferAccountType === 'Corriente' &&
+                          styles.accountTypeButtonActive,
+                      ]}
+                      onPress={() =>
+                        setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Corriente' })
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.accountTypeButtonText,
+                          paymentInfo.bankTransferAccountType === 'Corriente' &&
+                            styles.accountTypeButtonTextActive,
+                        ]}
+                      >
+                        Corriente
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.accountTypeButton,
+                        paymentInfo.bankTransferAccountType === 'Ahorro' &&
+                          styles.accountTypeButtonActive,
+                      ]}
+                      onPress={() =>
+                        setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Ahorro' })
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.accountTypeButtonText,
+                          paymentInfo.bankTransferAccountType === 'Ahorro' &&
+                            styles.accountTypeButtonTextActive,
+                        ]}
+                      >
+                        Ahorro
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.paymentInfoNote}>
+                <Ionicons name="information-circle" size={20} color="#6b7280" />
+                <Text style={styles.paymentInfoNoteText}>
+                  Debes configurar al menos un método de pago completo para recibir tus ganancias.
+                  {'\n\n'}• Pago Móvil: cédula, teléfono y banco{'\n'}• Transferencia: banco, cuenta
+                  y tipo
+                </Text>
+              </View>
+
               <TouchableOpacity
                 style={[styles.button, styles.saveButton]}
-                onPress={handleSaveProfile}
-                disabled={isSaving}
+                onPress={handleSavePaymentInfo}
+                disabled={isSavingPayment}
               >
-                {isSaving ? (
+                {isSavingPayment ? (
                   <ActivityIndicator color={Colors.white} />
                 ) : (
-                  <Text style={styles.saveButtonText}>{t.save}</Text>
+                  <Text style={styles.saveButtonText}>Guardar Métodos de Pago</Text>
                 )}
               </TouchableOpacity>
             </View>
           )}
         </View>
-      </View>
 
-      {/* Payment Methods Section */}
-      <View style={styles.section}>
-        <TouchableOpacity
-          style={styles.sectionHeader}
-          onPress={() => setIsPaymentSectionExpanded(!isPaymentSectionExpanded)}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.sectionTitle}>Métodos de Pago</Text>
-          <Ionicons
-            name={isPaymentSectionExpanded ? 'chevron-up' : 'chevron-down'}
-            size={24}
-            color={Colors.primary}
-          />
-        </TouchableOpacity>
+        {/* Settings Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t.settings}</Text>
 
-        {isPaymentSectionExpanded && (
           <View style={styles.card}>
-            {/* Pago Móvil Section */}
-            <View style={styles.paymentMethodSection}>
-              <View style={styles.paymentMethodHeader}>
-                <View style={styles.settingLeft}>
-                  <View style={styles.iconContainer}>
-                    <Ionicons name="phone-portrait" size={22} color={Colors.primary} />
-                  </View>
-                  <Text style={styles.paymentMethodTitle}>Pago Móvil</Text>
+            <View style={styles.settingItem}>
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="language" size={22} color={Colors.primary} />
                 </View>
-                {paymentInfo.pagoMovilPhone && paymentInfo.pagoMovilBank && paymentInfo.pagoMovilCedula && (
-                  <View style={styles.configuredBadge}>
-                    <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
-                    <Text style={styles.configuredText}>Configurado</Text>
-                  </View>
-                )}
+                <Text style={styles.settingLabel}>{t.language}</Text>
               </View>
+              <View style={styles.languageButtons}>
+                <TouchableOpacity
+                  style={[styles.languageButton, language === 'es' && styles.languageButtonActive]}
+                  onPress={() => handleLanguageChange('es')}
+                >
+                  <Text
+                    style={[
+                      styles.languageButtonText,
+                      language === 'es' && styles.languageButtonTextActive,
+                    ]}
+                  >
+                    {t.spanish}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.languageButton, language === 'en' && styles.languageButtonActive]}
+                  onPress={() => handleLanguageChange('en')}
+                >
+                  <Text
+                    style={[
+                      styles.languageButtonText,
+                      language === 'en' && styles.languageButtonTextActive,
+                    ]}
+                  >
+                    {t.english}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Cédula *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={paymentInfo.pagoMovilCedula}
-                  onChangeText={(text) => setPaymentInfo({ ...paymentInfo, pagoMovilCedula: text })}
-                  placeholder="V-12345678"
-                  placeholderTextColor={Colors.placeholder}
-                />
-              </View>
+        {/* Notifications Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t.notifications}</Text>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Teléfono *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={paymentInfo.pagoMovilPhone}
-                  onChangeText={(text) => setPaymentInfo({ ...paymentInfo, pagoMovilPhone: text })}
-                  placeholder="0414-1234567"
-                  placeholderTextColor={Colors.placeholder}
-                  keyboardType="phone-pad"
-                />
+          <View style={styles.card}>
+            <View style={styles.settingItem}>
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="notifications" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.settingLabel}>Solicitudes de viaje</Text>
               </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Banco *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={paymentInfo.pagoMovilBank}
-                  onChangeText={(text) => setPaymentInfo({ ...paymentInfo, pagoMovilBank: text })}
-                  placeholder="Ej: Banco de Venezuela"
-                  placeholderTextColor={Colors.placeholder}
-                />
-              </View>
+              <Switch
+                value={notificationPrefs.rideRequests}
+                onValueChange={value => handleUpdateNotificationPref('rideRequests', value)}
+                trackColor={{ false: Colors.lightGray, true: Colors.light }}
+                thumbColor={notificationPrefs.rideRequests ? Colors.primary : Colors.white}
+              />
             </View>
 
             <View style={styles.divider} />
 
-            {/* Transferencia Bancaria Section */}
-            <View style={styles.paymentMethodSection}>
-              <View style={styles.paymentMethodHeader}>
-                <View style={styles.settingLeft}>
-                  <View style={styles.iconContainer}>
-                    <Ionicons name="business" size={22} color={Colors.primary} />
-                  </View>
-                  <Text style={styles.paymentMethodTitle}>Transferencia Bancaria</Text>
+            <View style={styles.settingItem}>
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="car" size={22} color={Colors.primary} />
                 </View>
-                {paymentInfo.bankTransferAccount && paymentInfo.bankTransferBank && (
-                  <View style={styles.configuredBadge}>
-                    <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
-                    <Text style={styles.configuredText}>Configurado</Text>
-                  </View>
-                )}
+                <Text style={styles.settingLabel}>Actualizaciones de viaje</Text>
               </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Banco</Text>
-                <TextInput
-                  style={styles.input}
-                  value={paymentInfo.bankTransferBank}
-                  onChangeText={(text) => setPaymentInfo({ ...paymentInfo, bankTransferBank: text })}
-                  placeholder="Ej: Banco de Venezuela"
-                  placeholderTextColor={Colors.placeholder}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Número de Cuenta</Text>
-                <TextInput
-                  style={styles.input}
-                  value={paymentInfo.bankTransferAccount}
-                  onChangeText={(text) => setPaymentInfo({ ...paymentInfo, bankTransferAccount: text })}
-                  placeholder="0102-1234-5678-9012"
-                  placeholderTextColor={Colors.placeholder}
-                  keyboardType="number-pad"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Tipo de Cuenta</Text>
-                <View style={styles.accountTypeButtons}>
-                  <TouchableOpacity
-                    style={[
-                      styles.accountTypeButton,
-                      paymentInfo.bankTransferAccountType === 'Corriente' && styles.accountTypeButtonActive,
-                    ]}
-                    onPress={() => setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Corriente' })}
-                  >
-                    <Text
-                      style={[
-                        styles.accountTypeButtonText,
-                        paymentInfo.bankTransferAccountType === 'Corriente' && styles.accountTypeButtonTextActive,
-                      ]}
-                    >
-                      Corriente
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.accountTypeButton,
-                      paymentInfo.bankTransferAccountType === 'Ahorro' && styles.accountTypeButtonActive,
-                    ]}
-                    onPress={() => setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Ahorro' })}
-                  >
-                    <Text
-                      style={[
-                        styles.accountTypeButtonText,
-                        paymentInfo.bankTransferAccountType === 'Ahorro' && styles.accountTypeButtonTextActive,
-                      ]}
-                    >
-                      Ahorro
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              <Switch
+                value={notificationPrefs.rideUpdates}
+                onValueChange={value => handleUpdateNotificationPref('rideUpdates', value)}
+                trackColor={{ false: Colors.lightGray, true: Colors.light }}
+                thumbColor={notificationPrefs.rideUpdates ? Colors.primary : Colors.white}
+              />
             </View>
 
-            <View style={styles.paymentInfoNote}>
-              <Ionicons name="information-circle" size={20} color="#6b7280" />
-              <Text style={styles.paymentInfoNoteText}>
-                Debes configurar al menos un método de pago completo para recibir tus ganancias.{'\n\n'}
-                • Pago Móvil: cédula, teléfono y banco{'\n'}
-                • Transferencia: banco, cuenta y tipo
-              </Text>
+            <View style={styles.divider} />
+
+            <View style={styles.settingItem}>
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="card" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.settingLabel}>Pagos</Text>
+              </View>
+              <Switch
+                value={notificationPrefs.payments}
+                onValueChange={value => handleUpdateNotificationPref('payments', value)}
+                trackColor={{ false: Colors.lightGray, true: Colors.light }}
+                thumbColor={notificationPrefs.payments ? Colors.primary : Colors.white}
+              />
             </View>
 
+            <View style={styles.divider} />
+
+            <View style={styles.settingItem}>
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="megaphone" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.settingLabel}>Promociones</Text>
+              </View>
+              <Switch
+                value={notificationPrefs.promotions}
+                onValueChange={value => handleUpdateNotificationPref('promotions', value)}
+                trackColor={{ false: Colors.lightGray, true: Colors.light }}
+                thumbColor={notificationPrefs.promotions ? Colors.primary : Colors.white}
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* Account Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t.account}</Text>
+
+          <View style={styles.card}>
             <TouchableOpacity
-              style={[styles.button, styles.saveButton]}
-              onPress={handleSavePaymentInfo}
-              disabled={isSavingPayment}
+              style={styles.actionItem}
+              onPress={() => router.push('/(driver)/manage-ride' as any)}
             >
-              {isSavingPayment ? (
-                <ActivityIndicator color={Colors.white} />
-              ) : (
-                <Text style={styles.saveButtonText}>Guardar Métodos de Pago</Text>
-              )}
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="car-sport-outline" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.actionLabel}>Gestionar Viaje</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity style={styles.actionItem} onPress={handleLogout}>
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="log-out-outline" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.actionLabel}>{t.logout}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity style={styles.actionItem} onPress={handleDeleteAccount}>
+              <View style={styles.settingLeft}>
+                <View style={[styles.iconContainer, { backgroundColor: '#fef2f2' }]}>
+                  <Ionicons name="trash-outline" size={22} color={Colors.error} />
+                </View>
+                <Text style={[styles.actionLabel, styles.dangerText]}>{t.deleteAccount}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
             </TouchableOpacity>
           </View>
-        )}
-      </View>
-
-      {/* Settings Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t.settings}</Text>
-
-        <View style={styles.card}>
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="language" size={22} color={Colors.primary} />
-              </View>
-              <Text style={styles.settingLabel}>{t.language}</Text>
-            </View>
-            <View style={styles.languageButtons}>
-              <TouchableOpacity
-                style={[styles.languageButton, language === 'es' && styles.languageButtonActive]}
-                onPress={() => handleLanguageChange('es')}
-              >
-                <Text
-                  style={[
-                    styles.languageButtonText,
-                    language === 'es' && styles.languageButtonTextActive,
-                  ]}
-                >
-                  {t.spanish}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.languageButton, language === 'en' && styles.languageButtonActive]}
-                onPress={() => handleLanguageChange('en')}
-              >
-                <Text
-                  style={[
-                    styles.languageButtonText,
-                    language === 'en' && styles.languageButtonTextActive,
-                  ]}
-                >
-                  {t.english}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
         </View>
-      </View>
 
-      {/* Notifications Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t.notifications}</Text>
-
-        <View style={styles.card}>
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="notifications" size={22} color={Colors.primary} />
-              </View>
-              <Text style={styles.settingLabel}>Solicitudes de viaje</Text>
-            </View>
-            <Switch
-              value={notificationPrefs.rideRequests}
-              onValueChange={value => handleUpdateNotificationPref('rideRequests', value)}
-              trackColor={{ false: Colors.lightGray, true: Colors.light }}
-              thumbColor={notificationPrefs.rideRequests ? Colors.primary : Colors.white}
-            />
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="car" size={22} color={Colors.primary} />
-              </View>
-              <Text style={styles.settingLabel}>Actualizaciones de viaje</Text>
-            </View>
-            <Switch
-              value={notificationPrefs.rideUpdates}
-              onValueChange={value => handleUpdateNotificationPref('rideUpdates', value)}
-              trackColor={{ false: Colors.lightGray, true: Colors.light }}
-              thumbColor={notificationPrefs.rideUpdates ? Colors.primary : Colors.white}
-            />
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="card" size={22} color={Colors.primary} />
-              </View>
-              <Text style={styles.settingLabel}>Pagos</Text>
-            </View>
-            <Switch
-              value={notificationPrefs.payments}
-              onValueChange={value => handleUpdateNotificationPref('payments', value)}
-              trackColor={{ false: Colors.lightGray, true: Colors.light }}
-              thumbColor={notificationPrefs.payments ? Colors.primary : Colors.white}
-            />
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="megaphone" size={22} color={Colors.primary} />
-              </View>
-              <Text style={styles.settingLabel}>Promociones</Text>
-            </View>
-            <Switch
-              value={notificationPrefs.promotions}
-              onValueChange={value => handleUpdateNotificationPref('promotions', value)}
-              trackColor={{ false: Colors.lightGray, true: Colors.light }}
-              thumbColor={notificationPrefs.promotions ? Colors.primary : Colors.white}
-            />
-          </View>
-        </View>
-      </View>
-
-      {/* Account Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t.account}</Text>
-
-        <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.actionItem}
-            onPress={() => router.push('/(driver)/manage-ride' as any)}
-          >
-            <View style={styles.settingLeft}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="car-sport-outline" size={22} color={Colors.primary} />
-              </View>
-              <Text style={styles.actionLabel}>Gestionar Viaje</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </TouchableOpacity>
-
-          <View style={styles.divider} />
-
-          <TouchableOpacity style={styles.actionItem} onPress={handleLogout}>
-            <View style={styles.settingLeft}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="log-out-outline" size={22} color={Colors.primary} />
-              </View>
-              <Text style={styles.actionLabel}>{t.logout}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </TouchableOpacity>
-
-          <View style={styles.divider} />
-
-          <TouchableOpacity style={styles.actionItem} onPress={handleDeleteAccount}>
-            <View style={styles.settingLeft}>
-              <View style={[styles.iconContainer, { backgroundColor: '#fef2f2' }]}>
-                <Ionicons name="trash-outline" size={22} color={Colors.error} />
-              </View>
-              <Text style={[styles.actionLabel, styles.dangerText]}>{t.deleteAccount}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.bottomSpacer} />
-    </ScrollView>
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
     </SafeAreaView>
   );
 }

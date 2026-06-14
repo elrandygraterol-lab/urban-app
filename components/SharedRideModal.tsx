@@ -91,7 +91,9 @@ export default function SharedRideModal({
   const insets = useSafeAreaInsets();
 
   // Screen state: 'search' | 'summary' | 'waiting' | 'confirmation'
-  const [screenState, setScreenState] = useState<'search' | 'summary' | 'waiting' | 'confirmation'>('search');
+  const [screenState, setScreenState] = useState<'search' | 'summary' | 'waiting' | 'confirmation'>(
+    'search'
+  );
   const [selectedPassenger, setSelectedPassenger] = useState<PassengerResult | null>(null);
 
   const [query, setQuery] = useState('');
@@ -205,9 +207,9 @@ export default function SharedRideModal({
     console.log('[SharedRideModal] Subscribing to WebSocket events for invitation:', invitationId);
 
     // Handle invitation accepted
-    const cleanupAccepted = onSharedRideInvitationAccepted((data) => {
+    const cleanupAccepted = onSharedRideInvitationAccepted(data => {
       console.log('[SharedRideModal] Invitation accepted:', data);
-      
+
       if (data.invitationId !== invitationId) {
         return; // Not our invitation
       }
@@ -221,15 +223,15 @@ export default function SharedRideModal({
       // Update state with new fare and pickup location
       setUpdatedFare(data.updatedFare);
       setInviteePickupLocation(data.inviteePickupLocation);
-      
+
       // Switch to confirmation screen
       setScreenState('confirmation');
     });
 
     // Handle invitation rejected
-    const cleanupRejected = onSharedRideInvitationRejected((data) => {
+    const cleanupRejected = onSharedRideInvitationRejected(data => {
       console.log('[SharedRideModal] Invitation rejected:', data);
-      
+
       if (data.invitationId !== invitationId) {
         return; // Not our invitation
       }
@@ -246,9 +248,9 @@ export default function SharedRideModal({
     });
 
     // Handle invitation expired
-    const cleanupExpired = onSharedRideInvitationExpired((data) => {
+    const cleanupExpired = onSharedRideInvitationExpired(data => {
       console.log('[SharedRideModal] Invitation expired:', data);
-      
+
       if (data.invitationId !== invitationId) {
         return; // Not our invitation
       }
@@ -273,13 +275,10 @@ export default function SharedRideModal({
     };
   }, [screenState, invitationId, onClose]);
 
-  const handleSelect = useCallback(
-    (passenger: PassengerResult) => {
-      setSelectedPassenger(passenger);
-      setScreenState('summary');
-    },
-    []
-  );
+  const handleSelect = useCallback((passenger: PassengerResult) => {
+    setSelectedPassenger(passenger);
+    setScreenState('summary');
+  }, []);
 
   const handleConfirmInvitation = useCallback(async () => {
     if (!selectedPassenger) return;
@@ -330,7 +329,7 @@ export default function SharedRideModal({
 
       // Start countdown timer
       countdownIntervalRef.current = setInterval(() => {
-        setCountdown((prev) => {
+        setCountdown(prev => {
           if (prev <= 1) {
             if (countdownIntervalRef.current) {
               clearInterval(countdownIntervalRef.current);
@@ -346,13 +345,19 @@ export default function SharedRideModal({
     } catch (err: any) {
       console.error('SharedRideModal invitation error:', err);
       setInvitationError(
-        err.response?.data?.error?.message ||
-          'Error al enviar la invitación. Intenta nuevamente.'
+        err.response?.data?.error?.message || 'Error al enviar la invitación. Intenta nuevamente.'
       );
     } finally {
       setIsSendingInvitation(false);
     }
-  }, [selectedPassenger, pickupPoints, destinationPoints, estimatedFare, paymentConfig, onInvitationSent]);
+  }, [
+    selectedPassenger,
+    pickupPoints,
+    destinationPoints,
+    estimatedFare,
+    paymentConfig,
+    onInvitationSent,
+  ]);
 
   const handleBackToSearch = useCallback(() => {
     setScreenState('search');
@@ -381,8 +386,8 @@ export default function SharedRideModal({
       </View>
 
       <Text style={styles.subtitle}>
-        Ingresa el número de teléfono o código de usuario del pasajero con quien deseas
-        compartir el viaje.
+        Ingresa el número de teléfono o código de usuario del pasajero con quien deseas compartir el
+        viaje.
       </Text>
 
       {/* Search input */}
@@ -421,13 +426,11 @@ export default function SharedRideModal({
       {/* Results list */}
       <FlatList
         data={results}
-        keyExtractor={(item) => item.id}
+        keyExtractor={item => item.id}
         renderItem={renderItem}
         ListEmptyComponent={renderEmptyState}
         style={styles.list}
-        contentContainerStyle={
-          results.length === 0 ? styles.listEmptyContent : styles.listContent
-        }
+        contentContainerStyle={results.length === 0 ? styles.listEmptyContent : styles.listContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       />
@@ -484,7 +487,7 @@ export default function SharedRideModal({
           </TouchableOpacity>
         </View>
 
-        <ScrollView 
+        <ScrollView
           style={styles.summaryScrollView}
           contentContainerStyle={styles.summaryContent}
           showsVerticalScrollIndicator={false}
@@ -515,9 +518,7 @@ export default function SharedRideModal({
             <View style={styles.fareCardBody}>
               <View style={styles.fareRow}>
                 <Text style={styles.fareLabel}>Tarifa Total</Text>
-                <Text style={styles.fareValue}>
-                  {formatCurrency(estimatedFare, currency)}
-                </Text>
+                <Text style={styles.fareValue}>{formatCurrency(estimatedFare, currency)}</Text>
               </View>
               <View style={styles.fareDivider} />
               <View style={styles.fareRow}>
@@ -552,7 +553,8 @@ export default function SharedRideModal({
             <View style={styles.paymentInfoBox}>
               <Ionicons name="information-circle-outline" size={16} color={Colors.primary} />
               <Text style={styles.paymentInfoText}>
-                {selectedPassenger.name} seleccionará su propio método de pago al aceptar la invitación.
+                {selectedPassenger.name} seleccionará su propio método de pago al aceptar la
+                invitación.
               </Text>
             </View>
           </View>
@@ -591,8 +593,8 @@ export default function SharedRideModal({
           <View style={styles.infoCard}>
             <Ionicons name="information-circle-outline" size={20} color={Colors.primary} />
             <Text style={styles.infoText}>
-              {selectedPassenger.name} recibirá una notificación y tendrá 60 segundos para
-              aceptar o rechazar la invitación.
+              {selectedPassenger.name} recibirá una notificación y tendrá 60 segundos para aceptar o
+              rechazar la invitación.
             </Text>
           </View>
         </ScrollView>
@@ -601,7 +603,7 @@ export default function SharedRideModal({
         <TouchableOpacity
           style={[
             styles.confirmButton,
-            (isSendingInvitation || !isPaymentValid) && styles.confirmButtonDisabled
+            (isSendingInvitation || !isPaymentValid) && styles.confirmButtonDisabled,
           ]}
           onPress={handleConfirmInvitation}
           disabled={isSendingInvitation || !isPaymentValid}
@@ -713,9 +715,7 @@ export default function SharedRideModal({
           {/* Success message */}
           <View style={styles.successCard}>
             <Ionicons name="checkmark-circle" size={48} color={Colors.success} />
-            <Text style={styles.successTitle}>
-              {selectedPassenger.name} aceptó tu invitación
-            </Text>
+            <Text style={styles.successTitle}>{selectedPassenger.name} aceptó tu invitación</Text>
             <Text style={styles.successMessage}>
               Ahora puedes confirmar el viaje compartido con la tarifa actualizada.
             </Text>
@@ -755,9 +755,7 @@ export default function SharedRideModal({
             <View style={styles.fareCardBody}>
               <View style={styles.fareRow}>
                 <Text style={styles.fareLabel}>Tarifa Total</Text>
-                <Text style={styles.fareValue}>
-                  {formatCurrency(updatedFare, currency)}
-                </Text>
+                <Text style={styles.fareValue}>{formatCurrency(updatedFare, currency)}</Text>
               </View>
               <View style={styles.fareDivider} />
               <View style={styles.fareRow}>
@@ -836,9 +834,7 @@ export default function SharedRideModal({
       <View style={styles.emptyContainer}>
         <Ionicons name="search-outline" size={40} color={Colors.mediumGray} />
         <Text style={styles.emptyText}>No se encontraron resultados</Text>
-        <Text style={styles.emptySubtext}>
-          Verifica el número de teléfono o código de usuario
-        </Text>
+        <Text style={styles.emptySubtext}>Verifica el número de teléfono o código de usuario</Text>
       </View>
     );
   };
@@ -846,22 +842,12 @@ export default function SharedRideModal({
   // ── Main render ─────────────────────────────────────────────────────────────
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View
-          style={[
-            styles.container,
-            { paddingBottom: Math.max(insets.bottom, 24) },
-          ]}
-        >
+        <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           {screenState === 'search' && renderSearchScreen()}
           {screenState === 'summary' && renderSummaryScreen()}
           {screenState === 'waiting' && renderWaitingScreen()}

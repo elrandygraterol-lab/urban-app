@@ -330,7 +330,13 @@ export default function RegisterScreen() {
       if (role === 'passenger') {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          showStatus('warning', 'La app necesita acceso a tu ubicación para calcular rutas y mostrar conductores cercanos.', 'Permiso de ubicación requerido', undefined, { label: 'Abrir Configuración', onPress: () => Linking.openSettings() });
+          showStatus(
+            'warning',
+            'La app necesita acceso a tu ubicación para calcular rutas y mostrar conductores cercanos.',
+            'Permiso de ubicación requerido',
+            undefined,
+            { label: 'Abrir Configuración', onPress: () => Linking.openSettings() }
+          );
         }
       }
 
@@ -362,13 +368,26 @@ export default function RegisterScreen() {
       const msg = error?.response?.data?.error?.message || error?.message || '';
       const lower = msg.toLowerCase();
 
-      if (lower.includes('phone number') || lower.includes('teléfono') || lower.includes('telefono')) {
+      if (
+        lower.includes('phone number') ||
+        lower.includes('teléfono') ||
+        lower.includes('telefono')
+      ) {
         showToast('Este número de teléfono ya está registrado', 'error');
       } else if (lower.includes('email') || lower.includes('correo')) {
         showToast('Este correo electrónico ya está registrado', 'error');
-      } else if (lower.includes('duplicate') || lower.includes('unique') || lower.includes('exist')) {
+      } else if (
+        lower.includes('duplicate') ||
+        lower.includes('unique') ||
+        lower.includes('exist')
+      ) {
         showToast('Este usuario ya existe', 'error');
-      } else if (lower.includes('validation') || lower.includes('validación') || lower.includes('invalido') || lower.includes('inválido')) {
+      } else if (
+        lower.includes('validation') ||
+        lower.includes('validación') ||
+        lower.includes('invalido') ||
+        lower.includes('inválido')
+      ) {
         showToast('Verifica que todos los campos estén completos y sean correctos', 'error');
       } else {
         showToast('No se pudo completar el registro. Intenta de nuevo.', 'error');
@@ -378,268 +397,290 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f0f9ff' }} edges={['top', 'bottom']}>
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={{ flex: 1 }}
-    >
-      <ScrollView
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
-        <Text style={{ fontSize: 24, fontWeight: '800', color: '#111827', marginBottom: 6 }}>
-          Crear Cuenta
-        </Text>
-        <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 24 }}>
-          Completa el formulario para registrarte
-        </Text>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Header */}
+          <Text style={{ fontSize: 24, fontWeight: '800', color: '#111827', marginBottom: 6 }}>
+            Crear Cuenta
+          </Text>
+          <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 24 }}>
+            Completa el formulario para registrarte
+          </Text>
 
-        {/* Role Selector */}
-        <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 }}>
-          Tipo de cuenta
-        </Text>
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
-          {(['passenger', 'driver'] as UserRole[]).map((r) => (
-            <TouchableOpacity
-              key={r}
-              onPress={() => setRole(r)}
-              style={{
-                flex: 1,
-                paddingVertical: 12,
-                borderRadius: 12,
-                borderWidth: 2,
-                alignItems: 'center',
-                backgroundColor: role === r ? '#f0fdf4' : '#fff',
-                borderColor: role === r ? '#22c55e' : '#e5e7eb',
-              }}
-            >
-              <Ionicons
-                name={r === 'passenger' ? 'person' : 'car'}
-                size={20}
-                color={role === r ? '#22c55e' : '#9ca3af'}
-              />
-              <Text
+          {/* Role Selector */}
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 }}>
+            Tipo de cuenta
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+            {(['passenger', 'driver'] as UserRole[]).map(r => (
+              <TouchableOpacity
+                key={r}
+                onPress={() => setRole(r)}
                 style={{
-                  fontSize: 14,
-                  fontWeight: '600',
-                  color: role === r ? '#22c55e' : '#9ca3af',
-                  marginTop: 4,
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  borderWidth: 2,
+                  alignItems: 'center',
+                  backgroundColor: role === r ? '#f0fdf4' : '#fff',
+                  borderColor: role === r ? '#22c55e' : '#e5e7eb',
                 }}
               >
-                {r === 'passenger' ? 'Pasajero' : 'Conductor'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Name */}
-        <Text style={styles.label}>Nombre completo</Text>
-        <TextInput
-          style={[styles.input, nameError ? styles.inputError : null]}
-          value={name}
-          onChangeText={validateNameField}
-          placeholder="Ej: Juan Pérez"
-          placeholderTextColor="#9ca3af"
-        />
-        {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
-
-        {/* Email */}
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          style={[styles.input, emailError ? styles.inputError : null]}
-          value={email}
-          onChangeText={validateEmailField}
-          placeholder="ejemplo@correo.com"
-          placeholderTextColor="#9ca3af"
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-        {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
-
-        {/* Phone */}
-        <Text style={styles.label}>Teléfono</Text>
-        <TextInput
-          style={[styles.input, phoneError ? styles.inputError : null]}
-          value={phone}
-          onChangeText={validatePhoneField}
-          placeholder="04121234567"
-          placeholderTextColor="#9ca3af"
-          keyboardType="phone-pad"
-        />
-        {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
-
-        {/* Password */}
-        <Text style={styles.label}>Contraseña</Text>
-        <View style={{ position: 'relative' }}>
-          <TextInput
-            style={[styles.input, passwordError ? styles.inputError : null, { paddingRight: 40 }]}
-            value={password}
-            onChangeText={validatePasswordField}
-            placeholder="Mínimo 8 caracteres"
-            placeholderTextColor="#9ca3af"
-            secureTextEntry={!showPassword}
-          />
-          <TouchableOpacity
-            onPress={() => setShowPassword(!showPassword)}
-            style={{ position: 'absolute', right: 12, top: 12 }}
-          >
-            <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color="#9ca3af" />
-          </TouchableOpacity>
-        </View>
-        {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
-
-        {/* Confirm Password */}
-        <Text style={styles.label}>Confirmar Contraseña</Text>
-        <View style={{ position: 'relative' }}>
-          <TextInput
-            style={[styles.input, confirmPasswordError ? styles.inputError : null, { paddingRight: 40 }]}
-            value={confirmPassword}
-            onChangeText={validateConfirmPasswordField}
-            placeholder="Repite tu contraseña"
-            placeholderTextColor="#9ca3af"
-            secureTextEntry={!showConfirmPassword}
-          />
-          <TouchableOpacity
-            onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-            style={{ position: 'absolute', right: 12, top: 12 }}
-          >
-            <Ionicons name={showConfirmPassword ? 'eye-off' : 'eye'} size={20} color="#9ca3af" />
-          </TouchableOpacity>
-        </View>
-        {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}
-
-        {/* Profile Photo (optional) */}
-        <Text style={styles.label}>Foto de perfil (opcional)</Text>
-        {profilePhoto ? (
-          <TouchableOpacity style={styles.photoPreviewContainer} onPress={handlePickProfilePhoto}>
-            <Image
-              source={{ uri: profilePhoto.uri }}
-              style={{ width: 96, height: 96, borderRadius: 48 }}
-              resizeMode="cover"
-            />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.uploadBtn} onPress={handlePickProfilePhoto}>
-            <View style={{ alignItems: 'center' }}>
-              <Ionicons name="camera-outline" size={28} color="#9ca3af" />
-              <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>Agregar foto</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-
-        {/* Driver fields */}
-        {role === 'driver' && (
-          <>
-            <Text style={[styles.label, { marginTop: 16, fontSize: 16, fontWeight: '700', color: '#111827' }]}>
-              Datos del Vehículo
-            </Text>
-
-            <Text style={styles.label}>Tipo de vehículo</Text>
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-              {(['taxi', 'moto_taxi'] as VehicleType[]).map((v) => (
-                <TouchableOpacity
-                  key={v}
-                  onPress={() => setVehicleType(v)}
+                <Ionicons
+                  name={r === 'passenger' ? 'person' : 'car'}
+                  size={20}
+                  color={role === r ? '#22c55e' : '#9ca3af'}
+                />
+                <Text
                   style={{
-                    flex: 1,
-                    paddingVertical: 10,
-                    borderRadius: 10,
-                    borderWidth: 2,
-                    alignItems: 'center',
-                    backgroundColor: vehicleType === v ? '#f0fdf4' : '#fff',
-                    borderColor: vehicleType === v ? '#22c55e' : '#e5e7eb',
+                    fontSize: 14,
+                    fontWeight: '600',
+                    color: role === r ? '#22c55e' : '#9ca3af',
+                    marginTop: 4,
                   }}
                 >
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: vehicleType === v ? '#22c55e' : '#6b7280' }}>
-                    {v === 'taxi' ? 'Taxi' : 'Moto-Taxi'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                  {r === 'passenger' ? 'Pasajero' : 'Conductor'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-            <Text style={styles.label}>Placa del vehículo</Text>
+          {/* Name */}
+          <Text style={styles.label}>Nombre completo</Text>
+          <TextInput
+            style={[styles.input, nameError ? styles.inputError : null]}
+            value={name}
+            onChangeText={validateNameField}
+            placeholder="Ej: Juan Pérez"
+            placeholderTextColor="#9ca3af"
+          />
+          {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+
+          {/* Email */}
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            style={[styles.input, emailError ? styles.inputError : null]}
+            value={email}
+            onChangeText={validateEmailField}
+            placeholder="ejemplo@correo.com"
+            placeholderTextColor="#9ca3af"
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+
+          {/* Phone */}
+          <Text style={styles.label}>Teléfono</Text>
+          <TextInput
+            style={[styles.input, phoneError ? styles.inputError : null]}
+            value={phone}
+            onChangeText={validatePhoneField}
+            placeholder="04121234567"
+            placeholderTextColor="#9ca3af"
+            keyboardType="phone-pad"
+          />
+          {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
+
+          {/* Password */}
+          <Text style={styles.label}>Contraseña</Text>
+          <View style={{ position: 'relative' }}>
             <TextInput
-              style={[styles.input, licensePlateError ? styles.inputError : null]}
-              value={licensePlate}
-              onChangeText={validateLicensePlateField}
-              placeholder="Ej: AB123CD"
+              style={[styles.input, passwordError ? styles.inputError : null, { paddingRight: 40 }]}
+              value={password}
+              onChangeText={validatePasswordField}
+              placeholder="Mínimo 8 caracteres"
               placeholderTextColor="#9ca3af"
-              autoCapitalize="characters"
+              secureTextEntry={!showPassword}
             />
-            {licensePlateError ? <Text style={styles.errorText}>{licensePlateError}</Text> : null}
+            <TouchableOpacity
+              onPress={() => setShowPassword(!showPassword)}
+              style={{ position: 'absolute', right: 12, top: 12 }}
+            >
+              <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color="#9ca3af" />
+            </TouchableOpacity>
+          </View>
+          {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
 
-            <Text style={styles.label}>Modelo del vehículo</Text>
+          {/* Confirm Password */}
+          <Text style={styles.label}>Confirmar Contraseña</Text>
+          <View style={{ position: 'relative' }}>
             <TextInput
-              style={[styles.input, vehicleModelError ? styles.inputError : null]}
-              value={vehicleModel}
-              onChangeText={validateVehicleModelField}
-              placeholder="Ej: Toyota Corolla 2020"
+              style={[
+                styles.input,
+                confirmPasswordError ? styles.inputError : null,
+                { paddingRight: 40 },
+              ]}
+              value={confirmPassword}
+              onChangeText={validateConfirmPasswordField}
+              placeholder="Repite tu contraseña"
               placeholderTextColor="#9ca3af"
+              secureTextEntry={!showConfirmPassword}
             />
-            {vehicleModelError ? <Text style={styles.errorText}>{vehicleModelError}</Text> : null}
-
-            <Text style={[styles.label, { marginTop: 16, fontSize: 16, fontWeight: '700', color: '#111827' }]}>
-              Documentos requeridos
-            </Text>
-
-            <Text style={styles.label}>Licencia de conducir</Text>
             <TouchableOpacity
-              style={styles.uploadBtn}
-              onPress={() => handlePickDocument(setDriverLicense)}
+              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+              style={{ position: 'absolute', right: 12, top: 12 }}
             >
-              {driverLicense ? (
-                <Text style={{ color: '#22c55e', fontWeight: '600' }}>✓ Licencia adjunta</Text>
-              ) : (
-                <Text style={{ color: '#9ca3af' }}>Seleccionar archivo</Text>
-              )}
+              <Ionicons name={showConfirmPassword ? 'eye-off' : 'eye'} size={20} color="#9ca3af" />
             </TouchableOpacity>
+          </View>
+          {confirmPasswordError ? (
+            <Text style={styles.errorText}>{confirmPasswordError}</Text>
+          ) : null}
 
-            <Text style={styles.label}>Certificado médico</Text>
-            <TouchableOpacity
-              style={styles.uploadBtn}
-              onPress={() => handlePickDocument(setMedicalCertificate)}
-            >
-              {medicalCertificate ? (
-                <Text style={{ color: '#22c55e', fontWeight: '600' }}>✓ Certificado adjunto</Text>
-              ) : (
-                <Text style={{ color: '#9ca3af' }}>Seleccionar archivo</Text>
-              )}
+          {/* Profile Photo (optional) */}
+          <Text style={styles.label}>Foto de perfil (opcional)</Text>
+          {profilePhoto ? (
+            <TouchableOpacity style={styles.photoPreviewContainer} onPress={handlePickProfilePhoto}>
+              <Image
+                source={{ uri: profilePhoto.uri }}
+                style={{ width: 96, height: 96, borderRadius: 48 }}
+                resizeMode="cover"
+              />
             </TouchableOpacity>
-          </>
-        )}
-
-        {/* Submit */}
-        <TouchableOpacity
-          style={{
-            marginTop: 24,
-            backgroundColor: '#22c55e',
-            paddingVertical: 16,
-            borderRadius: 12,
-            alignItems: 'center',
-          }}
-          onPress={handleRegister}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={{ color: '#fff', fontSize: 17, fontWeight: '700' }}>Crear Cuenta</Text>
+            <TouchableOpacity style={styles.uploadBtn} onPress={handlePickProfilePhoto}>
+              <View style={{ alignItems: 'center' }}>
+                <Ionicons name="camera-outline" size={28} color="#9ca3af" />
+                <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>Agregar foto</Text>
+              </View>
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
 
-        {/* Login link */}
-        <TouchableOpacity
-          style={{ marginTop: 16, alignItems: 'center' }}
-          onPress={() => router.push('/(auth)/login' as any)}
-        >
-          <Text style={{ color: '#22c55e', fontSize: 14, fontWeight: '600' }}>
-            ¿Ya tienes cuenta? Inicia sesión
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          {/* Driver fields */}
+          {role === 'driver' && (
+            <>
+              <Text
+                style={[
+                  styles.label,
+                  { marginTop: 16, fontSize: 16, fontWeight: '700', color: '#111827' },
+                ]}
+              >
+                Datos del Vehículo
+              </Text>
+
+              <Text style={styles.label}>Tipo de vehículo</Text>
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                {(['taxi', 'moto_taxi'] as VehicleType[]).map(v => (
+                  <TouchableOpacity
+                    key={v}
+                    onPress={() => setVehicleType(v)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      borderWidth: 2,
+                      alignItems: 'center',
+                      backgroundColor: vehicleType === v ? '#f0fdf4' : '#fff',
+                      borderColor: vehicleType === v ? '#22c55e' : '#e5e7eb',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: '600',
+                        color: vehicleType === v ? '#22c55e' : '#6b7280',
+                      }}
+                    >
+                      {v === 'taxi' ? 'Taxi' : 'Moto-Taxi'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.label}>Placa del vehículo</Text>
+              <TextInput
+                style={[styles.input, licensePlateError ? styles.inputError : null]}
+                value={licensePlate}
+                onChangeText={validateLicensePlateField}
+                placeholder="Ej: AB123CD"
+                placeholderTextColor="#9ca3af"
+                autoCapitalize="characters"
+              />
+              {licensePlateError ? <Text style={styles.errorText}>{licensePlateError}</Text> : null}
+
+              <Text style={styles.label}>Modelo del vehículo</Text>
+              <TextInput
+                style={[styles.input, vehicleModelError ? styles.inputError : null]}
+                value={vehicleModel}
+                onChangeText={validateVehicleModelField}
+                placeholder="Ej: Toyota Corolla 2020"
+                placeholderTextColor="#9ca3af"
+              />
+              {vehicleModelError ? <Text style={styles.errorText}>{vehicleModelError}</Text> : null}
+
+              <Text
+                style={[
+                  styles.label,
+                  { marginTop: 16, fontSize: 16, fontWeight: '700', color: '#111827' },
+                ]}
+              >
+                Documentos requeridos
+              </Text>
+
+              <Text style={styles.label}>Licencia de conducir</Text>
+              <TouchableOpacity
+                style={styles.uploadBtn}
+                onPress={() => handlePickDocument(setDriverLicense)}
+              >
+                {driverLicense ? (
+                  <Text style={{ color: '#22c55e', fontWeight: '600' }}>✓ Licencia adjunta</Text>
+                ) : (
+                  <Text style={{ color: '#9ca3af' }}>Seleccionar archivo</Text>
+                )}
+              </TouchableOpacity>
+
+              <Text style={styles.label}>Certificado médico</Text>
+              <TouchableOpacity
+                style={styles.uploadBtn}
+                onPress={() => handlePickDocument(setMedicalCertificate)}
+              >
+                {medicalCertificate ? (
+                  <Text style={{ color: '#22c55e', fontWeight: '600' }}>✓ Certificado adjunto</Text>
+                ) : (
+                  <Text style={{ color: '#9ca3af' }}>Seleccionar archivo</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* Submit */}
+          <TouchableOpacity
+            style={{
+              marginTop: 24,
+              backgroundColor: '#22c55e',
+              paddingVertical: 16,
+              borderRadius: 12,
+              alignItems: 'center',
+            }}
+            onPress={handleRegister}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={{ color: '#fff', fontSize: 17, fontWeight: '700' }}>Crear Cuenta</Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Login link */}
+          <TouchableOpacity
+            style={{ marginTop: 16, alignItems: 'center' }}
+            onPress={() => router.push('/(auth)/login' as any)}
+          >
+            <Text style={{ color: '#22c55e', fontSize: 14, fontWeight: '600' }}>
+              ¿Ya tienes cuenta? Inicia sesión
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

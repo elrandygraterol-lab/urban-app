@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Line, Circle, Polyline, Text as SvgText } from 'react-native-svg';
-import { Colors, Typography, Spacing } from '@/constants/theme';
+import { Colors, Typography } from '@/constants/theme';
 
 interface DataPoint {
   date: string;
@@ -16,7 +16,7 @@ interface LineChartProps {
 
 /**
  * Simple Line Chart Component
- * 
+ *
  * Displays daily views as a line chart
  * Requirements: 14.7
  */
@@ -42,7 +42,8 @@ export const LineChart: React.FC<LineChartProps> = ({ data, width, height }) => 
   // Calculate points
   const points = data.map((point, index) => {
     const x = padding + (index / (data.length - 1 || 1)) * chartWidth;
-    const y = padding + chartHeight - ((point.views - minValue) / (maxValue - minValue || 1)) * chartHeight;
+    const y =
+      padding + chartHeight - ((point.views - minValue) / (maxValue - minValue || 1)) * chartHeight;
     return { x, y, value: point.views, date: point.date };
   });
 
@@ -60,12 +61,7 @@ export const LineChart: React.FC<LineChartProps> = ({ data, width, height }) => 
   };
 
   // Calculate Y-axis labels (show 4 labels)
-  const yAxisLabels = [
-    maxValue,
-    Math.round(maxValue * 0.66),
-    Math.round(maxValue * 0.33),
-    0,
-  ];
+  const yAxisLabels = [maxValue, Math.round(maxValue * 0.66), Math.round(maxValue * 0.33), 0];
 
   return (
     <View style={[styles.container, { width, height }]}>

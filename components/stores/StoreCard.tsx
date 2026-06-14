@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Store } from '@/types/store';
@@ -12,20 +12,20 @@ interface StoreCardProps {
   showDistance?: boolean;
 }
 
-export const StoreCard: React.FC<StoreCardProps> = React.memo(({
+export const StoreCard = React.memo(function StoreCard({
   store,
   onPress,
   showDistance = true,
-}) => {
+}: StoreCardProps) {
   // Render status badge for owner's stores
   const renderStatusBadge = () => {
     if (!store.status) return null;
 
     const statusConfig = {
-      'activa': { label: 'Activa', color: '#16a34a', bgColor: '#dcfce7' }, // Green
+      activa: { label: 'Activa', color: '#16a34a', bgColor: '#dcfce7' }, // Green
       'pendiente de aprobación': { label: 'Pendiente', color: '#ca8a04', bgColor: '#fef3c7' }, // Yellow
-      'rechazada': { label: 'Rechazada', color: '#dc2626', bgColor: '#fee2e2' }, // Red
-      'inactiva': { label: 'Inactiva', color: '#6b7280', bgColor: '#f3f4f6' }, // Gray
+      rechazada: { label: 'Rechazada', color: '#dc2626', bgColor: '#fee2e2' }, // Red
+      inactiva: { label: 'Inactiva', color: '#6b7280', bgColor: '#f3f4f6' }, // Gray
     };
 
     const config = statusConfig[store.status];
@@ -37,11 +37,14 @@ export const StoreCard: React.FC<StoreCardProps> = React.memo(({
     return (
       <View style={styles.statusBadgeContainer}>
         <View style={[styles.statusBadge, { backgroundColor: config.bgColor }]}>
-          <Text style={[styles.statusText, { color: config.color }]}>
-            {config.label}
-          </Text>
+          <Text style={[styles.statusText, { color: config.color }]}>{config.label}</Text>
           {showRejectionReason && (
-            <Ionicons name="information-circle" size={12} color={config.color} style={{ marginLeft: 2 }} />
+            <Ionicons
+              name="information-circle"
+              size={12}
+              color={config.color}
+              style={{ marginLeft: 2 }}
+            />
           )}
         </View>
         {showRejectionReason && (
@@ -62,17 +65,11 @@ export const StoreCard: React.FC<StoreCardProps> = React.memo(({
 
     for (let i = 0; i < 5; i++) {
       if (i < fullStars) {
-        stars.push(
-          <Ionicons key={i} name="star" size={14} color={Colors.warning} />
-        );
+        stars.push(<Ionicons key={i} name="star" size={14} color={Colors.warning} />);
       } else if (i === fullStars && hasHalfStar) {
-        stars.push(
-          <Ionicons key={i} name="star-half" size={14} color={Colors.warning} />
-        );
+        stars.push(<Ionicons key={i} name="star-half" size={14} color={Colors.warning} />);
       } else {
-        stars.push(
-          <Ionicons key={i} name="star-outline" size={14} color={Colors.lightGray} />
-        );
+        stars.push(<Ionicons key={i} name="star-outline" size={14} color={Colors.lightGray} />);
       }
     }
 
@@ -103,15 +100,13 @@ export const StoreCard: React.FC<StoreCardProps> = React.memo(({
   };
 
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
       {/* Logo Image */}
       <View style={styles.logoContainer}>
         <Image
-          source={{ uri: getOptimizedImageUrl(store.logo_url || 'https://via.placeholder.com/80', 'list') }}
+          source={{
+            uri: getOptimizedImageUrl(store.logo_url || 'https://via.placeholder.com/80', 'list'),
+          }}
           style={styles.logo}
           contentFit="cover"
           transition={200}
@@ -139,16 +134,10 @@ export const StoreCard: React.FC<StoreCardProps> = React.memo(({
       </View>
 
       {/* Chevron Icon */}
-      <Ionicons
-        name="chevron-forward"
-        size={20}
-        color={Colors.lightGray}
-        style={styles.chevron}
-      />
+      <Ionicons name="chevron-forward" size={20} color={Colors.lightGray} style={styles.chevron} />
     </TouchableOpacity>
   );
 });
-
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',

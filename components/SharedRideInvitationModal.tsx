@@ -14,7 +14,7 @@
  *  - Validates Requirements: 7.3, 7.4
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -34,7 +34,7 @@ import * as Location from 'expo-location';
 import { Colors } from '@/constants/theme';
 import { sharedRidesAPI, RoutePoint } from '@/services/api';
 import { formatCurrency, Currency } from '@/utils/currency';
-import mapsService from '@/services/mapsService';
+import { reverseGeocode } from '@/services/mapsService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -66,7 +66,7 @@ interface SharedRideInvitationModalProps {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const INVITATION_TIMEOUT_SECONDS = 60;
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -149,7 +149,7 @@ export default function SharedRideInvitationModal({
     if (screenState === 'pickup_selection' && !selectedPickupLocation) {
       getCurrentLocation();
     }
-  }, [screenState]);
+  }, [screenState, selectedPickupLocation]);
 
   const getCurrentLocation = async () => {
     setIsLoadingLocation(true);
@@ -170,7 +170,7 @@ export default function SharedRideInvitationModal({
       const { latitude, longitude } = location.coords;
 
       // Reverse geocode to get address
-      const locationData = await mapsService.reverseGeocode(latitude, longitude);
+      const locationData = await reverseGeocode(latitude, longitude);
 
       setSelectedPickupLocation({
         latitude,
@@ -206,7 +206,7 @@ export default function SharedRideInvitationModal({
 
     try {
       // Reverse geocode to get address
-      const locationData = await mapsService.reverseGeocode(latitude, longitude);
+      const locationData = await reverseGeocode(latitude, longitude);
 
       setSelectedPickupLocation({
         latitude,

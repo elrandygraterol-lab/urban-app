@@ -8,7 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/theme';
 import { driverAPI } from '../../services/api';
@@ -66,7 +66,11 @@ export default function DriverPaymentMethodsScreen() {
     }
   };
 
-  const hasPagoMovil = !!(paymentInfo.pagoMovilPhone && paymentInfo.pagoMovilBank && paymentInfo.pagoMovilCedula);
+  const hasPagoMovil = !!(
+    paymentInfo.pagoMovilPhone &&
+    paymentInfo.pagoMovilBank &&
+    paymentInfo.pagoMovilCedula
+  );
   const hasBankTransfer = !!(paymentInfo.bankTransferBank && paymentInfo.bankTransferAccount);
 
   const handleSave = async () => {
@@ -81,9 +85,13 @@ export default function DriverPaymentMethodsScreen() {
     try {
       setSaving(true);
       await driverAPI.updatePaymentInfo(paymentInfo);
-      showStatus('success', 'Métodos de pago actualizados exitosamente', 'Guardado', undefined, { label: 'OK', onPress: () => router.back() });
+      showStatus('success', 'Métodos de pago actualizados exitosamente', 'Guardado', undefined, {
+        label: 'OK',
+        onPress: () => router.back(),
+      });
     } catch (error: any) {
-      const message = error?.response?.data?.error?.message || 'Error al guardar los métodos de pago';
+      const message =
+        error?.response?.data?.error?.message || 'Error al guardar los métodos de pago';
       showToast(message, 'error');
     } finally {
       setSaving(false);
@@ -135,7 +143,7 @@ export default function DriverPaymentMethodsScreen() {
             <TextInput
               style={styles.input}
               value={paymentInfo.pagoMovilCedula}
-              onChangeText={(t) => setPaymentInfo({ ...paymentInfo, pagoMovilCedula: t })}
+              onChangeText={t => setPaymentInfo({ ...paymentInfo, pagoMovilCedula: t })}
               placeholder="V-12345678"
               placeholderTextColor="#9ca3af"
               autoCapitalize="characters"
@@ -147,7 +155,7 @@ export default function DriverPaymentMethodsScreen() {
             <TextInput
               style={styles.input}
               value={paymentInfo.pagoMovilPhone}
-              onChangeText={(t) => setPaymentInfo({ ...paymentInfo, pagoMovilPhone: t })}
+              onChangeText={t => setPaymentInfo({ ...paymentInfo, pagoMovilPhone: t })}
               placeholder="0414-1234567"
               placeholderTextColor="#9ca3af"
               keyboardType="phone-pad"
@@ -159,7 +167,7 @@ export default function DriverPaymentMethodsScreen() {
             <TextInput
               style={styles.input}
               value={paymentInfo.pagoMovilBank}
-              onChangeText={(t) => setPaymentInfo({ ...paymentInfo, pagoMovilBank: t })}
+              onChangeText={t => setPaymentInfo({ ...paymentInfo, pagoMovilBank: t })}
               placeholder="Ej: Banco de Venezuela"
               placeholderTextColor="#9ca3af"
             />
@@ -191,7 +199,7 @@ export default function DriverPaymentMethodsScreen() {
             <TextInput
               style={styles.input}
               value={paymentInfo.bankTransferBank}
-              onChangeText={(t) => setPaymentInfo({ ...paymentInfo, bankTransferBank: t })}
+              onChangeText={t => setPaymentInfo({ ...paymentInfo, bankTransferBank: t })}
               placeholder="Ej: Banco de Venezuela"
               placeholderTextColor="#9ca3af"
             />
@@ -202,7 +210,7 @@ export default function DriverPaymentMethodsScreen() {
             <TextInput
               style={styles.input}
               value={paymentInfo.bankTransferAccount}
-              onChangeText={(t) => setPaymentInfo({ ...paymentInfo, bankTransferAccount: t })}
+              onChangeText={t => setPaymentInfo({ ...paymentInfo, bankTransferAccount: t })}
               placeholder="0102-1234-5678-9012"
               placeholderTextColor="#9ca3af"
               keyboardType="number-pad"
@@ -213,18 +221,38 @@ export default function DriverPaymentMethodsScreen() {
             <Text style={styles.label}>Tipo de Cuenta</Text>
             <View style={styles.toggleRow}>
               <TouchableOpacity
-                style={[styles.toggleButton, paymentInfo.bankTransferAccountType === 'Corriente' && styles.toggleButtonActive]}
-                onPress={() => setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Corriente' })}
+                style={[
+                  styles.toggleButton,
+                  paymentInfo.bankTransferAccountType === 'Corriente' && styles.toggleButtonActive,
+                ]}
+                onPress={() =>
+                  setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Corriente' })
+                }
               >
-                <Text style={[styles.toggleText, paymentInfo.bankTransferAccountType === 'Corriente' && styles.toggleTextActive]}>
+                <Text
+                  style={[
+                    styles.toggleText,
+                    paymentInfo.bankTransferAccountType === 'Corriente' && styles.toggleTextActive,
+                  ]}
+                >
                   Corriente
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.toggleButton, paymentInfo.bankTransferAccountType === 'Ahorro' && styles.toggleButtonActive]}
-                onPress={() => setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Ahorro' })}
+                style={[
+                  styles.toggleButton,
+                  paymentInfo.bankTransferAccountType === 'Ahorro' && styles.toggleButtonActive,
+                ]}
+                onPress={() =>
+                  setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Ahorro' })
+                }
               >
-                <Text style={[styles.toggleText, paymentInfo.bankTransferAccountType === 'Ahorro' && styles.toggleTextActive]}>
+                <Text
+                  style={[
+                    styles.toggleText,
+                    paymentInfo.bankTransferAccountType === 'Ahorro' && styles.toggleTextActive,
+                  ]}
+                >
                   Ahorro
                 </Text>
               </TouchableOpacity>
@@ -236,8 +264,8 @@ export default function DriverPaymentMethodsScreen() {
         <View style={styles.infoBox}>
           <Ionicons name="information-circle" size={20} color="#6b7280" />
           <Text style={styles.infoText}>
-            Debes configurar al menos un método de pago completo para recibir tus ganancias.
-            Tus ganancias se transferirán automáticamente al método configurado.
+            Debes configurar al menos un método de pago completo para recibir tus ganancias. Tus
+            ganancias se transferirán automáticamente al método configurado.
           </Text>
         </View>
 

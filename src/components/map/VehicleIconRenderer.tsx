@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
 export type VehicleType = 'TAXI' | 'GENERIC';
@@ -37,10 +37,7 @@ export function calculateOrientation(
   return (angle + 360) % 360;
 }
 
-const TaxiIcon: React.FC<{ orientation: number; size: number }> = ({
-  orientation,
-  size,
-}) => {
+const TaxiIcon: React.FC<{ orientation: number; size: number }> = ({ orientation, size }) => {
   const iconSize = size * 0.55;
 
   return (

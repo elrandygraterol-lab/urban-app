@@ -1,6 +1,6 @@
 /**
  * RouteCalculator Tests
- * 
+ *
  * Unit tests for road-based route calculations
  */
 
@@ -15,7 +15,7 @@ jest.mock('../../services/MapRoutingService', () => ({
 }));
 
 describe('RouteCalculator', () => {
-  const mockOrigin: Location = { latitude: 40.7128, longitude: -74.0060 }; // New York
+  const mockOrigin: Location = { latitude: 40.7128, longitude: -74.006 }; // New York
   const mockDestination: Location = { latitude: 40.7589, longitude: -73.9851 }; // Times Square
 
   beforeEach(() => {
@@ -27,8 +27,8 @@ describe('RouteCalculator', () => {
       const mockRoute: RouteResult = {
         coordinates: [
           mockOrigin,
-          { latitude: 40.7300, longitude: -73.9950 },
-          { latitude: 40.7450, longitude: -73.9900 },
+          { latitude: 40.73, longitude: -73.995 },
+          { latitude: 40.745, longitude: -73.99 },
           mockDestination,
         ],
         distance: 5.2, // km
@@ -39,14 +39,14 @@ describe('RouteCalculator', () => {
             distance: 1000,
             duration: 180,
             startLocation: mockOrigin,
-            endLocation: { latitude: 40.7300, longitude: -73.9950 },
+            endLocation: { latitude: 40.73, longitude: -73.995 },
             maneuver: 'turn-left',
           },
           {
             instruction: 'Turn right on 7th Ave',
             distance: 2000,
             duration: 300,
-            startLocation: { latitude: 40.7300, longitude: -73.9950 },
+            startLocation: { latitude: 40.73, longitude: -73.995 },
             endLocation: mockDestination,
             maneuver: 'turn-right',
           },
@@ -130,9 +130,7 @@ describe('RouteCalculator', () => {
     });
 
     it('should fall back to haversine when API fails', async () => {
-      (mapRoutingService.calculateRoute as jest.Mock).mockRejectedValue(
-        new Error('API Error')
-      );
+      (mapRoutingService.calculateRoute as jest.Mock).mockRejectedValue(new Error('API Error'));
 
       const result = await routeCalculator.calculateDistance(mockOrigin, mockDestination);
 
@@ -198,8 +196,8 @@ describe('RouteCalculator', () => {
       const validRoute: RouteResult = {
         coordinates: [
           mockOrigin,
-          { latitude: 40.7300, longitude: -73.9950 },
-          { latitude: 40.7450, longitude: -73.9900 },
+          { latitude: 40.73, longitude: -73.995 },
+          { latitude: 40.745, longitude: -73.99 },
           mockDestination,
         ],
         distance: 5.2,
@@ -210,13 +208,13 @@ describe('RouteCalculator', () => {
             distance: 1000,
             duration: 180,
             startLocation: mockOrigin,
-            endLocation: { latitude: 40.7300, longitude: -73.9950 },
+            endLocation: { latitude: 40.73, longitude: -73.995 },
           },
           {
             instruction: 'Turn right on 7th Ave',
             distance: 2000,
             duration: 300,
-            startLocation: { latitude: 40.7300, longitude: -73.9950 },
+            startLocation: { latitude: 40.73, longitude: -73.995 },
             endLocation: mockDestination,
           },
         ],

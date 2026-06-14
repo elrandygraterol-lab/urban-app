@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { ToastData } from '@/context/NotificationContext';
 
 interface ToastNotificationProps {
@@ -29,7 +29,7 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({ toast, onD
     // Auto-dismiss
     const t = setTimeout(() => onDismiss(toast.id), toast.durationMs);
     return () => clearTimeout(t);
-  }, []);
+  }, [onDismiss, toast.durationMs, toast.id, translateY]);
 
   const backgroundColor = TYPE_COLORS[toast.type];
 
@@ -38,7 +38,11 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({ toast, onD
       <Text style={styles.message} numberOfLines={3}>
         {toast.message}
       </Text>
-      <TouchableOpacity onPress={() => onDismiss(toast.id)} style={styles.closeButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+      <TouchableOpacity
+        onPress={() => onDismiss(toast.id)}
+        style={styles.closeButton}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
         <Text style={styles.closeText}>✕</Text>
       </TouchableOpacity>
     </Animated.View>

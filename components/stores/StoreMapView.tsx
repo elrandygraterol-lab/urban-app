@@ -32,17 +32,11 @@ interface StorePreviewCardProps {
 const StorePreviewCard: React.FC<StorePreviewCardProps> = ({ store, onPress, onClose }) => {
   return (
     <View style={styles.previewCard}>
-      <TouchableOpacity
-        style={styles.previewCardContent}
-        onPress={onPress}
-        activeOpacity={0.7}
-      >
+      <TouchableOpacity style={styles.previewCardContent} onPress={onPress} activeOpacity={0.7}>
         {/* Store Logo */}
         {store.logo_url ? (
           <View style={styles.previewLogo}>
-            <Text style={styles.previewLogoText}>
-              {store.name.charAt(0).toUpperCase()}
-            </Text>
+            <Text style={styles.previewLogoText}>{store.name.charAt(0).toUpperCase()}</Text>
           </View>
         ) : (
           <View style={styles.previewLogo}>
@@ -179,9 +173,7 @@ export const StoreMapView: React.FC<StoreMapViewProps> = ({ stores, loading, onR
   }, [userLocation]);
 
   // Filter stores with valid coordinates
-  const validStores = stores.filter(
-    (store) => store.latitude !== null && store.longitude !== null
-  );
+  const validStores = stores.filter(store => store.latitude !== null && store.longitude !== null);
 
   // Calculate initial region
   const getInitialRegion = () => {
@@ -225,15 +217,13 @@ export const StoreMapView: React.FC<StoreMapViewProps> = ({ stores, loading, onR
         minZoom={1}
         extent={512}
         nodeSize={64}
-        onMarkerPress={(event) => {
+        onMarkerPress={event => {
           // Handle marker press - extract store info from marker
           const coordinate = event.nativeEvent.coordinate;
           if (coordinate) {
             // Find the store closest to the tapped coordinate
             const tappedStore = validStores.find(
-              (s) =>
-                s.latitude === coordinate.latitude &&
-                s.longitude === coordinate.longitude
+              s => s.latitude === coordinate.latitude && s.longitude === coordinate.longitude
             );
             if (tappedStore) {
               handleMarkerPress(tappedStore);
@@ -242,7 +232,7 @@ export const StoreMapView: React.FC<StoreMapViewProps> = ({ stores, loading, onR
         }}
       >
         {/* Store Markers */}
-        {validStores.map((store) => (
+        {validStores.map(store => (
           <Marker
             key={store.store_id}
             coordinate={{
@@ -285,11 +275,7 @@ export const StoreMapView: React.FC<StoreMapViewProps> = ({ stores, loading, onR
       )}
 
       {/* Refresh Button */}
-      <TouchableOpacity
-        style={styles.refreshButton}
-        onPress={onRefresh}
-        activeOpacity={0.7}
-      >
+      <TouchableOpacity style={styles.refreshButton} onPress={onRefresh} activeOpacity={0.7}>
         <Ionicons name="refresh" size={24} color={Colors.primary} />
       </TouchableOpacity>
 
@@ -307,9 +293,7 @@ export const StoreMapView: React.FC<StoreMapViewProps> = ({ stores, loading, onR
         <View style={styles.noStoresContainer}>
           <View style={styles.noStoresCard}>
             <Ionicons name="map-outline" size={48} color={Colors.mediumGray} />
-            <Text style={styles.noStoresText}>
-              No hay tiendas con ubicación disponible
-            </Text>
+            <Text style={styles.noStoresText}>No hay tiendas con ubicación disponible</Text>
           </View>
         </View>
       )}
@@ -451,4 +435,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-

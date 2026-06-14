@@ -22,11 +22,7 @@ const CenterLocationButton = forwardRef<any, CenterLocationButtonProps>(
         activeOpacity={0.7}
         {...rest}
       >
-        <Ionicons 
-          name="locate" 
-          size={18} 
-          color={disabled ? Colors.lightGray : Colors.primary} 
-        />
+        <Ionicons name="locate" size={18} color={disabled ? Colors.lightGray : Colors.primary} />
       </TouchableOpacity>
     );
   }

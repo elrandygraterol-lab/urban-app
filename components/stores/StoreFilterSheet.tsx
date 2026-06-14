@@ -1,14 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Modal,
-  ScrollView,
-  Switch,
-  Dimensions,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StoreFilters, StoreCategory } from '@/types/store';
 import { Colors, Typography, BorderRadius, Spacing, Shadows } from '@/constants/theme';
@@ -53,13 +44,13 @@ export const StoreFilterSheet: React.FC<StoreFilterSheetProps> = ({
   const toggleCategory = (categoryId: number) => {
     const categories = [...localFilters.categories];
     const index = categories.indexOf(categoryId);
-    
+
     if (index > -1) {
       categories.splice(index, 1);
     } else {
       categories.push(categoryId);
     }
-    
+
     setLocalFilters({ ...localFilters, categories });
   };
 
@@ -99,7 +90,10 @@ export const StoreFilterSheet: React.FC<StoreFilterSheetProps> = ({
               </View>
             )}
           </View>
-          <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <TouchableOpacity
+            onPress={onClose}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Ionicons name="close" size={28} color={Colors.darkGray} />
           </TouchableOpacity>
         </View>
@@ -111,16 +105,13 @@ export const StoreFilterSheet: React.FC<StoreFilterSheetProps> = ({
             <Text style={styles.sectionTitle}>Categorías</Text>
             <View style={styles.categoryGrid}>
               {categories
-                .filter((cat) => cat.is_active)
-                .map((category) => {
+                .filter(cat => cat.is_active)
+                .map(category => {
                   const isSelected = localFilters.categories.includes(category.category_id);
                   return (
                     <TouchableOpacity
                       key={category.category_id}
-                      style={[
-                        styles.categoryChip,
-                        isSelected && styles.categoryChipSelected,
-                      ]}
+                      style={[styles.categoryChip, isSelected && styles.categoryChipSelected]}
                       onPress={() => toggleCategory(category.category_id)}
                       activeOpacity={0.7}
                     >
@@ -146,18 +137,14 @@ export const StoreFilterSheet: React.FC<StoreFilterSheetProps> = ({
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Distancia máxima</Text>
-              <Text style={styles.sectionValue}>
-                {localFilters.distanceRange || 50} km
-              </Text>
+              <Text style={styles.sectionValue}>{localFilters.distanceRange || 50} km</Text>
             </View>
             <CustomSlider
               value={localFilters.distanceRange || 50}
               minimumValue={1}
               maximumValue={50}
               step={1}
-              onValueChange={(value) =>
-                setLocalFilters({ ...localFilters, distanceRange: value })
-              }
+              onValueChange={value => setLocalFilters({ ...localFilters, distanceRange: value })}
             />
           </View>
 
@@ -181,9 +168,7 @@ export const StoreFilterSheet: React.FC<StoreFilterSheetProps> = ({
               minimumValue={1}
               maximumValue={5}
               step={1}
-              onValueChange={(value) =>
-                setLocalFilters({ ...localFilters, ratingRange: value })
-              }
+              onValueChange={value => setLocalFilters({ ...localFilters, ratingRange: value })}
             />
           </View>
 
@@ -194,16 +179,12 @@ export const StoreFilterSheet: React.FC<StoreFilterSheetProps> = ({
                 <Ionicons name="time-outline" size={24} color={Colors.primary} />
                 <View style={styles.toggleTextContainer}>
                   <Text style={styles.toggleTitle}>Abiertas ahora</Text>
-                  <Text style={styles.toggleSubtitle}>
-                    Mostrar solo tiendas abiertas
-                  </Text>
+                  <Text style={styles.toggleSubtitle}>Mostrar solo tiendas abiertas</Text>
                 </View>
               </View>
               <Switch
                 value={localFilters.openNow || false}
-                onValueChange={(value) =>
-                  setLocalFilters({ ...localFilters, openNow: value })
-                }
+                onValueChange={value => setLocalFilters({ ...localFilters, openNow: value })}
                 trackColor={{ false: Colors.lightGray, true: Colors.primaryLight }}
                 thumbColor={localFilters.openNow ? Colors.primary : Colors.white}
               />
@@ -213,18 +194,10 @@ export const StoreFilterSheet: React.FC<StoreFilterSheetProps> = ({
 
         {/* Footer Buttons */}
         <View style={styles.footer}>
-          <TouchableOpacity
-            style={styles.clearButton}
-            onPress={handleClear}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity style={styles.clearButton} onPress={handleClear} activeOpacity={0.7}>
             <Text style={styles.clearButtonText}>Limpiar todo</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.applyButton}
-            onPress={handleApply}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity style={styles.applyButton} onPress={handleApply} activeOpacity={0.7}>
             <Text style={styles.applyButtonText}>Aplicar filtros</Text>
           </TouchableOpacity>
         </View>
@@ -266,13 +239,9 @@ const CustomSlider: React.FC<CustomSliderProps> = ({
   return (
     <View
       style={styles.sliderContainer}
-      onLayout={(event) => setSliderWidth(event.nativeEvent.layout.width)}
+      onLayout={event => setSliderWidth(event.nativeEvent.layout.width)}
     >
-      <TouchableOpacity
-        style={styles.sliderTrack}
-        onPress={handlePress}
-        activeOpacity={1}
-      >
+      <TouchableOpacity style={styles.sliderTrack} onPress={handlePress} activeOpacity={1}>
         <View style={styles.sliderTrackInactive} />
         <View style={[styles.sliderTrackActive, { width: `${percentage}%` }]} />
         <View style={[styles.sliderThumb, { left: `${percentage}%` }]} />

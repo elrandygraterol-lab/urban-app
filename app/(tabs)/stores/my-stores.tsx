@@ -24,13 +24,7 @@ export default function MyStoresScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { showToast, showStatus } = useUnifiedNotifications();
-  const {
-    myStores,
-    loading,
-    error,
-    fetchMyStores,
-    clearError,
-  } = useStoreStore();
+  const { myStores, loading, error, fetchMyStores } = useStoreStore();
 
   // Local state
   const [activeTab, setActiveTab] = useState<TabType>('my-stores');
@@ -42,11 +36,11 @@ export default function MyStoresScreen() {
     // Note: The backend User model has a role field that should be 'owner' for store owners
     // For now, we'll check if the user can fetch their stores
     // The backend will return 403 if user doesn't have owner role
-    
+
     if (user) {
       fetchMyStores();
     }
-  }, [user]);
+  }, [user, fetchMyStores]);
 
   // Handle pull to refresh
   const handleRefresh = useCallback(async () => {
@@ -56,12 +50,15 @@ export default function MyStoresScreen() {
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [fetchMyStores]);
 
   // Handle store card press
-  const handleStorePress = (store: Store) => {
-    router.push(`/(tabs)/stores/${store.store_id}` as any);
-  };
+  const handleStorePress = useCallback(
+    (store: Store) => {
+      router.push(`/(tabs)/stores/${store.store_id}` as any);
+    },
+    [router]
+  );
 
   // Handle add new store
   const handleAddStore = () => {
@@ -69,88 +66,111 @@ export default function MyStoresScreen() {
   };
 
   // Handle edit store
-  const handleEditStore = (store: Store) => {
-    router.push({
-      pathname: '/(tabs)/stores/form' as any,
-      params: { storeId: store.store_id.toString() },
-    });
-  };
+  const handleEditStore = useCallback(
+    (store: Store) => {
+      router.push({
+        pathname: '/(tabs)/stores/form' as any,
+        params: { storeId: store.store_id.toString() },
+      });
+    },
+    [router]
+  );
 
   // Handle toggle store active status
-  const handleToggleActive = async (store: Store) => {
-    // This will be implemented in task 22
-    showStatus('info', `¿Deseas ${store.status === 'activa' ? 'desactivar' : 'activar'} esta tienda?`, 'Cambiar estado', undefined, { label: 'Confirmar', onPress: () => {
-      showToast('Esta función se implementará próximamente', 'info');
-    }});
-  };
+  const handleToggleActive = useCallback(
+    async (store: Store) => {
+      // This will be implemented in task 22
+      showStatus(
+        'info',
+        `¿Deseas ${store.status === 'activa' ? 'desactivar' : 'activar'} esta tienda?`,
+        'Cambiar estado',
+        undefined,
+        {
+          label: 'Confirmar',
+          onPress: () => {
+            showToast('Esta función se implementará próximamente', 'info');
+          },
+        }
+      );
+    },
+    [showStatus, showToast]
+  );
 
   // Handle view stats
-  const handleViewStats = (store: Store) => {
-    router.push(`/(tabs)/stores/stats/${store.store_id}` as any);
-  };
+  const handleViewStats = useCallback(
+    (store: Store) => {
+      router.push(`/(tabs)/stores/stats/${store.store_id}` as any);
+    },
+    [router]
+  );
 
   // Render quick actions for each store
-  const renderQuickActions = (store: Store) => {
-    const canToggle = store.status === 'activa' || store.status === 'inactiva';
+  const renderQuickActions = useCallback(
+    (store: Store) => {
+      const canToggle = store.status === 'activa' || store.status === 'inactiva';
 
-    return (
-      <View style={styles.quickActions}>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => handleEditStore(store)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="create-outline" size={20} color={Colors.primary} />
-          <Text style={styles.actionButtonText}>Editar</Text>
-        </TouchableOpacity>
-
-        {canToggle && (
+      return (
+        <View style={styles.quickActions}>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => handleToggleActive(store)}
+            onPress={() => handleEditStore(store)}
             activeOpacity={0.7}
           >
-            <Ionicons
-              name={store.status === 'activa' ? 'pause-outline' : 'play-outline'}
-              size={20}
-              color={Colors.primary}
-            />
-            <Text style={styles.actionButtonText}>
-              {store.status === 'activa' ? 'Desactivar' : 'Activar'}
-            </Text>
+            <Ionicons name="create-outline" size={20} color={Colors.primary} />
+            <Text style={styles.actionButtonText}>Editar</Text>
           </TouchableOpacity>
-        )}
 
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => handleViewStats(store)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="stats-chart-outline" size={20} color={Colors.primary} />
-          <Text style={styles.actionButtonText}>Estadísticas</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  };
+          {canToggle && (
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => handleToggleActive(store)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={store.status === 'activa' ? 'pause-outline' : 'play-outline'}
+                size={20}
+                color={Colors.primary}
+              />
+              <Text style={styles.actionButtonText}>
+                {store.status === 'activa' ? 'Desactivar' : 'Activar'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleViewStats(store)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="stats-chart-outline" size={20} color={Colors.primary} />
+            <Text style={styles.actionButtonText}>Estadísticas</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    },
+    [handleEditStore, handleToggleActive, handleViewStats]
+  );
 
   // Render store item with quick actions
-  const renderStoreItem = useCallback(({ item }: { item: Store }) => (
-    <View style={styles.storeItemContainer}>
-      <StoreCard
-        store={item}
-        onPress={() => handleStorePress(item)}
-        showDistance={false}
-      />
-      {renderQuickActions(item)}
-    </View>
-  ), []);
+  const renderStoreItem = useCallback(
+    ({ item }: { item: Store }) => (
+      <View style={styles.storeItemContainer}>
+        <StoreCard store={item} onPress={() => handleStorePress(item)} showDistance={false} />
+        {renderQuickActions(item)}
+      </View>
+    ),
+    [handleStorePress, renderQuickActions]
+  );
 
   // Get item layout for FlatList optimization
-  const getItemLayout = useCallback((data: any, index: number) => ({
-    length: 180, // Approximate height of store item + quick actions
-    offset: 180 * index,
-    index,
-  }), []);
+  const getItemLayout = useCallback(
+    (data: any, index: number) => ({
+      length: 180, // Approximate height of store item + quick actions
+      offset: 180 * index,
+      index,
+    }),
+    []
+  );
 
   // Key extractor for FlatList optimization
   const keyExtractor = useCallback((item: Store) => item.store_id.toString(), []);
@@ -277,11 +297,7 @@ export default function MyStoresScreen() {
 
       {/* Floating Action Button (FAB) */}
       {myStores.length > 0 && (
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={handleAddStore}
-          activeOpacity={0.8}
-        >
+        <TouchableOpacity style={styles.fab} onPress={handleAddStore} activeOpacity={0.8}>
           <Ionicons name="add" size={28} color={Colors.white} />
         </TouchableOpacity>
       )}

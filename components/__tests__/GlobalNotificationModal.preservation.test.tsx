@@ -21,7 +21,7 @@
 import * as fc from 'fast-check';
 import React from 'react';
 import { render, waitFor, fireEvent } from '@testing-library/react-native';
-import GlobalNotificationModal from '../GlobalNotificationModal';
+import { GlobalNotificationModal } from '../GlobalNotificationModal';
 import { useNotificationStore, NotificationType } from '@/store/notificationStore';
 
 // Mock Ionicons

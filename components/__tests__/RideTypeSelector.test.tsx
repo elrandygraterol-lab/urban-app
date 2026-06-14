@@ -1,6 +1,6 @@
 /**
  * Tests for RideTypeSelector component
- * 
+ *
  * Validates: Requirements 4.1, 9.1
  */
 

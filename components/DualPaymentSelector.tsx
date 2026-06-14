@@ -14,13 +14,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 
@@ -139,16 +133,11 @@ export default function DualPaymentSelector({
       round2(value.cashAmount + value.pagoMovilAmount) === round2(totalFare));
 
   const dualDifference =
-    value.mode === 'dual' &&
-    value.cashAmount !== undefined &&
-    value.pagoMovilAmount !== undefined
+    value.mode === 'dual' && value.cashAmount !== undefined && value.pagoMovilAmount !== undefined
       ? round2(value.cashAmount + value.pagoMovilAmount - totalFare)
       : null;
 
-  const showDualError =
-    value.mode === 'dual' &&
-    dualDifference !== null &&
-    dualDifference !== 0;
+  const showDualError = value.mode === 'dual' && dualDifference !== null && dualDifference !== 0;
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -194,12 +183,7 @@ export default function DualPaymentSelector({
             {/* Cash amount */}
             <View style={styles.amountField}>
               <Text style={styles.amountLabel}>Efectivo (Bs.)</Text>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  showDualError && styles.inputWrapperError,
-                ]}
-              >
+              <View style={[styles.inputWrapper, showDualError && styles.inputWrapperError]}>
                 <Ionicons name="cash-outline" size={18} color={Colors.mediumGray} />
                 <TextInput
                   style={styles.amountInput}
@@ -221,12 +205,7 @@ export default function DualPaymentSelector({
             {/* Pago móvil amount */}
             <View style={styles.amountField}>
               <Text style={styles.amountLabel}>Pago Móvil (Bs.)</Text>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  showDualError && styles.inputWrapperError,
-                ]}
-              >
+              <View style={[styles.inputWrapper, showDualError && styles.inputWrapperError]}>
                 <Ionicons name="phone-portrait-outline" size={18} color={Colors.mediumGray} />
                 <TextInput
                   style={styles.amountInput}
@@ -294,22 +273,20 @@ function ModeButton({ icon, label, selected, onPress, disabled, wide }: ModeButt
       accessibilityState={{ selected, disabled }}
       accessibilityLabel={label}
     >
-      <Ionicons
-        name={icon}
-        size={22}
-        color={selected ? Colors.primary : Colors.mediumGray}
-      />
+      <Ionicons name={icon} size={22} color={selected ? Colors.primary : Colors.mediumGray} />
       <Text
-        style={[
-          styles.modeButtonLabel,
-          selected && styles.modeButtonLabelSelected,
-        ]}
+        style={[styles.modeButtonLabel, selected && styles.modeButtonLabelSelected]}
         numberOfLines={2}
       >
         {label}
       </Text>
       {selected && (
-        <Ionicons name="checkmark-circle" size={14} color={Colors.primary} style={styles.checkIcon} />
+        <Ionicons
+          name="checkmark-circle"
+          size={14}
+          color={Colors.primary}
+          style={styles.checkIcon}
+        />
       )}
     </TouchableOpacity>
   );

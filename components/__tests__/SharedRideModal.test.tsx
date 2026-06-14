@@ -1,8 +1,8 @@
 /**
  * SharedRideModal Tests
- * 
+ *
  * Tests for WebSocket event subscription and handling in the SharedRideModal component
- * 
+ *
  * Task 14.4: Suscribirse a eventos WebSocket de invitación en la app del pasajero invitador
  */
 
@@ -34,12 +34,8 @@ jest.mock('@/utils/currency', () => ({
 }));
 
 describe('SharedRideModal - WebSocket Event Subscription (Task 14.4)', () => {
-  const mockPickupPoints = [
-    { latitude: 10.5, longitude: -66.9, address: 'Pickup 1' },
-  ];
-  const mockDestinationPoints = [
-    { latitude: 10.6, longitude: -66.8, address: 'Destination 1' },
-  ];
+  const mockPickupPoints = [{ latitude: 10.5, longitude: -66.9, address: 'Pickup 1' }];
+  const mockDestinationPoints = [{ latitude: 10.6, longitude: -66.8, address: 'Destination 1' }];
   const mockOnInvitationSent = jest.fn();
   const mockOnClose = jest.fn();
 
@@ -87,14 +83,14 @@ describe('SharedRideModal - WebSocket Event Subscription (Task 14.4)', () => {
 
   it('should handle invitation:accepted event correctly', async () => {
     let acceptedCallback: any;
-    (socketService.onSharedRideInvitationAccepted as jest.Mock).mockImplementation((cb) => {
+    (socketService.onSharedRideInvitationAccepted as jest.Mock).mockImplementation(cb => {
       acceptedCallback = cb;
       return jest.fn();
     });
     (socketService.onSharedRideInvitationRejected as jest.Mock).mockReturnValue(jest.fn());
     (socketService.onSharedRideInvitationExpired as jest.Mock).mockReturnValue(jest.fn());
 
-    const { getByText } = render(
+    render(
       <SharedRideModal
         visible={true}
         pickupPoints={mockPickupPoints}
@@ -139,7 +135,7 @@ describe('SharedRideModal - WebSocket Event Subscription (Task 14.4)', () => {
   it('should handle invitation:rejected event correctly', async () => {
     let rejectedCallback: any;
     (socketService.onSharedRideInvitationAccepted as jest.Mock).mockReturnValue(jest.fn());
-    (socketService.onSharedRideInvitationRejected as jest.Mock).mockImplementation((cb) => {
+    (socketService.onSharedRideInvitationRejected as jest.Mock).mockImplementation(cb => {
       rejectedCallback = cb;
       return jest.fn();
     });
@@ -177,9 +173,7 @@ describe('SharedRideModal - WebSocket Event Subscription (Task 14.4)', () => {
 
     // Should show alert and close modal
     await waitFor(() => {
-      expect(global.alert).toHaveBeenCalledWith(
-        expect.stringContaining('rechazó la invitación')
-      );
+      expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('rechazó la invitación'));
       expect(mockOnClose).toHaveBeenCalled();
     });
   });
@@ -188,7 +182,7 @@ describe('SharedRideModal - WebSocket Event Subscription (Task 14.4)', () => {
     let expiredCallback: any;
     (socketService.onSharedRideInvitationAccepted as jest.Mock).mockReturnValue(jest.fn());
     (socketService.onSharedRideInvitationRejected as jest.Mock).mockReturnValue(jest.fn());
-    (socketService.onSharedRideInvitationExpired as jest.Mock).mockImplementation((cb) => {
+    (socketService.onSharedRideInvitationExpired as jest.Mock).mockImplementation(cb => {
       expiredCallback = cb;
       return jest.fn();
     });
@@ -223,9 +217,7 @@ describe('SharedRideModal - WebSocket Event Subscription (Task 14.4)', () => {
 
     // Should show alert and close modal
     await waitFor(() => {
-      expect(global.alert).toHaveBeenCalledWith(
-        expect.stringContaining('ha expirado')
-      );
+      expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('ha expirado'));
       expect(mockOnClose).toHaveBeenCalled();
     });
   });
@@ -235,8 +227,12 @@ describe('SharedRideModal - WebSocket Event Subscription (Task 14.4)', () => {
     const mockCleanupRejected = jest.fn();
     const mockCleanupExpired = jest.fn();
 
-    (socketService.onSharedRideInvitationAccepted as jest.Mock).mockReturnValue(mockCleanupAccepted);
-    (socketService.onSharedRideInvitationRejected as jest.Mock).mockReturnValue(mockCleanupRejected);
+    (socketService.onSharedRideInvitationAccepted as jest.Mock).mockReturnValue(
+      mockCleanupAccepted
+    );
+    (socketService.onSharedRideInvitationRejected as jest.Mock).mockReturnValue(
+      mockCleanupRejected
+    );
     (socketService.onSharedRideInvitationExpired as jest.Mock).mockReturnValue(mockCleanupExpired);
 
     const { rerender, unmount } = render(
@@ -275,7 +271,7 @@ describe('SharedRideModal - WebSocket Event Subscription (Task 14.4)', () => {
 
   it('should only handle events matching the current invitation ID', async () => {
     let acceptedCallback: any;
-    (socketService.onSharedRideInvitationAccepted as jest.Mock).mockImplementation((cb) => {
+    (socketService.onSharedRideInvitationAccepted as jest.Mock).mockImplementation(cb => {
       acceptedCallback = cb;
       return jest.fn();
     });
@@ -323,20 +319,16 @@ describe('SharedRideModal - WebSocket Event Subscription (Task 14.4)', () => {
 
 /**
  * SharedRideModal Payment Integration Tests
- * 
+ *
  * Tests for DualPaymentSelector integration in shared ride flow
- * 
+ *
  * Task 14.5: Integrar DualPaymentSelector en el flujo de viaje compartido para cada pasajero
  * Requirements: 5.1, 5.2, 5.3
  */
 
 describe('SharedRideModal - Payment Integration (Task 14.5)', () => {
-  const mockPickupPoints = [
-    { latitude: 10.5, longitude: -66.9, address: 'Pickup 1' },
-  ];
-  const mockDestinationPoints = [
-    { latitude: 10.6, longitude: -66.8, address: 'Destination 1' },
-  ];
+  const mockPickupPoints = [{ latitude: 10.5, longitude: -66.9, address: 'Pickup 1' }];
+  const mockDestinationPoints = [{ latitude: 10.6, longitude: -66.8, address: 'Destination 1' }];
   const mockOnInvitationSent = jest.fn();
   const mockOnClose = jest.fn();
 
@@ -367,7 +359,7 @@ describe('SharedRideModal - Payment Integration (Task 14.5)', () => {
     // This test verifies that the validation logic in handleConfirmInvitation
     // correctly validates dual payment amounts against the passenger's share
     // The actual validation happens when the user tries to send the invitation
-    
+
     // The component should:
     // 1. Calculate costPerPassenger = estimatedFare / 2
     // 2. Validate that cashAmount + pagoMovilAmount === costPerPassenger
@@ -465,11 +457,11 @@ describe('SharedRideModal - Payment Integration (Task 14.5)', () => {
     // This test verifies that payment validation uses 2 decimal precision
     // to avoid floating-point arithmetic issues
 
-    const costPerPassenger = 50.00;
-    
+    const costPerPassenger = 50.0;
+
     // Test case 1: Amounts that sum correctly with 2 decimal precision
-    const cashAmount1 = 30.50;
-    const pagoMovilAmount1 = 19.50;
+    const cashAmount1 = 30.5;
+    const pagoMovilAmount1 = 19.5;
     const sum1 = Math.round((cashAmount1 + pagoMovilAmount1) * 100) / 100;
     expect(sum1).toBe(costPerPassenger);
 

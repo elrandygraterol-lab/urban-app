@@ -1,9 +1,9 @@
 /**
  * MapRoutingService
- * 
+ *
  * Provides road-based routing using Google Maps Directions API.
  * Replaces straight-line routing with real road network calculations.
- * 
+ *
  * Requirements: 2.1, 2.7
  */
 
@@ -70,7 +70,7 @@ export const VehicleRoutingPresets = {
 };
 
 export interface RouteResult {
-  coordinates: Array<{ latitude: number; longitude: number }>;
+  coordinates: { latitude: number; longitude: number }[];
   distance: number; // in kilometers
   duration: number; // in minutes
   steps?: NavigationStep[];
@@ -100,11 +100,13 @@ class MapRoutingService {
   constructor() {
     // Initialize with API key from environment
     this.apiKey = GOOGLE_MAPS_API_KEY;
-    
+
     if (!this.apiKey) {
-      console.warn('[MapRoutingService] Google Maps API key not configured. Set EXPO_PUBLIC_GOOGLE_MAPS_API_KEY in .env');
+      console.warn(
+        '[MapRoutingService] Google Maps API key not configured. Set EXPO_PUBLIC_GOOGLE_MAPS_API_KEY in .env'
+      );
     }
-    
+
     // On web, we can use the Google Maps JavaScript API directly
     if (Platform.OS === 'web' && typeof window !== 'undefined' && (window as any).google) {
       this.directionsService = new (window as any).google.maps.DirectionsService();
@@ -118,7 +120,7 @@ class MapRoutingService {
     if (apiKey) {
       this.apiKey = apiKey;
     }
-    
+
     // On web, we can use the Google Maps JavaScript API directly
     if (Platform.OS === 'web' && typeof window !== 'undefined' && (window as any).google) {
       this.directionsService = new (window as any).google.maps.DirectionsService();
@@ -127,7 +129,7 @@ class MapRoutingService {
 
   /**
    * Calculate route using Google Maps Directions API
-   * 
+   *
    * @param origin - Starting location
    * @param destination - Ending location
    * @param options - Routing options (avoid tolls, highways, etc.)
@@ -159,7 +161,7 @@ class MapRoutingService {
       return await this.calculateRouteViaRestAPI(origin, destination, options);
     } catch (error) {
       console.error('[MapRoutingService] Error calculating route:', error);
-      
+
       // Return fallback route on error
       console.warn('[MapRoutingService] Falling back to straight-line route due to API error');
       return this.getFallbackRoute(origin, destination);
@@ -169,15 +171,12 @@ class MapRoutingService {
   /**
    * Calculate route optimized for taxi/ride-sharing
    * Uses preset options: avoid tolls, prefer highways, avoid ferries
-   * 
+   *
    * @param origin - Starting location
    * @param destination - Ending location
    * @returns Promise with route data
    */
-  async calculateTaxiRoute(
-    origin: Location,
-    destination: Location
-  ): Promise<RouteResult> {
+  async calculateTaxiRoute(origin: Location, destination: Location): Promise<RouteResult> {
     return this.calculateRoute(origin, destination, VehicleRoutingPresets.TAXI);
   }
 
@@ -215,17 +214,19 @@ class MapRoutingService {
 
     try {
       const response = await fetch(url);
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
 
       if (data.status !== 'OK') {
         const errorMessage = data.error_message || 'Unknown error';
-        console.error(`[MapRoutingService] Google Maps API error: ${data.status} - ${errorMessage}`);
-        
+        console.error(
+          `[MapRoutingService] Google Maps API error: ${data.status} - ${errorMessage}`
+        );
+
         // Handle specific error cases
         if (data.status === 'ZERO_RESULTS') {
           throw new Error('No route found between the specified locations');
@@ -261,7 +262,10 @@ class MapRoutingService {
     return new Promise((resolve, reject) => {
       const request = {
         origin: new (window as any).google.maps.LatLng(origin.latitude, origin.longitude),
-        destination: new (window as any).google.maps.LatLng(destination.latitude, destination.longitude),
+        destination: new (window as any).google.maps.LatLng(
+          destination.latitude,
+          destination.longitude
+        ),
         travelMode: (window as any).google.maps.TravelMode.DRIVING,
         avoidTolls: options.avoidTolls || false,
         avoidHighways: options.avoidHighways || false,
@@ -379,8 +383,8 @@ class MapRoutingService {
    * Decode Google Maps polyline encoding
    * Algorithm from: https://developers.google.com/maps/documentation/utilities/polylinealgorithm
    */
-  private decodePolyline(encoded: string): Array<{ latitude: number; longitude: number }> {
-    const coordinates: Array<{ latitude: number; longitude: number }> = [];
+  private decodePolyline(encoded: string): { latitude: number; longitude: number }[] {
+    const coordinates: { latitude: number; longitude: number }[] = [];
     let index = 0;
     let lat = 0;
     let lng = 0;
@@ -433,17 +437,14 @@ class MapRoutingService {
    * Validate a route against road network
    * Checks if the route follows actual roads
    */
-  async validateRoute(coordinates: Array<Location>): Promise<boolean> {
+  async validateRoute(coordinates: Location[]): Promise<boolean> {
     if (coordinates.length < 2) {
       return false;
     }
 
     try {
       // Calculate route between first and last point
-      const route = await this.calculateRoute(
-        coordinates[0],
-        coordinates[coordinates.length - 1]
-      );
+      const route = await this.calculateRoute(coordinates[0], coordinates[coordinates.length - 1]);
 
       // If we got a valid route with coordinates, it follows roads
       return route.coordinates.length > 0;

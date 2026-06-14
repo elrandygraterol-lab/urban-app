@@ -1,9 +1,9 @@
 /**
  * SequentialNavigationManager
- * 
+ *
  * Manages two-phase navigation: pickup → destination
  * Handles automatic transition between phases and phase-specific instructions.
- * 
+ *
  * Requirements: 2.5
  */
 
@@ -39,7 +39,7 @@ export interface SequentialNavigationCallbacks {
 
 /**
  * SequentialNavigationManager
- * 
+ *
  * Manages sequential navigation from current location → pickup → destination
  * Automatically transitions between phases when proximity thresholds are met
  */
@@ -79,9 +79,13 @@ export class SequentialNavigationManager {
           this.pickupLocation,
           'pickup'
         );
-        
-        this.state.pickupConfig = this.createPhaseConfig('pickup', this.pickupLocation, pickupRoute);
-        
+
+        this.state.pickupConfig = this.createPhaseConfig(
+          'pickup',
+          this.pickupLocation,
+          pickupRoute
+        );
+
         // Notify phase change
         this.callbacks.onPhaseChange?.('pickup', this.state.pickupConfig);
       } else {
@@ -91,13 +95,13 @@ export class SequentialNavigationManager {
           this.destinationLocation,
           'destination'
         );
-        
+
         this.state.destinationConfig = this.createPhaseConfig(
           'destination',
           this.destinationLocation,
           destinationRoute
         );
-        
+
         // Notify phase change
         this.callbacks.onPhaseChange?.('destination', this.state.destinationConfig);
       }
@@ -124,7 +128,7 @@ export class SequentialNavigationManager {
 
     // Find current step based on location
     const newStepIndex = this.findCurrentStep(currentLocation, currentConfig.instructions);
-    
+
     // Check if step changed
     if (newStepIndex !== this.state.currentStepIndex) {
       this.state.currentStepIndex = newStepIndex;
@@ -136,7 +140,7 @@ export class SequentialNavigationManager {
 
     // Check if we've reached the target for current phase
     const distanceToTarget = this.calculateDistance(currentLocation, currentConfig.target);
-    
+
     if (distanceToTarget <= this.proximityThreshold) {
       await this.handlePhaseCompletion(currentLocation);
     }
@@ -207,12 +211,12 @@ export class SequentialNavigationManager {
     try {
       // Use taxi-optimized routing
       const route = await mapRoutingService.calculateTaxiRoute(origin, destination);
-      
+
       // Enhance instructions with phase-specific context
       if (route.steps) {
         route.steps = this.enhanceInstructionsForPhase(route.steps, phase);
       }
-      
+
       return route;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(`Failed to calculate ${phase} route`);

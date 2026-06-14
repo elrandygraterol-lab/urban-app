@@ -44,7 +44,7 @@ export default function RatingModal({
       setComment('');
       onClose();
       onSubmit?.();
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to submit rating');
     } finally {
       setLoading(false);

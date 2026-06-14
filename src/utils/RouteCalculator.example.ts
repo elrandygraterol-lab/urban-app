@@ -1,6 +1,6 @@
 /**
  * RouteCalculator Usage Examples
- * 
+ *
  * Demonstrates how to use the RouteCalculator for road-based route calculations
  */
 
@@ -11,7 +11,7 @@ import { Location } from '../services/MapRoutingService';
 async function example1_BasicDistanceCalculation() {
   console.log('=== Example 1: Basic Distance Calculation ===');
 
-  const pickup: Location = { latitude: 40.7128, longitude: -74.0060 }; // New York
+  const pickup: Location = { latitude: 40.7128, longitude: -74.006 }; // New York
   const destination: Location = { latitude: 40.7589, longitude: -73.9851 }; // Times Square
 
   try {
@@ -30,7 +30,7 @@ async function example1_BasicDistanceCalculation() {
 async function example2_DistanceWithTraffic() {
   console.log('=== Example 2: Distance Calculation with Traffic ===');
 
-  const pickup: Location = { latitude: 40.7128, longitude: -74.0060 };
+  const pickup: Location = { latitude: 40.7128, longitude: -74.006 };
   const destination: Location = { latitude: 40.7589, longitude: -73.9851 };
 
   const options: RouteCalculationOptions = {
@@ -44,7 +44,7 @@ async function example2_DistanceWithTraffic() {
     console.log('Duration without traffic:', result.durationWithoutTraffic, 'minutes');
     console.log('Duration with traffic:', result.duration, 'minutes');
     console.log('Traffic delay:', result.trafficDelay, 'minutes');
-    
+
     if (result.trafficData) {
       console.log('Congestion level:', result.trafficData.congestionLevel);
       console.log('Affected segments:', result.trafficData.affectedSegments.length);
@@ -58,7 +58,7 @@ async function example2_DistanceWithTraffic() {
 async function example3_DistanceWithRoutingOptions() {
   console.log('=== Example 3: Distance Calculation with Routing Options ===');
 
-  const pickup: Location = { latitude: 40.7128, longitude: -74.0060 };
+  const pickup: Location = { latitude: 40.7128, longitude: -74.006 };
   const destination: Location = { latitude: 40.7589, longitude: -73.9851 };
 
   const options: RouteCalculationOptions = {
@@ -82,14 +82,17 @@ async function example3_DistanceWithRoutingOptions() {
 async function example4_TravelTimeCalculation() {
   console.log('=== Example 4: Travel Time Calculation ===');
 
-  const pickup: Location = { latitude: 40.7128, longitude: -74.0060 };
+  const pickup: Location = { latitude: 40.7128, longitude: -74.006 };
   const destination: Location = { latitude: 40.7589, longitude: -73.9851 };
 
   try {
     const travelTime = await routeCalculator.calculateTravelTime(pickup, destination);
 
     console.log('Estimated travel time:', travelTime, 'minutes');
-    console.log('Estimated arrival:', new Date(Date.now() + travelTime * 60000).toLocaleTimeString());
+    console.log(
+      'Estimated arrival:',
+      new Date(Date.now() + travelTime * 60000).toLocaleTimeString()
+    );
   } catch (error) {
     console.error('Error calculating travel time:', error);
   }
@@ -99,7 +102,7 @@ async function example4_TravelTimeCalculation() {
 async function example5_RouteValidation() {
   console.log('=== Example 5: Route Validation ===');
 
-  const pickup: Location = { latitude: 40.7128, longitude: -74.0060 };
+  const pickup: Location = { latitude: 40.7128, longitude: -74.006 };
   const destination: Location = { latitude: 40.7589, longitude: -73.9851 };
 
   try {
@@ -122,12 +125,12 @@ async function example5_RouteValidation() {
 async function example6_TaxiFareEstimation() {
   console.log('=== Example 6: Taxi Fare Estimation ===');
 
-  const pickup: Location = { latitude: 40.7128, longitude: -74.0060 };
+  const pickup: Location = { latitude: 40.7128, longitude: -74.006 };
   const destination: Location = { latitude: 40.7589, longitude: -73.9851 };
 
-  const BASE_FARE = 3.00; // $3.00 base fare
-  const PER_KM_RATE = 2.50; // $2.50 per km
-  const PER_MINUTE_RATE = 0.50; // $0.50 per minute
+  const BASE_FARE = 3.0; // $3.00 base fare
+  const PER_KM_RATE = 2.5; // $2.50 per km
+  const PER_MINUTE_RATE = 0.5; // $0.50 per minute
 
   try {
     const result = await routeCalculator.calculateDistance(pickup, destination, {
@@ -149,7 +152,10 @@ async function example6_TaxiFareEstimation() {
     if (result.trafficDelay > 0) {
       console.log('---');
       console.log('Traffic delay:', result.trafficDelay.toFixed(0), 'minutes');
-      console.log('Additional cost due to traffic:', `$${(result.trafficDelay * PER_MINUTE_RATE).toFixed(2)}`);
+      console.log(
+        'Additional cost due to traffic:',
+        `$${(result.trafficDelay * PER_MINUTE_RATE).toFixed(2)}`
+      );
     }
   } catch (error) {
     console.error('Error estimating fare:', error);
@@ -160,7 +166,7 @@ async function example6_TaxiFareEstimation() {
 async function example7_MultipleRouteComparison() {
   console.log('=== Example 7: Multiple Route Comparison ===');
 
-  const pickup: Location = { latitude: 40.7128, longitude: -74.0060 };
+  const pickup: Location = { latitude: 40.7128, longitude: -74.006 };
   const destination: Location = { latitude: 40.7589, longitude: -73.9851 };
 
   try {
@@ -200,7 +206,7 @@ async function example7_MultipleRouteComparison() {
 async function example8_RealtimeETAUpdates() {
   console.log('=== Example 8: Real-time ETA Updates ===');
 
-  const pickup: Location = { latitude: 40.7128, longitude: -74.0060 };
+  const pickup: Location = { latitude: 40.7128, longitude: -74.006 };
   const destination: Location = { latitude: 40.7589, longitude: -73.9851 };
 
   try {
@@ -236,25 +242,25 @@ async function example8_RealtimeETAUpdates() {
 export async function runAllExamples() {
   await example1_BasicDistanceCalculation();
   console.log('\n');
-  
+
   await example2_DistanceWithTraffic();
   console.log('\n');
-  
+
   await example3_DistanceWithRoutingOptions();
   console.log('\n');
-  
+
   await example4_TravelTimeCalculation();
   console.log('\n');
-  
+
   await example5_RouteValidation();
   console.log('\n');
-  
+
   await example6_TaxiFareEstimation();
   console.log('\n');
-  
+
   await example7_MultipleRouteComparison();
   console.log('\n');
-  
+
   await example8_RealtimeETAUpdates();
 }
 

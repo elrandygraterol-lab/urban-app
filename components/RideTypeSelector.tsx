@@ -16,14 +16,7 @@
  */
 
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Modal,
-  TouchableOpacity,
-  ScrollView,
-} from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
@@ -111,19 +104,9 @@ export default function RideTypeSelector({
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View
-          style={[
-            styles.container,
-            { paddingBottom: Math.max(insets.bottom, 24) },
-          ]}
-        >
+        <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
@@ -140,9 +123,7 @@ export default function RideTypeSelector({
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.subtitle}>
-            Selecciona el tipo de viaje que deseas solicitar
-          </Text>
+          <Text style={styles.subtitle}>Selecciona el tipo de viaje que deseas solicitar</Text>
 
           {/* Options list */}
           <ScrollView
@@ -150,7 +131,7 @@ export default function RideTypeSelector({
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {RIDE_TYPE_OPTIONS.map((option) => (
+            {RIDE_TYPE_OPTIONS.map(option => (
               <TouchableOpacity
                 key={option.id}
                 style={[
@@ -166,34 +147,20 @@ export default function RideTypeSelector({
                 accessibilityHint={option.description}
               >
                 <View style={styles.optionIconContainer}>
-                  <Ionicons
-                    name={option.icon}
-                    size={32}
-                    color={option.iconColor}
-                  />
+                  <Ionicons name={option.icon} size={32} color={option.iconColor} />
                 </View>
                 <View style={styles.optionContent}>
                   <Text style={styles.optionTitle}>{option.title}</Text>
-                  <Text style={styles.optionDescription}>
-                    {option.description}
-                  </Text>
+                  <Text style={styles.optionDescription}>{option.description}</Text>
                 </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={Colors.mediumGray}
-                />
+                <Ionicons name="chevron-forward" size={20} color={Colors.mediumGray} />
               </TouchableOpacity>
             ))}
           </ScrollView>
 
           {/* Info message */}
           <View style={styles.infoCard}>
-            <Ionicons
-              name="information-circle-outline"
-              size={20}
-              color={Colors.primary}
-            />
+            <Ionicons name="information-circle-outline" size={20} color={Colors.primary} />
             <Text style={styles.infoText}>
               Puedes cambiar el tipo de viaje en cualquier momento antes de confirmar la solicitud.
             </Text>

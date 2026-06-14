@@ -30,41 +30,44 @@ export default function NotificationsScreen() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  const fetchNotifications = useCallback(async (pageNum: number = 1, append: boolean = false) => {
-    try {
-      if (pageNum === 1) {
-        setLoading(true);
+  const fetchNotifications = useCallback(
+    async (pageNum: number = 1, append: boolean = false) => {
+      try {
+        if (pageNum === 1) {
+          setLoading(true);
+        }
+
+        const response = await notificationAPI.getNotifications({ page: pageNum, limit: 20 });
+        const { notifications: newNotifications, pagination } = response.data;
+
+        if (append) {
+          setNotifications(prev => [...prev, ...newNotifications]);
+        } else {
+          setNotifications(newNotifications);
+        }
+
+        setHasMore(pagination.page < pagination.totalPages);
+        setPage(pageNum);
+
+        // Update unread count in store
+        const unreadCount = newNotifications.filter((n: StoreNotification) => !n.readStatus).length;
+        setUnreadCount(unreadCount);
+      } catch (error) {
+        console.error('Error fetching notifications:', error);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-
-      const response = await notificationAPI.getNotifications({ page: pageNum, limit: 20 });
-      const { notifications: newNotifications, pagination } = response.data;
-
-      if (append) {
-        setNotifications(prev => [...prev, ...newNotifications]);
-      } else {
-        setNotifications(newNotifications);
-      }
-
-      setHasMore(pagination.page < pagination.totalPages);
-      setPage(pageNum);
-
-      // Update unread count in store
-      const unreadCount = newNotifications.filter((n: StoreNotification) => !n.readStatus).length;
-      setUnreadCount(unreadCount);
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [setUnreadCount]);
+    },
+    [setUnreadCount]
+  );
 
   useEffect(() => {
     fetchNotifications();
     // Requirement 6.3: mark all as read and reset badge when screen mounts
     notificationAPI.markAllRead().catch(() => {});
     Notifications.setBadgeCountAsync(0).catch(() => {});
-  }, []);
+  }, [fetchNotifications]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);

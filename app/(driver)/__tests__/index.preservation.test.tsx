@@ -18,6 +18,11 @@
 import * as fc from 'fast-check';
 import React from 'react';
 import { render, waitFor, fireEvent } from '@testing-library/react-native';
+import { useRouter } from 'expo-router';
+import { rideAPI } from '@/services/api';
+
+// Import component AFTER all mocks are set up
+import DriverHomeScreen from '../index';
 
 // Mock dependencies BEFORE importing component
 jest.mock('expo-router', () => ({
@@ -61,7 +66,6 @@ jest.mock('expo-location', () => ({
 }));
 
 jest.mock('react-native-maps', () => {
-  const React = require('react');
   const MapView = React.forwardRef((props: any, ref: any) => {
     return React.createElement('MapView', { ...props, ref, testID: 'map-view' });
   });
@@ -100,9 +104,6 @@ jest.mock('@/services/socket', () => ({
   getSocket: jest.fn(() => mockSocket),
   disconnectSocket: jest.fn(),
 }));
-
-// Import component AFTER all mocks are set up
-import DriverHomeScreen from '../index';
 
 describe('Preservation Properties: Non-Display Functionality', () => {
   beforeEach(() => {
@@ -205,12 +206,11 @@ describe('Preservation Properties: Non-Display Functionality', () => {
           expiresAt: fc.date().map(d => d.toISOString()),
         }),
         async rideRequest => {
-          const mockRouter = require('expo-router').useRouter();
-          const { rideAPI } = require('@/services/api');
-          rideAPI.acceptRide.mockClear();
-          mockRouter.push.mockClear();
+          const mockRouter = useRouter();
+          (rideAPI.acceptRide as jest.Mock).mockClear();
+          (mockRouter.push as jest.Mock).mockClear();
 
-          const { getByText, queryByText } = render(<DriverHomeScreen />);
+          const { queryByText } = render(<DriverHomeScreen />);
 
           await waitFor(() => {
             expect(mockSocket).not.toBeNull();

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
-import { InteractionManager, Platform, StatusBar } from 'react-native';
+import { InteractionManager } from 'react-native';
 import 'react-native-reanimated';
 // import { CopilotProvider } from 'react-native-copilot';
 // import CopilotTooltip from '@/components/tutorial/CopilotTooltip';
@@ -40,7 +40,7 @@ function AppContent() {
   useEffect(() => {
     logInfo('App Initialization', 'Loading stored authentication...');
     loadStoredAuth();
-  }, []);
+  }, [loadStoredAuth]);
 
   // Log notification setup status
   useEffect(() => {
@@ -140,7 +140,7 @@ function AppContent() {
     } catch (error) {
       logError('Navigation', error, { segments, isAuthenticated, userRole: user?.role });
     }
-  }, [isAuthenticated, user, segments, isNavigationReady]);
+  }, [isAuthenticated, user?.id, user?.role, segments, isNavigationReady, router]);
 
   return (
     <>
@@ -162,7 +162,7 @@ export default function RootLayout() {
     <ErrorBoundary>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <UnifiedNotificationProvider>
-            <AppContent />
+          <AppContent />
         </UnifiedNotificationProvider>
       </ThemeProvider>
     </ErrorBoundary>

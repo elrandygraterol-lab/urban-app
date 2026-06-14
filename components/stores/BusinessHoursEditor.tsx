@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { BusinessHours, DayHours } from '@/types/store';
+import { BusinessHours } from '@/types/store';
 import { Colors, Typography, BorderRadius, Spacing, Shadows } from '@/constants/theme';
 
 interface BusinessHoursEditorProps {
@@ -30,10 +30,7 @@ const DAYS: { key: DayKey; label: string }[] = [
   { key: 'sunday', label: 'Domingo' },
 ];
 
-export const BusinessHoursEditor: React.FC<BusinessHoursEditorProps> = ({
-  hours,
-  onChange,
-}) => {
+export const BusinessHoursEditor: React.FC<BusinessHoursEditorProps> = ({ hours, onChange }) => {
   const [showTimePicker, setShowTimePicker] = useState<{
     day: DayKey | null;
     type: 'open' | 'close' | null;
@@ -223,17 +220,13 @@ export const BusinessHoursEditor: React.FC<BusinessHoursEditorProps> = ({
             <View style={styles.pickerOverlay}>
               <View style={styles.pickerContainer}>
                 <View style={styles.pickerHeader}>
-                  <TouchableOpacity
-                    onPress={() => setShowTimePicker({ day: null, type: null })}
-                  >
+                  <TouchableOpacity onPress={() => setShowTimePicker({ day: null, type: null })}>
                     <Text style={styles.pickerButton}>Cancelar</Text>
                   </TouchableOpacity>
                   <Text style={styles.pickerTitle}>
                     {showTimePicker.type === 'open' ? 'Hora de Apertura' : 'Hora de Cierre'}
                   </Text>
-                  <TouchableOpacity
-                    onPress={() => setShowTimePicker({ day: null, type: null })}
-                  >
+                  <TouchableOpacity onPress={() => setShowTimePicker({ day: null, type: null })}>
                     <Text style={[styles.pickerButton, styles.pickerButtonDone]}>Listo</Text>
                   </TouchableOpacity>
                 </View>

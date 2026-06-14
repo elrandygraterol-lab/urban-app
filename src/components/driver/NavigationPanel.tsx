@@ -1,19 +1,19 @@
 /**
  * NavigationPanel Component
- * 
+ *
  * Provides real-time turn-by-turn navigation for drivers.
  * Displays current instruction, distance to next maneuver, progress, and ETA.
- * 
+ *
  * Requirements: 2.4
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { NavigationStep, Location } from '../../services/MapRoutingService';
-import { 
-  SequentialNavigationManager, 
+import {
+  SequentialNavigationManager,
   NavigationPhase,
-  NavigationPhaseConfig 
+  NavigationPhaseConfig,
 } from '../../services/SequentialNavigationManager';
 
 export interface NavigationPanelProps {
@@ -65,7 +65,7 @@ export const NavigationPanel: React.FC<NavigationPanelProps> = ({
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Use ref to maintain navigation manager instance
   const navigationManagerRef = useRef<SequentialNavigationManager | null>(null);
 
@@ -78,67 +78,63 @@ export const NavigationPanel: React.FC<NavigationPanelProps> = ({
       setError(null);
 
       // Create navigation manager
-      const manager = new SequentialNavigationManager(
-        pickupLocation,
-        destination,
-        {
-          onPhaseChange: (phase: NavigationPhase, config: NavigationPhaseConfig) => {
-            console.log('[NavigationPanel] Phase changed to:', phase);
-            
-            // Update state with new phase configuration
-            setNavigationState(prev => ({
-              ...prev,
-              phase,
-              steps: config.instructions,
-              totalDistance: config.distance,
-              totalDuration: config.duration,
-              remainingDistance: config.distance,
-              remainingDuration: config.duration,
-              currentStepIndex: 0,
-              eta: config.eta,
-            }));
+      const manager = new SequentialNavigationManager(pickupLocation, destination, {
+        onPhaseChange: (phase: NavigationPhase, config: NavigationPhaseConfig) => {
+          console.log('[NavigationPanel] Phase changed to:', phase);
 
-            // Notify parent
-            onPhaseChange?.(phase);
-            onRouteCalculated?.(config.instructions, config.distance, config.duration);
-          },
-          onStepChange: (stepIndex: number, step: NavigationStep) => {
-            console.log('[NavigationPanel] Step changed to:', stepIndex, step.instruction);
-            setNavigationState(prev => ({
-              ...prev,
-              currentStepIndex: stepIndex,
-            }));
-          },
-          onTransitionStart: (fromPhase: NavigationPhase, toPhase: NavigationPhase) => {
-            console.log('[NavigationPanel] Transitioning from', fromPhase, 'to', toPhase);
-            setIsLoading(true);
-          },
-          onTransitionComplete: (phase: NavigationPhase, config: NavigationPhaseConfig) => {
-            console.log('[NavigationPanel] Transition complete to:', phase);
-            setIsLoading(false);
-          },
-          onNavigationComplete: () => {
-            console.log('[NavigationPanel] Navigation completed');
-            setNavigationState(prev => ({
-              ...prev,
-              phase: 'completed',
-            }));
-            onPhaseChange?.('completed');
-          },
-          onError: (err: Error, phase: NavigationPhase) => {
-            console.error('[NavigationPanel] Error in phase', phase, ':', err);
-            setError(`Navigation error: ${err.message}`);
-            setIsLoading(false);
-          },
-        }
-      );
+          // Update state with new phase configuration
+          setNavigationState(prev => ({
+            ...prev,
+            phase,
+            steps: config.instructions,
+            totalDistance: config.distance,
+            totalDuration: config.duration,
+            remainingDistance: config.distance,
+            remainingDuration: config.duration,
+            currentStepIndex: 0,
+            eta: config.eta,
+          }));
+
+          // Notify parent
+          onPhaseChange?.(phase);
+          onRouteCalculated?.(config.instructions, config.distance, config.duration);
+        },
+        onStepChange: (stepIndex: number, step: NavigationStep) => {
+          console.log('[NavigationPanel] Step changed to:', stepIndex, step.instruction);
+          setNavigationState(prev => ({
+            ...prev,
+            currentStepIndex: stepIndex,
+          }));
+        },
+        onTransitionStart: (fromPhase: NavigationPhase, toPhase: NavigationPhase) => {
+          console.log('[NavigationPanel] Transitioning from', fromPhase, 'to', toPhase);
+          setIsLoading(true);
+        },
+        onTransitionComplete: (phase: NavigationPhase, config: NavigationPhaseConfig) => {
+          console.log('[NavigationPanel] Transition complete to:', phase);
+          setIsLoading(false);
+        },
+        onNavigationComplete: () => {
+          console.log('[NavigationPanel] Navigation completed');
+          setNavigationState(prev => ({
+            ...prev,
+            phase: 'completed',
+          }));
+          onPhaseChange?.('completed');
+        },
+        onError: (err: Error, phase: NavigationPhase) => {
+          console.error('[NavigationPanel] Error in phase', phase, ':', err);
+          setError(`Navigation error: ${err.message}`);
+          setIsLoading(false);
+        },
+      });
 
       // Initialize the manager
       await manager.initialize(currentLocation);
-      
+
       // Store manager in ref
       navigationManagerRef.current = manager;
-      
+
       setIsLoading(false);
     } catch (err) {
       console.error('[NavigationPanel] Error initializing navigation:', err);
@@ -187,7 +183,7 @@ export const NavigationPanel: React.FC<NavigationPanelProps> = ({
    */
   useEffect(() => {
     initializeNavigation();
-    
+
     // Cleanup on unmount
     return () => {
       if (navigationManagerRef.current) {
@@ -195,7 +191,7 @@ export const NavigationPanel: React.FC<NavigationPanelProps> = ({
         navigationManagerRef.current = null;
       }
     };
-  }, []); // Only run on mount
+  }, [initializeNavigation]);
 
   /**
    * Update progress when location changes
@@ -217,21 +213,6 @@ export const NavigationPanel: React.FC<NavigationPanelProps> = ({
   };
 
   /**
-   * Format duration for display
-   */
-  const formatDuration = (durationMin: number): string => {
-    if (durationMin < 1) {
-      return '< 1 min';
-    }
-    if (durationMin < 60) {
-      return `${Math.round(durationMin)} min`;
-    }
-    const hours = Math.floor(durationMin / 60);
-    const minutes = Math.round(durationMin % 60);
-    return `${hours}h ${minutes}m`;
-  };
-
-  /**
    * Format ETA for display
    */
   const formatETA = (eta: Date | null): string => {
@@ -244,7 +225,7 @@ export const NavigationPanel: React.FC<NavigationPanelProps> = ({
    */
   const getManeuverIcon = (maneuver?: string): string => {
     if (!maneuver) return '→';
-    
+
     const icons: Record<string, string> = {
       'turn-left': '←',
       'turn-right': '→',
@@ -254,10 +235,10 @@ export const NavigationPanel: React.FC<NavigationPanelProps> = ({
       'turn-sharp-right': '➡',
       'uturn-left': '↶',
       'uturn-right': '↷',
-      'merge': '⤴',
+      merge: '⤴',
       'roundabout-left': '↺',
       'roundabout-right': '↻',
-      'straight': '↑',
+      straight: '↑',
     };
 
     return icons[maneuver] || '→';
@@ -299,16 +280,21 @@ export const NavigationPanel: React.FC<NavigationPanelProps> = ({
 
   const currentStep = navigationState.steps[navigationState.currentStepIndex];
   const nextStep = navigationState.steps[navigationState.currentStepIndex + 1];
-  const progress = navigationState.totalDistance > 0
-    ? ((navigationState.totalDistance - navigationState.remainingDistance) / navigationState.totalDistance) * 100
-    : 0;
+  const progress =
+    navigationState.totalDistance > 0
+      ? ((navigationState.totalDistance - navigationState.remainingDistance) /
+          navigationState.totalDistance) *
+        100
+      : 0;
 
   return (
     <View style={styles.container}>
       {/* Phase Indicator */}
       <View style={styles.phaseContainer}>
         <Text style={styles.phaseText}>
-          {navigationState.phase === 'pickup' ? '📍 Navigating to Pickup' : '🎯 Navigating to Destination'}
+          {navigationState.phase === 'pickup'
+            ? '📍 Navigating to Pickup'
+            : '🎯 Navigating to Destination'}
         </Text>
       </View>
 
@@ -336,9 +322,7 @@ export const NavigationPanel: React.FC<NavigationPanelProps> = ({
           <Text style={styles.progressText}>
             {formatDistance(navigationState.remainingDistance)} remaining
           </Text>
-          <Text style={styles.etaText}>
-            ETA: {formatETA(navigationState.eta)}
-          </Text>
+          <Text style={styles.etaText}>ETA: {formatETA(navigationState.eta)}</Text>
         </View>
       </View>
 

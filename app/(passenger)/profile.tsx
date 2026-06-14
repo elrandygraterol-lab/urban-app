@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 // import { useCopilot, walkthroughable, CopilotStep } from 'react-native-copilot';
-import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/theme';
+import { Colors, Spacing } from '../../constants/theme';
 import { useAuthStore } from '../../store/authStore';
 import { useLanguage } from '../../hooks/useLanguage';
 import { translations } from '../../i18n/translations';
@@ -70,57 +70,58 @@ export default function PassengerProfileScreen() {
   });
 
   useEffect(() => {
-    loadUserData();
-  }, []);
-
-  const loadUserData = async () => {
-    try {
-      setIsLoading(true);
-
-      // Load user info
-      const userResponse = await userAPI.getMe();
-
-      // Defensive programming: validate response structure
-      // API returns: {success: true, data: {user data}}
-      if (!userResponse || !userResponse.data || !userResponse.data.data) {
-        console.warn('User API returned invalid response:', userResponse);
-        showToast(t.loadError, 'error');
-        return;
-      }
-
-      const userData = userResponse.data.data;
-
-      // Update auth store with fresh data (including profilePhotoUrl)
-      if (user) {
-        useAuthStore.getState().setUser({
-          ...user,
-          name: userData.name || user.name,
-          phone: userData.phone || user.phone,
-          email: userData.email || user.email,
-          profilePhotoUrl: userData.profilePhotoUrl || user.profilePhotoUrl,
-        });
-      }
-
-      setName(userData.name || '');
-      setPhone(userData.phone || '');
-      setEmail(userData.email || '');
-
-      // Load notification preferences
+    const loadUserData = async () => {
       try {
-        const prefsResponse = await notificationAPI.getPreferences();
-        if (prefsResponse.data && prefsResponse.data.preferences) {
-          setNotificationPrefs(prefsResponse.data.preferences);
+        setIsLoading(true);
+
+        // Load user info
+        const userResponse = await userAPI.getMe();
+
+        // Defensive programming: validate response structure
+        // API returns: {success: true, data: {user data}}
+        if (!userResponse || !userResponse.data || !userResponse.data.data) {
+          console.warn('User API returned invalid response:', userResponse);
+          showToast(t.loadError, 'error');
+          return;
+        }
+
+        const userData = userResponse.data.data;
+
+        // Update auth store with fresh data (including profilePhotoUrl)
+        if (user) {
+          useAuthStore.getState().setUser({
+            ...user,
+            name: userData.name || user.name,
+            phone: userData.phone || user.phone,
+            email: userData.email || user.email,
+            profilePhotoUrl: userData.profilePhotoUrl || user.profilePhotoUrl,
+          });
+        }
+
+        setName(userData.name || '');
+        setPhone(userData.phone || '');
+        setEmail(userData.email || '');
+
+        // Load notification preferences
+        try {
+          const prefsResponse = await notificationAPI.getPreferences();
+          if (prefsResponse.data && prefsResponse.data.preferences) {
+            setNotificationPrefs(prefsResponse.data.preferences);
+          }
+        } catch {
+          console.log('No notification preferences found, using defaults');
         }
       } catch (error) {
-        console.log('No notification preferences found, using defaults');
+        console.error('Error loading user data:', error);
+        showToast(t.loadError, 'error');
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error('Error loading user data:', error);
-      showToast(t.loadError, 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
+
+    loadUserData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSaveProfile = async () => {
     try {
@@ -140,7 +141,11 @@ export default function PassengerProfileScreen() {
     key: keyof NotificationPreferences,
     value: boolean
   ) => {
-    showStatus('info', 'Esta opción estará disponible en una futura actualización. Por ahora, las notificaciones permanecen activadas por defecto.', 'En desarrollo');
+    showStatus(
+      'info',
+      'Esta opción estará disponible en una futura actualización. Por ahora, las notificaciones permanecen activadas por defecto.',
+      'En desarrollo'
+    );
   };
 
   const handleLanguageChange = async (newLanguage: 'es' | 'en') => {
@@ -263,255 +268,259 @@ export default function PassengerProfileScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor="#f0f9ff" />
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {/* Personal Information Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t.personalInfo}</Text>
-          {!isEditing && (
-            <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editButton}>
-              <Ionicons name="pencil" size={20} color={Colors.primary} />
-              <Text style={styles.editButtonText}>{t.edit}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <View style={styles.card}>
-          {/* Profile Photo */}
-          <View style={styles.avatarSection}>
-            <TouchableOpacity onPress={handleChangePhoto} style={styles.avatarContainer}>
-              {resolveFileUrl(user?.profilePhotoUrl) ? (
-                <Image source={{ uri: resolveFileUrl(user?.profilePhotoUrl) }} style={styles.avatarImage} resizeMode="cover" />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Ionicons name="person" size={40} color={Colors.primary} />
-                </View>
-              )}
-              <View style={styles.avatarBadge}>
-                <Ionicons name="camera" size={14} color={Colors.white} />
-              </View>
-            </TouchableOpacity>
-            <Text style={styles.avatarName}>{user?.name || ''}</Text>
-            <Text style={styles.avatarRole}>Pasajero</Text>
-            <TouchableOpacity onPress={handleChangePhoto} style={styles.changePhotoButton}>
-              <Ionicons name="camera-outline" size={16} color={Colors.primary} />
-              <Text style={styles.changePhotoText}>Cambiar foto</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.avatarDivider} />
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>{t.name}</Text>
-            <TextInput
-              style={[styles.input, !isEditing && styles.inputDisabled]}
-              value={name}
-              onChangeText={setName}
-              editable={isEditing}
-              placeholder={t.name}
-              placeholderTextColor={Colors.placeholder}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>{t.email}</Text>
-            <TextInput
-              style={[styles.input, styles.inputDisabled]}
-              value={email}
-              editable={false}
-              placeholder={t.email}
-              placeholderTextColor={Colors.placeholder}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>{t.phone}</Text>
-            <TextInput
-              style={[styles.input, !isEditing && styles.inputDisabled]}
-              value={phone}
-              onChangeText={setPhone}
-              editable={isEditing}
-              placeholder={t.phone}
-              placeholderTextColor={Colors.placeholder}
-              keyboardType="phone-pad"
-            />
-          </View>
-
-          {isEditing && (
-            <View style={styles.editActions}>
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={() => {
-                  setIsEditing(false);
-                  setName(user?.name || '');
-                  setPhone(user?.phone || '');
-                }}
-              >
-                <Text style={styles.cancelButtonText}>{t.cancel}</Text>
+        {/* Personal Information Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t.personalInfo}</Text>
+            {!isEditing && (
+              <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editButton}>
+                <Ionicons name="pencil" size={20} color={Colors.primary} />
+                <Text style={styles.editButtonText}>{t.edit}</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.button, styles.saveButton]}
-                onPress={handleSaveProfile}
-                disabled={isSaving}
-              >
-                {isSaving ? (
-                  <ActivityIndicator color={Colors.white} />
+            )}
+          </View>
+
+          <View style={styles.card}>
+            {/* Profile Photo */}
+            <View style={styles.avatarSection}>
+              <TouchableOpacity onPress={handleChangePhoto} style={styles.avatarContainer}>
+                {resolveFileUrl(user?.profilePhotoUrl) ? (
+                  <Image
+                    source={{ uri: resolveFileUrl(user?.profilePhotoUrl) }}
+                    style={styles.avatarImage}
+                    resizeMode="cover"
+                  />
                 ) : (
-                  <Text style={styles.saveButtonText}>{t.save}</Text>
+                  <View style={styles.avatarPlaceholder}>
+                    <Ionicons name="person" size={40} color={Colors.primary} />
+                  </View>
                 )}
+                <View style={styles.avatarBadge}>
+                  <Ionicons name="camera" size={14} color={Colors.white} />
+                </View>
+              </TouchableOpacity>
+              <Text style={styles.avatarName}>{user?.name || ''}</Text>
+              <Text style={styles.avatarRole}>Pasajero</Text>
+              <TouchableOpacity onPress={handleChangePhoto} style={styles.changePhotoButton}>
+                <Ionicons name="camera-outline" size={16} color={Colors.primary} />
+                <Text style={styles.changePhotoText}>Cambiar foto</Text>
               </TouchableOpacity>
             </View>
-          )}
-        </View>
-      </View>
 
-      {/* Settings Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t.settings}</Text>
+            <View style={styles.avatarDivider} />
 
-        <View style={styles.card}>
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="language" size={22} color={Colors.primary} />
-              </View>
-              <Text style={styles.settingLabel}>{t.language}</Text>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t.name}</Text>
+              <TextInput
+                style={[styles.input, !isEditing && styles.inputDisabled]}
+                value={name}
+                onChangeText={setName}
+                editable={isEditing}
+                placeholder={t.name}
+                placeholderTextColor={Colors.placeholder}
+              />
             </View>
-            <View style={styles.languageButtons}>
-              <TouchableOpacity
-                style={[styles.languageButton, language === 'es' && styles.languageButtonActive]}
-                onPress={() => handleLanguageChange('es')}
-              >
-                <Text
-                  style={[
-                    styles.languageButtonText,
-                    language === 'es' && styles.languageButtonTextActive,
-                  ]}
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t.email}</Text>
+              <TextInput
+                style={[styles.input, styles.inputDisabled]}
+                value={email}
+                editable={false}
+                placeholder={t.email}
+                placeholderTextColor={Colors.placeholder}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t.phone}</Text>
+              <TextInput
+                style={[styles.input, !isEditing && styles.inputDisabled]}
+                value={phone}
+                onChangeText={setPhone}
+                editable={isEditing}
+                placeholder={t.phone}
+                placeholderTextColor={Colors.placeholder}
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            {isEditing && (
+              <View style={styles.editActions}>
+                <TouchableOpacity
+                  style={[styles.button, styles.cancelButton]}
+                  onPress={() => {
+                    setIsEditing(false);
+                    setName(user?.name || '');
+                    setPhone(user?.phone || '');
+                  }}
                 >
-                  {t.spanish}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.languageButton, language === 'en' && styles.languageButtonActive]}
-                onPress={() => handleLanguageChange('en')}
-              >
-                <Text
-                  style={[
-                    styles.languageButtonText,
-                    language === 'en' && styles.languageButtonTextActive,
-                  ]}
+                  <Text style={styles.cancelButtonText}>{t.cancel}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.button, styles.saveButton]}
+                  onPress={handleSaveProfile}
+                  disabled={isSaving}
                 >
-                  {t.english}
-                </Text>
-              </TouchableOpacity>
+                  {isSaving ? (
+                    <ActivityIndicator color={Colors.white} />
+                  ) : (
+                    <Text style={styles.saveButtonText}>{t.save}</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Settings Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t.settings}</Text>
+
+          <View style={styles.card}>
+            <View style={styles.settingItem}>
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="language" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.settingLabel}>{t.language}</Text>
+              </View>
+              <View style={styles.languageButtons}>
+                <TouchableOpacity
+                  style={[styles.languageButton, language === 'es' && styles.languageButtonActive]}
+                  onPress={() => handleLanguageChange('es')}
+                >
+                  <Text
+                    style={[
+                      styles.languageButtonText,
+                      language === 'es' && styles.languageButtonTextActive,
+                    ]}
+                  >
+                    {t.spanish}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.languageButton, language === 'en' && styles.languageButtonActive]}
+                  onPress={() => handleLanguageChange('en')}
+                >
+                  <Text
+                    style={[
+                      styles.languageButtonText,
+                      language === 'en' && styles.languageButtonTextActive,
+                    ]}
+                  >
+                    {t.english}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>
-      </View>
 
-      {/* Notifications Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t.notifications}</Text>
+        {/* Notifications Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t.notifications}</Text>
 
-        <View style={styles.card}>
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="car-sport" size={22} color={Colors.primary} />
+          <View style={styles.card}>
+            <View style={styles.settingItem}>
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="car-sport" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.settingLabel}>Llegada del conductor</Text>
               </View>
-              <Text style={styles.settingLabel}>Llegada del conductor</Text>
+              <Switch
+                value={notificationPrefs.driverArrival}
+                onValueChange={value => handleUpdateNotificationPref('driverArrival', value)}
+                trackColor={{ false: Colors.lightGray, true: Colors.light }}
+                thumbColor={notificationPrefs.driverArrival ? Colors.primary : Colors.white}
+              />
             </View>
-            <Switch
-              value={notificationPrefs.driverArrival}
-              onValueChange={value => handleUpdateNotificationPref('driverArrival', value)}
-              trackColor={{ false: Colors.lightGray, true: Colors.light }}
-              thumbColor={notificationPrefs.driverArrival ? Colors.primary : Colors.white}
-            />
-          </View>
 
-          <View style={styles.divider} />
+            <View style={styles.divider} />
 
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="notifications" size={22} color={Colors.primary} />
+            <View style={styles.settingItem}>
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="notifications" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.settingLabel}>Actualizaciones de viaje</Text>
               </View>
-              <Text style={styles.settingLabel}>Actualizaciones de viaje</Text>
+              <Switch
+                value={notificationPrefs.rideUpdates}
+                onValueChange={value => handleUpdateNotificationPref('rideUpdates', value)}
+                trackColor={{ false: Colors.lightGray, true: Colors.light }}
+                thumbColor={notificationPrefs.rideUpdates ? Colors.primary : Colors.white}
+              />
             </View>
-            <Switch
-              value={notificationPrefs.rideUpdates}
-              onValueChange={value => handleUpdateNotificationPref('rideUpdates', value)}
-              trackColor={{ false: Colors.lightGray, true: Colors.light }}
-              thumbColor={notificationPrefs.rideUpdates ? Colors.primary : Colors.white}
-            />
-          </View>
 
-          <View style={styles.divider} />
+            <View style={styles.divider} />
 
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="time" size={22} color={Colors.primary} />
+            <View style={styles.settingItem}>
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="time" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.settingLabel}>Recordatorios de viaje</Text>
               </View>
-              <Text style={styles.settingLabel}>Recordatorios de viaje</Text>
+              <Switch
+                value={notificationPrefs.tripReminders}
+                onValueChange={value => handleUpdateNotificationPref('tripReminders', value)}
+                trackColor={{ false: Colors.lightGray, true: Colors.light }}
+                thumbColor={notificationPrefs.tripReminders ? Colors.primary : Colors.white}
+              />
             </View>
-            <Switch
-              value={notificationPrefs.tripReminders}
-              onValueChange={value => handleUpdateNotificationPref('tripReminders', value)}
-              trackColor={{ false: Colors.lightGray, true: Colors.light }}
-              thumbColor={notificationPrefs.tripReminders ? Colors.primary : Colors.white}
-            />
-          </View>
 
-          <View style={styles.divider} />
+            <View style={styles.divider} />
 
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="megaphone" size={22} color={Colors.primary} />
+            <View style={styles.settingItem}>
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="megaphone" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.settingLabel}>Promociones</Text>
               </View>
-              <Text style={styles.settingLabel}>Promociones</Text>
+              <Switch
+                value={notificationPrefs.promotions}
+                onValueChange={value => handleUpdateNotificationPref('promotions', value)}
+                trackColor={{ false: Colors.lightGray, true: Colors.light }}
+                thumbColor={notificationPrefs.promotions ? Colors.primary : Colors.white}
+              />
             </View>
-            <Switch
-              value={notificationPrefs.promotions}
-              onValueChange={value => handleUpdateNotificationPref('promotions', value)}
-              trackColor={{ false: Colors.lightGray, true: Colors.light }}
-              thumbColor={notificationPrefs.promotions ? Colors.primary : Colors.white}
-            />
           </View>
         </View>
-      </View>
 
-      {/* Account Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t.account}</Text>
+        {/* Account Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t.account}</Text>
 
-        <View style={styles.card}>
-          <TouchableOpacity style={styles.actionItem} onPress={handleLogout}>
-            <View style={styles.settingLeft}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="log-out-outline" size={22} color={Colors.primary} />
+          <View style={styles.card}>
+            <TouchableOpacity style={styles.actionItem} onPress={handleLogout}>
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="log-out-outline" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.actionLabel}>{t.logout}</Text>
               </View>
-              <Text style={styles.actionLabel}>{t.logout}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </TouchableOpacity>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            </TouchableOpacity>
 
-          <View style={styles.divider} />
+            <View style={styles.divider} />
 
-          <TouchableOpacity style={styles.actionItem} onPress={handleDeleteAccount}>
-            <View style={styles.settingLeft}>
-              <View style={[styles.iconContainer, { backgroundColor: '#fef2f2' }]}>
-                <Ionicons name="trash-outline" size={22} color={Colors.error} />
+            <TouchableOpacity style={styles.actionItem} onPress={handleDeleteAccount}>
+              <View style={styles.settingLeft}>
+                <View style={[styles.iconContainer, { backgroundColor: '#fef2f2' }]}>
+                  <Ionicons name="trash-outline" size={22} color={Colors.error} />
+                </View>
+                <Text style={[styles.actionLabel, styles.dangerText]}>{t.deleteAccount}</Text>
               </View>
-              <Text style={[styles.actionLabel, styles.dangerText]}>{t.deleteAccount}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </TouchableOpacity>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
 
-      <View style={styles.bottomSpacer} />
-    </ScrollView>
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
     </SafeAreaView>
   );
 }

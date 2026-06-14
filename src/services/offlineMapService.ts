@@ -11,14 +11,15 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
-import logger from '../utils/logger';
+import { logger } from '../utils/logger';
 import { offlineConfig } from '../styles/mapStyles';
 
 // Try to import NetInfo, but don't fail if it's not available
 let NetInfo: any = null;
 try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   NetInfo = require('@react-native-community/netinfo').default;
-} catch (e) {
+} catch {
   // Silently fail - NetInfo not available
 }
 
@@ -31,7 +32,7 @@ interface CacheStatus {
 
 interface CachedRoute {
   id: string;
-  coordinates: Array<[number, number]>;
+  coordinates: [number, number][];
   distance: number;
   duration: number;
   timestamp: number;
@@ -228,7 +229,7 @@ class OfflineMapService {
    */
   async cacheRoute(
     id: string,
-    coordinates: Array<[number, number]>,
+    coordinates: [number, number][],
     distance: number,
     duration: number
   ): Promise<boolean> {

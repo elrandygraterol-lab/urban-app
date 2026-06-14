@@ -1,12 +1,5 @@
 import React from 'react';
-import {
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  ViewStyle,
-  TextStyle,
-  ActivityIndicator,
-} from 'react-native';
+import { TouchableOpacity, Text, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
 import { Colors, Typography, BorderRadius, Spacing } from '@/constants/theme';
 
 interface ButtonProps {
@@ -94,11 +87,3 @@ export const Button: React.FC<ButtonProps> = ({
     </TouchableOpacity>
   );
 };
-
-const styles = StyleSheet.create({
-  button: {
-    borderRadius: BorderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});

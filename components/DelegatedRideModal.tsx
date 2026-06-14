@@ -82,18 +82,18 @@ function validatePhoneFormat(phone: string): string | null {
   if (!phone.trim()) {
     return 'El número de teléfono es requerido';
   }
-  
+
   // Remove spaces and dashes for validation
   const cleanPhone = phone.replace(/[-\s]/g, '');
-  
+
   if (cleanPhone.length < 10) {
     return 'El número debe tener al menos 10 dígitos';
   }
-  
+
   if (!PHONE_REGEX.test(phone)) {
     return 'Formato inválido. Ej: +58 414 1234567 o 04141234567';
   }
-  
+
   return null;
 }
 
@@ -135,7 +135,7 @@ export default function DelegatedRideModal({
   // Real-time phone validation
   const handlePhoneChange = useCallback((text: string) => {
     setBeneficiaryPhone(text);
-    
+
     // Only show error if user has typed something
     if (text.trim().length > 0) {
       const error = validatePhoneFormat(text);
@@ -152,7 +152,7 @@ export default function DelegatedRideModal({
     if (validatePhoneFormat(beneficiaryPhone) !== null) return false;
     if (!pickupPoint) return false;
     if (!destinationPoint) return false;
-    
+
     // Validate payment configuration
     if (paymentConfig.mode === 'dual') {
       const { cashAmount, pagoMovilAmount } = paymentConfig;
@@ -170,15 +170,22 @@ export default function DelegatedRideModal({
         return false;
       }
     }
-    
+
     return true;
-  }, [beneficiaryName, beneficiaryPhone, pickupPoint, destinationPoint, paymentConfig, estimatedFare]);
+  }, [
+    beneficiaryName,
+    beneficiaryPhone,
+    pickupPoint,
+    destinationPoint,
+    paymentConfig,
+    estimatedFare,
+  ]);
 
   const handleConfirm = useCallback(async () => {
     if (!isFormValid() || !pickupPoint || !destinationPoint) return;
-    
+
     setIsConfirming(true);
-    
+
     try {
       logInfo('DelegatedRideModal', 'Creating delegated ride', {
         beneficiaryName: beneficiaryName.trim(),
@@ -196,14 +203,15 @@ export default function DelegatedRideModal({
           mode: paymentConfig.mode,
           cashAmount: paymentConfig.cashAmount,
           pagoMovilAmount: paymentConfig.pagoMovilAmount,
-          pagoMovilReference: paymentConfig.mode === 'pago_movil' || paymentConfig.mode === 'dual' 
-            ? 'REF-' + Date.now() // Placeholder - in real app, this would come from payment flow
-            : undefined,
+          pagoMovilReference:
+            paymentConfig.mode === 'pago_movil' || paymentConfig.mode === 'dual'
+              ? 'REF-' + Date.now() // Placeholder - in real app, this would come from payment flow
+              : undefined,
         },
       });
 
       const rideId = response.data.rideId;
-      
+
       logInfo('DelegatedRideModal', 'Delegated ride created successfully', { rideId });
 
       // Show success message
@@ -223,10 +231,10 @@ export default function DelegatedRideModal({
       );
     } catch (error: any) {
       logError('DelegatedRideModal', error, { context: 'Creating delegated ride' });
-      
+
       // Handle specific error cases
       let errorMessage = 'No se pudo solicitar el viaje. Por favor, intenta nuevamente.';
-      
+
       if (error.response?.status === 422) {
         // Validation error
         const serverMessage = error.response?.data?.error?.message;
@@ -237,7 +245,8 @@ export default function DelegatedRideModal({
         }
       } else if (error.response?.status === 402) {
         // Payment processing error
-        errorMessage = 'El pago no pudo ser procesado. Verifica tu método de pago e intenta nuevamente.';
+        errorMessage =
+          'El pago no pudo ser procesado. Verifica tu método de pago e intenta nuevamente.';
       } else if (error.response?.status === 404) {
         // Not found (e.g., requester not found)
         errorMessage = 'No se pudo verificar tu cuenta. Por favor, inicia sesión nuevamente.';
@@ -251,32 +260,30 @@ export default function DelegatedRideModal({
         // Network error
         errorMessage = 'No hay conexión a internet. Verifica tu conexión e intenta nuevamente.';
       }
-      
+
       Alert.alert('Error', errorMessage, [{ text: 'OK' }]);
     } finally {
       setIsConfirming(false);
     }
-  }, [isFormValid, beneficiaryName, beneficiaryPhone, pickupPoint, destinationPoint, paymentConfig, onSuccess]);
+  }, [
+    isFormValid,
+    beneficiaryName,
+    beneficiaryPhone,
+    pickupPoint,
+    destinationPoint,
+    paymentConfig,
+    onSuccess,
+  ]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View
-          style={[
-            styles.container,
-            { paddingBottom: Math.max(insets.bottom, 24) },
-          ]}
-        >
+        <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
@@ -294,8 +301,8 @@ export default function DelegatedRideModal({
           </View>
 
           <Text style={styles.subtitle}>
-            Solicita un viaje para una persona que no tiene la aplicación. Tú pagarás el viaje
-            y el conductor contactará al beneficiario.
+            Solicita un viaje para una persona que no tiene la aplicación. Tú pagarás el viaje y el
+            conductor contactará al beneficiario.
           </Text>
 
           <ScrollView
@@ -333,12 +340,7 @@ export default function DelegatedRideModal({
               {/* Phone input */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Número de Teléfono *</Text>
-                <View
-                  style={[
-                    styles.inputWrapper,
-                    phoneError && styles.inputWrapperError,
-                  ]}
-                >
+                <View style={[styles.inputWrapper, phoneError && styles.inputWrapperError]}>
                   <Ionicons name="call" size={18} color={Colors.mediumGray} />
                   <TextInput
                     style={styles.textInput}
@@ -394,9 +396,7 @@ export default function DelegatedRideModal({
                       {pickupPoint.address}
                     </Text>
                   ) : (
-                    <Text style={styles.locationPlaceholder}>
-                      Toca para seleccionar en el mapa
-                    </Text>
+                    <Text style={styles.locationPlaceholder}>Toca para seleccionar en el mapa</Text>
                   )}
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={Colors.mediumGray} />
@@ -424,9 +424,7 @@ export default function DelegatedRideModal({
                       {destinationPoint.address}
                     </Text>
                   ) : (
-                    <Text style={styles.locationPlaceholder}>
-                      Toca para seleccionar en el mapa
-                    </Text>
+                    <Text style={styles.locationPlaceholder}>Toca para seleccionar en el mapa</Text>
                   )}
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={Colors.mediumGray} />
@@ -442,9 +440,7 @@ export default function DelegatedRideModal({
                 </View>
                 <View style={styles.fareRow}>
                   <Text style={styles.fareLabel}>Total a Pagar</Text>
-                  <Text style={styles.fareValue}>
-                    {formatCurrency(estimatedFare, currency)}
-                  </Text>
+                  <Text style={styles.fareValue}>{formatCurrency(estimatedFare, currency)}</Text>
                 </View>
               </View>
             )}
@@ -475,9 +471,9 @@ export default function DelegatedRideModal({
             <View style={styles.noticeCard}>
               <Ionicons name="alert-circle-outline" size={20} color="#f59e0b" />
               <Text style={styles.noticeText}>
-                <Text style={styles.noticeTextBold}>Importante:</Text> El beneficiario no
-                recibirá notificaciones automáticas. Asegúrate de informarle sobre el viaje
-                y coordinar la recogida.
+                <Text style={styles.noticeTextBold}>Importante:</Text> El beneficiario no recibirá
+                notificaciones automáticas. Asegúrate de informarle sobre el viaje y coordinar la
+                recogida.
               </Text>
             </View>
           </ScrollView>

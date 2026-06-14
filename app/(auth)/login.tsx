@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -15,7 +14,6 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as SecureStore from 'expo-secure-store';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -103,8 +101,7 @@ export default function LoginScreen() {
       // No pasamos rol - el backend detecta automáticamente el rol del usuario
       await login(email.trim(), password);
     } catch (error: any) {
-      const rawMessage: string =
-        error?.response?.data?.error?.message || error?.message || '';
+      const rawMessage: string = error?.response?.data?.error?.message || error?.message || '';
 
       // Driver pending admin approval — show friendly message, no technical details
       const isPendingApproval =
@@ -141,14 +138,20 @@ export default function LoginScreen() {
       }
 
       // Generic fallback — never show raw technical errors
-      showToast('No se pudo iniciar sesión. Verifica tu conexión a internet e intenta de nuevo.', 'error');
+      showToast(
+        'No se pudo iniciar sesión. Verifica tu conexión a internet e intenta de nuevo.',
+        'error'
+      );
     }
   };
 
   // Show loading indicator while loading saved credentials
   if (isLoadingCredentials) {
     return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]} edges={['top', 'bottom']}>
+      <SafeAreaView
+        style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}
+        edges={['top', 'bottom']}
+      >
         <ActivityIndicator size="large" color="#22c55e" />
       </SafeAreaView>
     );
@@ -156,159 +159,159 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* Illustration Background */}
-        <View style={styles.illustrationContainer}>
-          <View style={styles.illustrationBg}>
-            {/* Mountains/Hills */}
-            <View style={styles.mountain1} />
-            <View style={styles.mountain2} />
-            <View style={styles.mountain3} />
-            {/* Clouds */}
-            <View style={styles.cloud1} />
-            <View style={styles.cloud2} />
-            <View style={styles.cloud3} />
-          </View>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Illustration Background */}
+          <View style={styles.illustrationContainer}>
+            <View style={styles.illustrationBg}>
+              {/* Mountains/Hills */}
+              <View style={styles.mountain1} />
+              <View style={styles.mountain2} />
+              <View style={styles.mountain3} />
+              {/* Clouds */}
+              <View style={styles.cloud1} />
+              <View style={styles.cloud2} />
+              <View style={styles.cloud3} />
+            </View>
 
-          {/* Logo */}
-          <View style={styles.logoContainer}>
-            <Image
-              source={require('@/assets/images/logo.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-            <Text style={styles.tagline}>¿Listo para tu siguiente destino?</Text>
-          </View>
-        </View>
-
-        {/* White Card Container */}
-        <View style={styles.cardContainer}>
-          {/* Welcome Badge */}
-          <View style={styles.welcomeBadge}>
-            <Text style={styles.welcomeText}>
-              <Text style={styles.welcomeBold}>Bienvenido </Text>
-              <Text style={styles.welcomeNormal}>de vuelta</Text>
-            </Text>
-            <View style={styles.decorativeCircles}>
-              <View style={styles.decorCircle} />
-              <View style={styles.decorCircle} />
-              <View style={styles.decorCircle} />
+            {/* Logo */}
+            <View style={styles.logoContainer}>
+              <Image
+                source={require('@/assets/images/logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+              <Text style={styles.tagline}>¿Listo para tu siguiente destino?</Text>
             </View>
           </View>
 
-          {/* Form Container */}
-          <View style={styles.formContainer}>
-            {/* Email Input */}
-            <View style={styles.inputWrapper}>
-              <TextInput
-                style={styles.input}
-                placeholder="Ingresa tu email o teléfono"
-                placeholderTextColor="#9ca3af"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!isLoading}
-              />
+          {/* White Card Container */}
+          <View style={styles.cardContainer}>
+            {/* Welcome Badge */}
+            <View style={styles.welcomeBadge}>
+              <Text style={styles.welcomeText}>
+                <Text style={styles.welcomeBold}>Bienvenido </Text>
+                <Text style={styles.welcomeNormal}>de vuelta</Text>
+              </Text>
+              <View style={styles.decorativeCircles}>
+                <View style={styles.decorCircle} />
+                <View style={styles.decorCircle} />
+                <View style={styles.decorCircle} />
+              </View>
             </View>
 
-            {/* Password Input */}
-            <View style={styles.inputWrapper}>
-              <TextInput
-                style={styles.input}
-                placeholder="Ingresa tu contraseña"
-                placeholderTextColor="#9ca3af"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!isLoading}
-              />
-              <TouchableOpacity
-                style={styles.eyeIcon}
-                onPress={() => setShowPassword(!showPassword)}
-                disabled={isLoading}
-              >
-                <Ionicons
-                  name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                  size={22}
-                  color="#9ca3af"
+            {/* Form Container */}
+            <View style={styles.formContainer}>
+              {/* Email Input */}
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ingresa tu email o teléfono"
+                  placeholderTextColor="#9ca3af"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading}
                 />
-              </TouchableOpacity>
-            </View>
+              </View>
 
-            {/* Remember Me & Forgot Password */}
-            <View style={styles.optionsRow}>
+              {/* Password Input */}
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ingresa tu contraseña"
+                  placeholderTextColor="#9ca3af"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                />
+                <TouchableOpacity
+                  style={styles.eyeIcon}
+                  onPress={() => setShowPassword(!showPassword)}
+                  disabled={isLoading}
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+                    size={22}
+                    color="#9ca3af"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* Remember Me & Forgot Password */}
+              <View style={styles.optionsRow}>
+                <TouchableOpacity
+                  style={styles.rememberRow}
+                  onPress={() => setRememberMe(!rememberMe)}
+                  disabled={isLoading}
+                >
+                  <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                    {rememberMe && <View style={styles.checkboxInner} />}
+                  </View>
+                  <Text style={styles.rememberText}>Recuérdame</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => router.push('/(auth)/forgot-password' as any)}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.forgotText}>¿Olvidaste tu Contraseña?</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Login Button */}
               <TouchableOpacity
-                style={styles.rememberRow}
-                onPress={() => setRememberMe(!rememberMe)}
+                style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+                onPress={handleLogin}
                 disabled={isLoading}
               >
-                <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-                  {rememberMe && <View style={styles.checkboxInner} />}
-                </View>
-                <Text style={styles.rememberText}>Recuérdame</Text>
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.loginButtonText}>Empezar a viajar</Text>
+                )}
               </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={() => router.push('/(auth)/forgot-password' as any)}
-                disabled={isLoading}
-              >
-                <Text style={styles.forgotText}>¿Olvidaste tu Contraseña?</Text>
+              {/* Register Link */}
+              <View style={styles.registerRow}>
+                <Text style={styles.registerText}>¿Aún no tienes una cuenta? </Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/(auth)/register' as any)}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.registerLink}>Regístrate aquí.</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Divider */}
+              <Text style={styles.dividerText}>o</Text>
+
+              {/* Social Buttons */}
+              <TouchableOpacity style={styles.socialButton} disabled={isLoading}>
+                <Ionicons name="logo-google" size={22} color="#4285f4" />
+                <Text style={styles.socialButtonText}>Continuar con Google</Text>
               </TouchableOpacity>
-            </View>
 
-            {/* Login Button */}
-            <TouchableOpacity
-              style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
-              onPress={handleLogin}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.loginButtonText}>Empezar a viajar</Text>
-              )}
-            </TouchableOpacity>
-
-            {/* Register Link */}
-            <View style={styles.registerRow}>
-              <Text style={styles.registerText}>¿Aún no tienes una cuenta? </Text>
-              <TouchableOpacity
-                onPress={() => router.push('/(auth)/register' as any)}
-                disabled={isLoading}
-              >
-                <Text style={styles.registerLink}>Regístrate aquí.</Text>
+              <TouchableOpacity style={styles.socialButton} disabled={isLoading}>
+                <Ionicons name="logo-apple" size={22} color="#000" />
+                <Text style={styles.socialButtonText}>Continuar con Apple</Text>
               </TouchableOpacity>
             </View>
-
-            {/* Divider */}
-            <Text style={styles.dividerText}>o</Text>
-
-            {/* Social Buttons */}
-            <TouchableOpacity style={styles.socialButton} disabled={isLoading}>
-              <Ionicons name="logo-google" size={22} color="#4285f4" />
-              <Text style={styles.socialButtonText}>Continuar con Google</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.socialButton} disabled={isLoading}>
-              <Ionicons name="logo-apple" size={22} color="#000" />
-              <Text style={styles.socialButtonText}>Continuar con Apple</Text>
-            </TouchableOpacity>
           </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

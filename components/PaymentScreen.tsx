@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Modal,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { rideAPI, paymentAPI } from '@/services/api';
 
@@ -44,69 +43,72 @@ export default function PaymentScreen({ visible, rideId, onClose }: PaymentScree
   const [rideDetails, setRideDetails] = useState<RideDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const processPaymentAutomatically = useCallback(
+    async (paymentMethodId: string) => {
+      setIsProcessingPayment(true);
+
+      try {
+        await paymentAPI.processPayment(rideId, paymentMethodId);
+        setPaymentCompleted(true);
+        setIsProcessingPayment(false);
+      } catch (error: any) {
+        console.error('Error processing payment:', error);
+        setIsProcessingPayment(false);
+        setError(
+          error.response?.data?.error?.message ||
+            'Error al procesar el pago. Por favor intenta nuevamente.'
+        );
+      }
+    },
+    [rideId]
+  );
+
   useEffect(() => {
+    const loadRideDetails = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await rideAPI.getRide(rideId);
+        const ride = response.data.ride;
+
+        setRideDetails({
+          id: ride.id,
+          pickupAddress: ride.pickupAddress,
+          destinationAddress: ride.destinationAddress,
+          actualDurationMinutes: ride.actualDurationMinutes || 0,
+          actualDistanceKm: ride.actualDistanceKm || 0,
+          finalFare: ride.finalFare || 0,
+          fareBreakdown: {
+            baseFare: ride.fareBreakdown?.baseFare || 0,
+            perKmRate: ride.fareBreakdown?.perKmRate || 0,
+            perMinuteRate: ride.fareBreakdown?.perMinuteRate || 0,
+            distance: ride.actualDistanceKm || 0,
+            duration: ride.actualDurationMinutes || 0,
+          },
+          paymentMethodId: ride.paymentMethodId || 'cash',
+          driver: {
+            name: ride.driver?.name || 'Conductor',
+          },
+        });
+
+        // Si el método de pago NO es efectivo, procesar automáticamente
+        if (ride.paymentMethodId && ride.paymentMethodId !== 'cash') {
+          await processPaymentAutomatically(ride.paymentMethodId);
+        }
+
+        setIsLoading(false);
+      } catch (error: any) {
+        console.error('Error loading ride details:', error);
+        setError('No se pudieron cargar los detalles del viaje');
+        setIsLoading(false);
+      }
+    };
+
     if (visible && rideId) {
       loadRideDetails();
     }
-  }, [visible, rideId]);
-
-  const loadRideDetails = async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await rideAPI.getRide(rideId);
-      const ride = response.data.ride;
-
-      setRideDetails({
-        id: ride.id,
-        pickupAddress: ride.pickupAddress,
-        destinationAddress: ride.destinationAddress,
-        actualDurationMinutes: ride.actualDurationMinutes || 0,
-        actualDistanceKm: ride.actualDistanceKm || 0,
-        finalFare: ride.finalFare || 0,
-        fareBreakdown: {
-          baseFare: ride.fareBreakdown?.baseFare || 0,
-          perKmRate: ride.fareBreakdown?.perKmRate || 0,
-          perMinuteRate: ride.fareBreakdown?.perMinuteRate || 0,
-          distance: ride.actualDistanceKm || 0,
-          duration: ride.actualDurationMinutes || 0,
-        },
-        paymentMethodId: ride.paymentMethodId || 'cash',
-        driver: {
-          name: ride.driver?.name || 'Conductor',
-        },
-      });
-
-      // Si el método de pago NO es efectivo, procesar automáticamente
-      if (ride.paymentMethodId && ride.paymentMethodId !== 'cash') {
-        await processPaymentAutomatically(ride.paymentMethodId);
-      }
-
-      setIsLoading(false);
-    } catch (error: any) {
-      console.error('Error loading ride details:', error);
-      setError('No se pudieron cargar los detalles del viaje');
-      setIsLoading(false);
-    }
-  };
-
-  const processPaymentAutomatically = async (paymentMethodId: string) => {
-    setIsProcessingPayment(true);
-
-    try {
-      await paymentAPI.processPayment(rideId, paymentMethodId);
-      setPaymentCompleted(true);
-      setIsProcessingPayment(false);
-    } catch (error: any) {
-      console.error('Error processing payment:', error);
-      setIsProcessingPayment(false);
-      setError(
-        error.response?.data?.error?.message ||
-          'Error al procesar el pago. Por favor intenta nuevamente.'
-      );
-    }
-  };
+  }, [visible, rideId, processPaymentAutomatically]);
 
   const handleRetryPayment = async () => {
     if (!rideDetails) return;

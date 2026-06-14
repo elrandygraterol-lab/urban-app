@@ -3,7 +3,7 @@
  * Displays notification icon with unread count badge
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { notificationAPI } from '@/services/api';
@@ -18,16 +18,7 @@ interface NotificationTabIconProps {
 export function NotificationTabIcon({ color, focused }: NotificationTabIconProps) {
   const { unreadCount, setUnreadCount } = useNotificationStore();
 
-  useEffect(() => {
-    fetchUnreadCount();
-
-    // Poll for updates every 30 seconds
-    const interval = setInterval(fetchUnreadCount, 30000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const fetchUnreadCount = async () => {
+  const fetchUnreadCount = useCallback(async () => {
     try {
       const response = await notificationAPI.getNotifications({ page: 1, limit: 50 });
       const notifications = response.data.notifications;
@@ -36,7 +27,16 @@ export function NotificationTabIcon({ color, focused }: NotificationTabIconProps
     } catch (error) {
       console.error('Error fetching unread count:', error);
     }
-  };
+  }, [setUnreadCount]);
+
+  useEffect(() => {
+    fetchUnreadCount();
+
+    // Poll for updates every 30 seconds
+    const interval = setInterval(fetchUnreadCount, 30000);
+
+    return () => clearInterval(interval);
+  }, [fetchUnreadCount]);
 
   return (
     <View style={styles.container}>

@@ -90,7 +90,7 @@ export default function DocumentsUploadScreen() {
         newDocuments[index].uri = result.assets[0].uri;
         setDocuments(newDocuments);
       }
-    } catch (error) {
+    } catch {
       showToast('No se pudo seleccionar la imagen', 'error');
     }
   };
@@ -127,10 +127,7 @@ export default function DocumentsUploadScreen() {
       const newDocuments = [...documents];
       newDocuments[index].isUploading = false;
       setDocuments(newDocuments);
-      showToast(
-        error instanceof Error ? error.message : 'No se pudo subir el documento',
-        'error'
-      );
+      showToast(error instanceof Error ? error.message : 'No se pudo subir el documento', 'error');
     }
   };
 
@@ -146,7 +143,7 @@ export default function DocumentsUploadScreen() {
     try {
       // Navigate to verification status screen
       router.push('/(driver)/verification-status');
-    } catch (error) {
+    } catch {
       showToast('No se pudo completar el registro', 'error');
     } finally {
       setIsSubmitting(false);

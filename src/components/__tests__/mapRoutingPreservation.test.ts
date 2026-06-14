@@ -1,14 +1,14 @@
 /**
  * Preservation Property Tests - Non-Navigation Map Functionality
- * 
+ *
  * **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7**
- * 
+ *
  * CRITICAL: These tests MUST PASS on unfixed code - they verify baseline behavior
- * 
+ *
  * This test suite uses observation-first methodology:
  * 1. Observe behavior on UNFIXED code for non-buggy inputs (map interactions without active routing)
  * 2. Write property-based tests capturing observed behavior patterns
- * 
+ *
  * These tests ensure that fixing the routing bugs does NOT break existing map functionality:
  * - Base map visualization continues working correctly (Req 3.1)
  * - Real-time location updates continue functioning (Req 3.2)
@@ -17,7 +17,7 @@
  * - Route cancellation continues cleaning visualization correctly (Req 3.5)
  * - View switching continues maintaining specific functionality (Req 3.6)
  * - Connectivity handling continues managing states correctly (Req 3.7)
- * 
+ *
  * EXPECTED OUTCOME: Tests PASS (confirms baseline behavior to preserve)
  */
 
@@ -165,20 +165,12 @@ function handleConnectivityChange(state: MapState, isOnline: boolean): MapState 
   };
 }
 
-/**
- * Check if this is a non-buggy input (no active routing)
- */
-function isNonBuggyInput(state: MapState): boolean {
-  // Non-buggy inputs are those that don't involve active routing/navigation
-  return state.activeRoute === undefined;
-}
-
 describe('Preservation Property Tests: Non-Navigation Map Functionality', () => {
   /**
    * Property 2: Preservation - Non-Navigation Map Functionality
-   * 
+   *
    * **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7**
-   * 
+   *
    * For any map interaction that does NOT involve active routing, the system
    * SHALL preserve all existing functionality.
    */
@@ -217,7 +209,7 @@ describe('Preservation Property Tests: Non-Navigation Map Functionality', () => 
       });
 
       fc.assert(
-        fc.property(mapStateArb, (state) => {
+        fc.property(mapStateArb, state => {
           // Render map without active routing
           const result = renderMapBaseline(state);
 
@@ -399,7 +391,7 @@ describe('Preservation Property Tests: Non-Navigation Map Functionality', () => 
       });
 
       fc.assert(
-        fc.property(mapStateArb, (state) => {
+        fc.property(mapStateArb, state => {
           // Render map with multiple vehicles
           const result = renderMapBaseline(state);
 
@@ -451,7 +443,7 @@ describe('Preservation Property Tests: Non-Navigation Map Functionality', () => 
       });
 
       fc.assert(
-        fc.property(mapStateWithRouteArb, (state) => {
+        fc.property(mapStateWithRouteArb, state => {
           // Verify route is initially present
           const beforeCancel = renderMapBaseline(state);
           expect(beforeCancel.hasRoute).toBe(true);
@@ -505,7 +497,7 @@ describe('Preservation Property Tests: Non-Navigation Map Functionality', () => 
       });
 
       fc.assert(
-        fc.property(mapStateArb, (state) => {
+        fc.property(mapStateArb, state => {
           // Render in original view mode
           const beforeSwitch = renderMapBaseline(state);
 
@@ -549,7 +541,7 @@ describe('Preservation Property Tests: Non-Navigation Map Functionality', () => 
       });
 
       fc.assert(
-        fc.property(mapStateArb, (state) => {
+        fc.property(mapStateArb, state => {
           // Render in current connectivity state
           const beforeChange = renderMapBaseline(state);
 
@@ -604,7 +596,7 @@ describe('Preservation Property Tests: Non-Navigation Map Functionality', () => 
       });
 
       fc.assert(
-        fc.property(offlineStateArb, (state) => {
+        fc.property(offlineStateArb, state => {
           // Verify offline state
           const offline = renderMapBaseline(state);
           expect(offline.connectionStatus).toBe('OFFLINE');
@@ -662,7 +654,7 @@ describe('Preservation Property Tests: Non-Navigation Map Functionality', () => 
       });
 
       fc.assert(
-        fc.property(mapStateArb, (initialState) => {
+        fc.property(mapStateArb, initialState => {
           // Sequence of interactions
           let state: MapState = initialState;
 

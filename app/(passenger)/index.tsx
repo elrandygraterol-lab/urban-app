@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   Platform,
   Keyboard,
@@ -16,13 +15,7 @@ import {
 } from 'react-native';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import Svg, { Path, G } from 'react-native-svg';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
+import Animated, { useSharedValue, withSpring, withTiming, Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import MapView, { Marker, Polyline } from 'react-native-maps';
@@ -30,7 +23,6 @@ import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import {
   DriverTaxiIcon,
-  PassengerIcon,
   PickupIcon,
   DropoffIcon,
   SecondPickupIcon,
@@ -39,10 +31,9 @@ import {
 import { computeBearing } from '@/src/utils/mapNav';
 import { useAuthStore } from '@/store/authStore';
 import { rideAPI, paymentAPI, ratingAPI } from '@/services/api';
-import mapsService from '@/services/mapsService';
+import { reverseGeocode, getRoute, geocodeAddress } from '@/services/mapsService';
 import {
   connectSocket,
-  disconnectSocket,
   getSocket,
   joinRide,
   leaveRide,
@@ -172,36 +163,38 @@ export default function PassengerHomeScreen() {
   const [destinationAddress, setDestinationAddress] = useState('');
   const [pickupAddress, setPickupAddress] = useState('');
   const [isEditingPickup, setIsEditingPickup] = useState(false);
-  
+
   // Full addresses for internal use (precision)
   const [destinationFullAddress, setDestinationFullAddress] = useState('');
   const [pickupFullAddress, setPickupFullAddress] = useState('');
 
   // Source tracking for custom place visual distinction
-  const [pickupLocationSource, setPickupLocationSource] = useState<'custom' | 'nominatim' | null>(null);
-  const [destinationLocationSource, setDestinationLocationSource] = useState<'custom' | 'nominatim' | null>(null);
+  const [, setPickupLocationSource] = useState<'custom' | 'nominatim' | null>(null);
+  const [, setDestinationLocationSource] = useState<'custom' | 'nominatim' | null>(null);
 
   // Second pickup point states (Req. 6.1, 6.3)
   const [showSecondPickup, setShowSecondPickup] = useState(false);
   const [secondPickupLocation, setSecondPickupLocation] = useState<LocationCoords | null>(null);
   const [secondPickupAddress, setSecondPickupAddress] = useState('');
   const [secondPickupFullAddress, setSecondPickupFullAddress] = useState('');
-  const [secondPickupLocationSource, setSecondPickupLocationSource] = useState<'custom' | 'nominatim' | null>(null);
+  const [, setSecondPickupLocationSource] = useState<'custom' | 'nominatim' | null>(null);
   const [isEditingSecondPickup, setIsEditingSecondPickup] = useState(false);
 
   // Second destination point states (Req. 6.2, 6.4, 6.6)
   const [showSecondDestination, setShowSecondDestination] = useState(false);
-  const [secondDestinationLocation, setSecondDestinationLocation] = useState<LocationCoords | null>(null);
+  const [secondDestinationLocation, setSecondDestinationLocation] = useState<LocationCoords | null>(
+    null
+  );
   const [secondDestinationAddress, setSecondDestinationAddress] = useState('');
   const [secondDestinationFullAddress, setSecondDestinationFullAddress] = useState('');
-  const [secondDestinationLocationSource, setSecondDestinationLocationSource] = useState<'custom' | 'nominatim' | null>(null);
+  const [, setSecondDestinationLocationSource] = useState<'custom' | 'nominatim' | null>(null);
   const [isEditingSecondDestination, setIsEditingSecondDestination] = useState(false);
 
   // Map selection mode states
-  const [mapSelectionMode, setMapSelectionMode] = useState<'none' | 'pickup' | 'destination' | 'second_pickup' | 'second_destination'>(
-    'none'
-  );
-  const [tempMarkerLocation, setTempMarkerLocation] = useState<LocationCoords | null>(null);
+  const [mapSelectionMode, setMapSelectionMode] = useState<
+    'none' | 'pickup' | 'destination' | 'second_pickup' | 'second_destination'
+  >('none');
+  const [, setTempMarkerLocation] = useState<LocationCoords | null>(null);
 
   // UI states
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
@@ -238,17 +231,21 @@ export default function PassengerHomeScreen() {
     originZoneName?: string;
     destinationZoneName?: string;
     // Multi-point breakdown
-    segmentBreakdown?: Array<{
+    segmentBreakdown?: {
       segment: number;
       from: string;
       to: string;
       price: number;
       usedFallback: boolean;
       fallbackType?: string;
-    }>;
+    }[];
   } | null>(null);
   const [isCalculatingFare, setIsCalculatingFare] = useState(false);
-  const [zoneInfo, setZoneInfo] = useState<{ zoneId: string | null; zoneName: string | null; usedFallback: boolean } | null>(null);
+  const [zoneInfo, setZoneInfo] = useState<{
+    zoneId: string | null;
+    zoneName: string | null;
+    usedFallback: boolean;
+  } | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<RouteCoordinates[]>([]);
   const [isApproximateRoute, setIsApproximateRoute] = useState(false);
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
@@ -261,19 +258,18 @@ export default function PassengerHomeScreen() {
   const prevDriverLocationRef = useRef<LocationCoords | null>(null);
 
   // Shared ride passenger location tracking (Req. 4.10)
-  const [passenger1Location, setPassenger1Location] = useState<LocationCoords | null>(null);
-  const [passenger2Location, setPassenger2Location] = useState<LocationCoords | null>(null);
+  const [, setPassenger1Location] = useState<LocationCoords | null>(null);
+  const [, setPassenger2Location] = useState<LocationCoords | null>(null);
 
   // Cancellation modal states
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
-  const [cancellationFeeWarning, setCancellationFeeWarning] = useState<string | null>(null);
+  const [, setCancellationFeeWarning] = useState<string | null>(null);
 
   // Animation values for cancel modal
   const modalScale = useSharedValue(0);
   const modalOpacity = useSharedValue(0);
   const modalTranslateY = useSharedValue(50);
-  const buttonScale = useSharedValue(1);
 
   // Safe area insets for modal
   const insets = useSafeAreaInsets();
@@ -295,10 +291,9 @@ export default function PassengerHomeScreen() {
   // Use cancellation policy hook - only fetch when ride is in a cancellable state AND user is authenticated
   const canFetchPolicy =
     !!token && !!activeRide && ['pending', 'accepted', 'arrived'].includes(activeRide.status);
-  const { policy: cancellationPolicy, loading: loadingPolicy } = useCancellationPolicy(
-    activeRide?.id || null,
-    { enabled: canFetchPolicy }
-  );
+  const { policy: cancellationPolicy } = useCancellationPolicy(activeRide?.id || null, {
+    enabled: canFetchPolicy,
+  });
 
   // Payment modal states
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -306,7 +301,9 @@ export default function PassengerHomeScreen() {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [finalFare, setFinalFare] = useState<number | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'digital_wallet' | 'pago_movil' | 'bank_transfer'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<
+    'cash' | 'card' | 'digital_wallet' | 'pago_movil' | 'bank_transfer'
+  >('cash');
   const [selectedPlatformMethod, setSelectedPlatformMethod] = useState<any>(null);
   const [platformPaymentMethods, setPlatformPaymentMethods] = useState<any[]>([]);
 
@@ -332,22 +329,23 @@ export default function PassengerHomeScreen() {
 
   // ========== MEJORAS DE NAVEGACIÓN ==========
   // Mejora 1: Actualización dinámica de ruta
-  const [isDynamicRouteEnabled, setIsDynamicRouteEnabled] = useState(true);
+  const [isDynamicRouteEnabled] = useState(true);
   const [lastRouteUpdate, setLastRouteUpdate] = useState<number>(Date.now());
-  const [totalRouteDistance, setTotalRouteDistance] = useState<number>(0);
-  
+
   // Mejora 2: Indicador de progreso visual
   const [rideProgress, setRideProgress] = useState<number>(0); // 0-100%
   const [initialDistanceToDestination, setInitialDistanceToDestination] = useState<number>(0);
-  
+
   // Mejora 3: Puntos de interés en la ruta
-  const [nearbyLandmarks, setNearbyLandmarks] = useState<Array<{
-    id: string;
-    name: string;
-    latitude: number;
-    longitude: number;
-    type: 'landmark' | 'poi';
-  }>>([]);
+  const [nearbyLandmarks, setNearbyLandmarks] = useState<
+    {
+      id: string;
+      name: string;
+      latitude: number;
+      longitude: number;
+      type: 'landmark' | 'poi';
+    }[]
+  >([]);
 
   // Request location permissions and get current location
   useEffect(() => {
@@ -401,10 +399,10 @@ export default function PassengerHomeScreen() {
           setIsLoadingLocation(false);
           logInfo('PassengerHomeScreen', 'Location applied', coords);
           try {
-            const locationData = await mapsService.reverseGeocode(coords.latitude, coords.longitude);
+            const locationData = await reverseGeocode(coords.latitude, coords.longitude);
             setPickupAddress(
               locationData.address ||
-              `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`
+                `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`
             );
           } catch {
             setPickupAddress(`${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`);
@@ -415,8 +413,8 @@ export default function PassengerHomeScreen() {
         let lastKnownApplied = false;
         try {
           const lastKnown = await Location.getLastKnownPositionAsync({
-            maxAge: 3 * 60 * 1000,  // prefer positions up to 3 min old
-            requiredAccuracy: 150,   // within 150 meters
+            maxAge: 3 * 60 * 1000, // prefer positions up to 3 min old
+            requiredAccuracy: 150, // within 150 meters
           });
           if (lastKnown) {
             logInfo('PassengerHomeScreen', 'Last known position available', {
@@ -458,11 +456,15 @@ export default function PassengerHomeScreen() {
             try {
               const staleKnown = await Location.getLastKnownPositionAsync();
               if (staleKnown) {
-                logWarning('PassengerHomeScreen', 'Using stale last known position as fallback: ' + JSON.stringify({
-                  lat: staleKnown.coords.latitude,
-                  lng: staleKnown.coords.longitude,
-                  ageMs: Date.now() - staleKnown.timestamp,
-                }));
+                logWarning(
+                  'PassengerHomeScreen',
+                  'Using stale last known position as fallback: ' +
+                    JSON.stringify({
+                      lat: staleKnown.coords.latitude,
+                      lng: staleKnown.coords.longitude,
+                      ageMs: Date.now() - staleKnown.timestamp,
+                    })
+                );
                 await applyLocation({
                   latitude: staleKnown.coords.latitude,
                   longitude: staleKnown.coords.longitude,
@@ -504,20 +506,30 @@ export default function PassengerHomeScreen() {
                 message =
                   'El GPS está desactivado o sin señal. Activa la ubicación en Configuración e intenta de nuevo.';
               } else {
-                message =
-                  `Error interno al obtener la ubicación.\n\nDetalle: ${msg}\n\nSi el problema persiste, reinicia la app.`;
+                message = `Error interno al obtener la ubicación.\n\nDetalle: ${msg}\n\nSi el problema persiste, reinicia la app.`;
               }
 
-              logWarning('PassengerHomeScreen', { context: 'Getting location', isNetwork, isGpsOff, message: msg });
+              logWarning('PassengerHomeScreen', {
+                context: 'Getting location',
+                isNetwork,
+                isGpsOff,
+                message: msg,
+              });
 
-              showStatus('warning', message, title, undefined, { label: 'Reintentar', onPress: () => {
-                setIsLoadingLocation(true);
-                Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-                  .then(loc =>
-                    applyLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude })
-                  )
-                  .catch(() => setIsLoadingLocation(false));
-              }});
+              showStatus('warning', message, title, undefined, {
+                label: 'Reintentar',
+                onPress: () => {
+                  setIsLoadingLocation(true);
+                  Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+                    .then(loc =>
+                      applyLocation({
+                        latitude: loc.coords.latitude,
+                        longitude: loc.coords.longitude,
+                      })
+                    )
+                    .catch(() => setIsLoadingLocation(false));
+                },
+              });
 
               setIsLoadingLocation(false);
             }
@@ -528,11 +540,14 @@ export default function PassengerHomeScreen() {
       } catch (error: any) {
         // Outer catch: unexpected errors (e.g. permissions API crash)
         logError('PassengerHomeScreen', error, { context: 'Location init' });
-        showToast('Ocurrió un error al inicializar la ubicación. Reinicia la app e intenta de nuevo.', 'error');
+        showToast(
+          'Ocurrió un error al inicializar la ubicación. Reinicia la app e intenta de nuevo.',
+          'error'
+        );
         setIsLoadingLocation(false);
       }
     })();
-  }, [user]);
+  }, [user, showStatus, showToast]);
 
   // Retry location when app comes from background (e.g., user enabled GPS in Settings)
   useEffect(() => {
@@ -549,8 +564,10 @@ export default function PassengerHomeScreen() {
             setPickupLocation(coords);
             setIsLoadingLocation(false);
             try {
-              const addr = await mapsService.reverseGeocode(coords.latitude, coords.longitude);
-              setPickupAddress(addr.address || `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`);
+              const addr = await reverseGeocode(coords.latitude, coords.longitude);
+              setPickupAddress(
+                addr.address || `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`
+              );
             } catch {
               setPickupAddress(`${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`);
             }
@@ -739,7 +756,7 @@ export default function PassengerHomeScreen() {
       };
 
       setDriverLocation(newDriverLocation);
-      
+
       if (data.heading !== undefined && data.heading !== null) {
         setDriverHeading(data.heading);
       } else {
@@ -764,7 +781,11 @@ export default function PassengerHomeScreen() {
       }
 
       // ========== MEJORA 2: Calcular Progreso del Viaje ==========
-      if (activeRide?.status === 'in_progress' && destinationLocation && initialDistanceToDestination > 0) {
+      if (
+        activeRide?.status === 'in_progress' &&
+        destinationLocation &&
+        initialDistanceToDestination > 0
+      ) {
         calculateRideProgress(newDriverLocation, destinationLocation);
       }
     };
@@ -871,7 +892,12 @@ export default function PassengerHomeScreen() {
       // CRITICAL: Only handle cancellation for the CURRENT active ride
       // Otherwise, an auto-cancelled previous ride will wipe the active ride's state
       if (data.rideId !== activeRide?.id) {
-        console.log('❌ Cancellation for different ride, ignoring. Cancelled:', data.rideId, 'Active:', activeRide?.id);
+        console.log(
+          '❌ Cancellation for different ride, ignoring. Cancelled:',
+          data.rideId,
+          'Active:',
+          activeRide?.id
+        );
         return;
       }
 
@@ -970,6 +996,7 @@ export default function PassengerHomeScreen() {
       // Remove all socket listeners to prevent duplicates
       removeAllListeners();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRide?.id]); // Only re-run when ride ID changes (new ride created)
 
   // Shared ride invitation listeners (Req. 7.3, 7.4)
@@ -982,7 +1009,7 @@ export default function PassengerHomeScreen() {
     console.log('[PASSENGER] Registering shared ride invitation listeners...');
 
     // Handle incoming invitation
-    const cleanupInvitationReceived = onSharedRideInvitationReceived((data) => {
+    const cleanupInvitationReceived = onSharedRideInvitationReceived(data => {
       console.log('[PASSENGER] Shared ride invitation received:', data);
 
       // Play notification sound
@@ -1004,23 +1031,23 @@ export default function PassengerHomeScreen() {
     });
 
     // Handle invitation accepted (for the inviter)
-    const cleanupInvitationAccepted = onSharedRideInvitationAccepted((data) => {
+    const cleanupInvitationAccepted = onSharedRideInvitationAccepted(data => {
       console.log('[PASSENGER] Shared ride invitation accepted:', data);
       // This would be handled by the inviter's screen
       // For now, just log it
     });
 
     // Handle invitation rejected (for the inviter)
-    const cleanupInvitationRejected = onSharedRideInvitationRejected((data) => {
+    const cleanupInvitationRejected = onSharedRideInvitationRejected(data => {
       console.log('[PASSENGER] Shared ride invitation rejected:', data);
       // This would be handled by the inviter's screen
       // For now, just log it
     });
 
     // Handle invitation expired
-    const cleanupInvitationExpired = onSharedRideInvitationExpired((data) => {
+    const cleanupInvitationExpired = onSharedRideInvitationExpired(data => {
       console.log('[PASSENGER] Shared ride invitation expired:', data);
-      
+
       // Close modal if it's still open for this invitation
       if (currentInvitation?.id === data.invitationId) {
         setShowInvitationModal(false);
@@ -1038,7 +1065,7 @@ export default function PassengerHomeScreen() {
       cleanupInvitationRejected();
       cleanupInvitationExpired();
     };
-  }, [isSocketConnected, currentInvitation?.id, playNotificationSound]);
+  }, [isSocketConnected, currentInvitation?.id, playNotificationSound, showToast]);
 
   // Track and send passenger location during active shared ride (Req. 4.10)
   useEffect(() => {
@@ -1069,7 +1096,7 @@ export default function PassengerHomeScreen() {
             timeInterval: 10000, // Update every 10 seconds
             distanceInterval: 50, // Or when moved 50 meters
           },
-          (location) => {
+          location => {
             const { latitude, longitude } = location.coords;
 
             // Send location update via socket
@@ -1128,7 +1155,11 @@ export default function PassengerHomeScreen() {
       setInitialDistanceToDestination(initialDistance);
       setRideProgress(0); // Iniciar en 0%
 
-      console.log('[RIDE_IMPROVEMENTS] Initial distance to destination:', initialDistance.toFixed(2), 'km');
+      console.log(
+        '[RIDE_IMPROVEMENTS] Initial distance to destination:',
+        initialDistance.toFixed(2),
+        'km'
+      );
 
       // Mejora 3: Buscar puntos de interés cercanos
       fetchNearbyLandmarks(driverLocation);
@@ -1140,34 +1171,40 @@ export default function PassengerHomeScreen() {
       setRideProgress(0);
       setNearbyLandmarks([]);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRide?.status, driverLocation, destinationLocation]);
 
   // Handlers for invitation modal
   const handleInvitationAccept = useCallback(
     (invitationId: string, pickupLocation: any) => {
       console.log('[PASSENGER] Invitation accepted:', invitationId, pickupLocation);
-      
+
       // Close modal
       setShowInvitationModal(false);
       setCurrentInvitation(null);
 
       // Show success message
-      showToast('Has aceptado la invitación. El solicitante confirmará el viaje y se buscará un conductor.', 'success');
+      showToast(
+        'Has aceptado la invitación. El solicitante confirmará el viaje y se buscará un conductor.',
+        'success'
+      );
     },
-    []
+    [showToast]
   );
 
-  const handleInvitationReject = useCallback((invitationId: string) => {
-    console.log('[PASSENGER] Invitation rejected:', invitationId);
-    
-    // Close modal
-    setShowInvitationModal(false);
-    setCurrentInvitation(null);
+  const handleInvitationReject = useCallback(
+    (invitationId: string) => {
+      console.log('[PASSENGER] Invitation rejected:', invitationId);
 
-    // Show confirmation message
-    showToast('Has rechazado la invitación de viaje compartido.', 'info');
-  }, []);
+      // Close modal
+      setShowInvitationModal(false);
+      setCurrentInvitation(null);
+
+      // Show confirmation message
+      showToast('Has rechazado la invitación de viaje compartido.', 'info');
+    },
+    [showToast]
+  );
 
   const handleInvitationClose = useCallback(() => {
     console.log('[PASSENGER] Invitation modal closed');
@@ -1196,7 +1233,7 @@ export default function PassengerHomeScreen() {
 
       if (waypoints.length === 2) {
         // Simple single-segment route
-        const routeData = await mapsService.getRoute(waypoints[0], waypoints[1]);
+        const routeData = await getRoute(waypoints[0], waypoints[1]);
         allRouteCoords = routeData.polyline.map((coord: [number, number]) => ({
           latitude: coord[1],
           longitude: coord[0],
@@ -1205,7 +1242,7 @@ export default function PassengerHomeScreen() {
         // Multi-segment route: fetch each consecutive segment and concatenate
         for (let i = 0; i < waypoints.length - 1; i++) {
           try {
-            const segmentData = await mapsService.getRoute(waypoints[i], waypoints[i + 1]);
+            const segmentData = await getRoute(waypoints[i], waypoints[i + 1]);
             const segmentCoords: RouteCoordinates[] = segmentData.polyline.map(
               (coord: [number, number]) => ({
                 latitude: coord[1],
@@ -1260,69 +1297,74 @@ export default function PassengerHomeScreen() {
   }, [pickupLocation, destinationLocation, secondPickupLocation, secondDestinationLocation]);
 
   // ========== MEJORA 1: Actualización Dinámica de Ruta ==========
-  const updateDynamicRoute = useCallback(async (
-    driverLoc: LocationCoords,
-    destination: LocationCoords
-  ) => {
-    try {
-      console.log('[DYNAMIC_ROUTE] Updating route from driver to destination');
-      
-      const routeData = await mapsService.getRoute(driverLoc, destination);
-      const newRouteCoords: RouteCoordinates[] = routeData.polyline.map((coord: [number, number]) => ({
-        latitude: coord[1],
-        longitude: coord[0],
-      }));
+  const updateDynamicRoute = useCallback(
+    async (driverLoc: LocationCoords, destination: LocationCoords) => {
+      try {
+        console.log('[DYNAMIC_ROUTE] Updating route from driver to destination');
 
-      setRouteCoordinates(newRouteCoords);
-      setLastRouteUpdate(Date.now());
-      
-      console.log('[DYNAMIC_ROUTE] Route updated successfully', {
-        pointsCount: newRouteCoords.length,
-      });
-    } catch (error) {
-      console.error('[DYNAMIC_ROUTE] Failed to update route:', error);
-      // Keep existing route on error
-    }
-  }, []);
+        const routeData = await getRoute(driverLoc, destination);
+        const newRouteCoords: RouteCoordinates[] = routeData.polyline.map(
+          (coord: [number, number]) => ({
+            latitude: coord[1],
+            longitude: coord[0],
+          })
+        );
+
+        setRouteCoordinates(newRouteCoords);
+        setLastRouteUpdate(Date.now());
+
+        console.log('[DYNAMIC_ROUTE] Route updated successfully', {
+          pointsCount: newRouteCoords.length,
+        });
+      } catch (error) {
+        console.error('[DYNAMIC_ROUTE] Failed to update route:', error);
+        // Keep existing route on error
+      }
+    },
+    []
+  );
 
   // ========== MEJORA 2: Calcular Progreso del Viaje ==========
-  const calculateRideProgress = useCallback((
-    driverLoc: LocationCoords,
-    destination: LocationCoords
-  ) => {
-    // Calcular distancia actual del conductor al destino usando Haversine
-    const R = 6371; // Radio de la Tierra en km
-    const dLat = toRad(destination.latitude - driverLoc.latitude);
-    const dLon = toRad(destination.longitude - driverLoc.longitude);
-    const lat1 = toRad(driverLoc.latitude);
-    const lat2 = toRad(destination.latitude);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const currentDistance = R * c;
+  const calculateRideProgress = useCallback(
+    (driverLoc: LocationCoords, destination: LocationCoords) => {
+      // Calcular distancia actual del conductor al destino usando Haversine
+      const R = 6371; // Radio de la Tierra en km
+      const dLat = toRad(destination.latitude - driverLoc.latitude);
+      const dLon = toRad(destination.longitude - driverLoc.longitude);
+      const lat1 = toRad(driverLoc.latitude);
+      const lat2 = toRad(destination.latitude);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const currentDistance = R * c;
 
-    // Calcular progreso: (distancia inicial - distancia actual) / distancia inicial * 100
-    if (initialDistanceToDestination > 0) {
-      const progress = Math.min(
-        100,
-        Math.max(0, ((initialDistanceToDestination - currentDistance) / initialDistanceToDestination) * 100)
-      );
-      setRideProgress(Math.round(progress));
-      
-      console.log('[RIDE_PROGRESS]', {
-        initial: initialDistanceToDestination.toFixed(2),
-        current: currentDistance.toFixed(2),
-        progress: `${progress.toFixed(1)}%`,
-      });
-    }
-  }, [initialDistanceToDestination]);
+      // Calcular progreso: (distancia inicial - distancia actual) / distancia inicial * 100
+      if (initialDistanceToDestination > 0) {
+        const progress = Math.min(
+          100,
+          Math.max(
+            0,
+            ((initialDistanceToDestination - currentDistance) / initialDistanceToDestination) * 100
+          )
+        );
+        setRideProgress(Math.round(progress));
+
+        console.log('[RIDE_PROGRESS]', {
+          initial: initialDistanceToDestination.toFixed(2),
+          current: currentDistance.toFixed(2),
+          progress: `${progress.toFixed(1)}%`,
+        });
+      }
+    },
+    [initialDistanceToDestination]
+  );
 
   // ========== MEJORA 3: Buscar Puntos de Interés Cercanos ==========
   const fetchNearbyLandmarks = useCallback(async (location: LocationCoords) => {
     try {
       console.log('[LANDMARKS] Fetching nearby landmarks...');
-      
+
       // Landmarks conocidos de San Juan de los Morros (hardcoded por ahora)
       const knownLandmarks = [
         {
@@ -1343,14 +1385,14 @@ export default function PassengerHomeScreen() {
           id: 'catedral',
           name: 'Catedral de San Juan',
           latitude: 9.9078,
-          longitude: -67.3540,
+          longitude: -67.354,
           type: 'landmark' as const,
         },
         {
           id: 'terminal',
           name: 'Terminal de Pasajeros',
-          latitude: 9.9050,
-          longitude: -67.3600,
+          latitude: 9.905,
+          longitude: -67.36,
           type: 'poi' as const,
         },
       ];
@@ -1367,7 +1409,7 @@ export default function PassengerHomeScreen() {
           Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         const distance = R * c;
-        
+
         return distance <= 2; // Dentro de 2km
       });
 
@@ -1400,17 +1442,27 @@ export default function PassengerHomeScreen() {
 
     // Determine point sequence
     const hasMultiplePickups = showSecondPickup && secondPickupLocation;
-    const points: Array<{ lat: number; lng: number }> = [{ lat: pickupLocation.latitude, lng: pickupLocation.longitude }];
+    const points: { lat: number; lng: number }[] = [
+      { lat: pickupLocation.latitude, lng: pickupLocation.longitude },
+    ];
     if (hasMultiplePickups) {
       points.push({ lat: secondPickupLocation.latitude, lng: secondPickupLocation.longitude });
     }
     points.push({ lat: destinationLocation.latitude, lng: destinationLocation.longitude });
     if (hasMultipleDestinations && secondDestinationLocation) {
-      points.push({ lat: secondDestinationLocation.latitude, lng: secondDestinationLocation.longitude });
+      points.push({
+        lat: secondDestinationLocation.latitude,
+        lng: secondDestinationLocation.longitude,
+      });
     }
 
     for (let i = 0; i < points.length - 1; i++) {
-      totalDistance += haversine(points[i].lat, points[i].lng, points[i + 1].lat, points[i + 1].lng);
+      totalDistance += haversine(
+        points[i].lat,
+        points[i].lng,
+        points[i + 1].lat,
+        points[i + 1].lng
+      );
     }
 
     // Estimate duration (rough estimate: 3 min per km)
@@ -1420,7 +1472,7 @@ export default function PassengerHomeScreen() {
 
     try {
       const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      
+
       // Build request body
       const hasMultiplePickups = showSecondPickup && secondPickupLocation;
       const isMultiPoint = hasMultiplePickups || hasMultipleDestinations;
@@ -1454,11 +1506,14 @@ export default function PassengerHomeScreen() {
 
         requestBody.pickupPoints = pickupPoints;
         requestBody.destinationPoints = destPoints;
-        console.log('[FARE_DEBUG] Sending multi-point request:', JSON.stringify({
-          pickupPoints,
-          destinationPoints: destPoints,
-          distanceKm: totalDistance,
-        }));
+        console.log(
+          '[FARE_DEBUG] Sending multi-point request:',
+          JSON.stringify({
+            pickupPoints,
+            destinationPoints: destPoints,
+            distanceKm: totalDistance,
+          })
+        );
       } else {
         // Single point: use individual fields
         requestBody.pickupLat = pickupLocation.latitude;
@@ -1466,19 +1521,16 @@ export default function PassengerHomeScreen() {
         requestBody.destinationLat = destinationLocation.latitude;
         requestBody.destinationLng = destinationLocation.longitude;
       }
-      
+
       // Use the full fare estimation engine (zone matrix + time surcharge)
-      const response = await fetch(
-        `${apiUrl}/api/fares/estimate`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(requestBody),
-        }
-      );
+      const response = await fetch(`${apiUrl}/api/fares/estimate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
 
       if (!response.ok) {
         throw new Error(`Fare estimate API returned ${response.status}`);
@@ -1488,20 +1540,26 @@ export default function PassengerHomeScreen() {
 
       if (result.success && result.data) {
         const data = result.data;
-        console.log('[FARE_DEBUG] Backend response:', JSON.stringify({
-          totalPrice: data.totalPrice,
-          currency: data.currency,
-          totalPriceUSD: data.totalPriceUSD,
-          fareType: data.fareType,
-          usedFallback: data.usedFallback,
-          fallbackType: data.fallbackType,
-          originZone: data.originZone,
-          destinationZone: data.destinationZone,
-          segmentBreakdown: data.segmentBreakdown?.map((s: any) => ({
-            from: s.from, to: s.to, price: s.price,
-            usedFallback: s.usedFallback, fallbackType: s.fallbackType
-          })),
-        }));
+        console.log(
+          '[FARE_DEBUG] Backend response:',
+          JSON.stringify({
+            totalPrice: data.totalPrice,
+            currency: data.currency,
+            totalPriceUSD: data.totalPriceUSD,
+            fareType: data.fareType,
+            usedFallback: data.usedFallback,
+            fallbackType: data.fallbackType,
+            originZone: data.originZone,
+            destinationZone: data.destinationZone,
+            segmentBreakdown: data.segmentBreakdown?.map((s: any) => ({
+              from: s.from,
+              to: s.to,
+              price: s.price,
+              usedFallback: s.usedFallback,
+              fallbackType: s.fallbackType,
+            })),
+          })
+        );
         setEstimatedFare(data.totalPrice);
         setFareCurrency(data.currency as Currency);
         setZoneInfo({
@@ -1523,9 +1581,15 @@ export default function PassengerHomeScreen() {
             if (bcv && bcv > 0) {
               exchangeRate = bcv;
               if (data.currency === 'USD') {
-                dualPrice = { usd: data.totalPrice, ves: Math.round(data.totalPrice * bcv * 100) / 100 };
+                dualPrice = {
+                  usd: data.totalPrice,
+                  ves: Math.round(data.totalPrice * bcv * 100) / 100,
+                };
               } else {
-                dualPrice = { ves: data.totalPrice, usd: Math.round((data.totalPrice / bcv) * 100) / 100 };
+                dualPrice = {
+                  ves: data.totalPrice,
+                  usd: Math.round((data.totalPrice / bcv) * 100) / 100,
+                };
               }
             }
           }
@@ -1536,12 +1600,15 @@ export default function PassengerHomeScreen() {
         // Store segment breakdown if available (for multi-point)
         const segmentBreakdown = data.segmentBreakdown || [];
         if (segmentBreakdown.length > 0) {
-          console.log('[FareEstimate] Segments:', segmentBreakdown.map((s: any) => ({
-            from: s.from,
-            to: s.to,
-            price: s.price,
-            distanceKm: s.distanceKm,
-          })));
+          console.log(
+            '[FareEstimate] Segments:',
+            segmentBreakdown.map((s: any) => ({
+              from: s.from,
+              to: s.to,
+              price: s.price,
+              distanceKm: s.distanceKm,
+            }))
+          );
         }
 
         // Determinar la tarifa base correcta según el tipo
@@ -1573,7 +1640,7 @@ export default function PassengerHomeScreen() {
       } else {
         throw new Error('Invalid response from fare estimate API');
       }
-    } catch (error) {
+    } catch {
       logWarning('PassengerHomeScreen', 'Fare estimate API failed — no fare available');
       setEstimatedFare(null);
       setFareBreakdown(null);
@@ -1581,7 +1648,15 @@ export default function PassengerHomeScreen() {
     } finally {
       setIsCalculatingFare(false);
     }
-  }, [pickupLocation, destinationLocation, secondDestinationLocation, showSecondDestination, vehicleType, token]);
+  }, [
+    pickupLocation,
+    destinationLocation,
+    secondPickupLocation,
+    secondDestinationLocation,
+    showSecondPickup,
+    showSecondDestination,
+    token,
+  ]);
 
   // Calculate route and fare when destination changes
   useEffect(() => {
@@ -1589,7 +1664,14 @@ export default function PassengerHomeScreen() {
       calculateRoute();
       calculateFareWithZone();
     }
-  }, [pickupLocation, destinationLocation, secondPickupLocation, secondDestinationLocation, calculateRoute, calculateFareWithZone]);
+  }, [
+    pickupLocation,
+    destinationLocation,
+    secondPickupLocation,
+    secondDestinationLocation,
+    calculateRoute,
+    calculateFareWithZone,
+  ]);
 
   const toRad = (value: number) => (value * Math.PI) / 180;
 
@@ -1725,7 +1807,7 @@ export default function PassengerHomeScreen() {
       console.log('[GEOCODING] User input:', userInput);
       console.log('[GEOCODING] Search query:', searchQuery);
 
-      const location = await mapsService.geocodeAddress(searchQuery);
+      const location = await geocodeAddress(searchQuery);
 
       if (!location || !location.latitude || !location.longitude) {
         showStatus(
@@ -1807,7 +1889,7 @@ export default function PassengerHomeScreen() {
       console.log('[PICKUP GEOCODING] User input:', userInput);
       console.log('[PICKUP GEOCODING] Search query:', searchQuery);
 
-      const location = await mapsService.geocodeAddress(searchQuery);
+      const location = await geocodeAddress(searchQuery);
 
       if (!location || !location.latitude || !location.longitude) {
         showStatus(
@@ -1856,7 +1938,9 @@ export default function PassengerHomeScreen() {
   };
 
   // Map selection handlers
-  const handleEnableMapSelection = (mode: 'pickup' | 'destination' | 'second_pickup' | 'second_destination') => {
+  const handleEnableMapSelection = (
+    mode: 'pickup' | 'destination' | 'second_pickup' | 'second_destination'
+  ) => {
     console.log('[MAP_SELECTION] ========================================');
     console.log('[MAP_SELECTION] Enabling map selection mode:', mode);
     console.log('[MAP_SELECTION] Previous mode:', mapSelectionMode);
@@ -1930,10 +2014,7 @@ export default function PassengerHomeScreen() {
     try {
       // Reverse geocode the selected coordinates
       console.log('[MAP_LONG_PRESS] Starting reverse geocode...');
-      const locationData = await mapsService.reverseGeocode(
-        coordinate.latitude,
-        coordinate.longitude
-      );
+      const locationData = await reverseGeocode(coordinate.latitude, coordinate.longitude);
 
       console.log('[MAP_LONG_PRESS] Reverse geocode result:', locationData);
 
@@ -1944,39 +2025,33 @@ export default function PassengerHomeScreen() {
       console.log('[MAP_LONG_PRESS] Address to show:', address);
 
       // Confirm selection with user
-      showStatus(
-        'info',
-        `¿Usar esta ubicación?\n\n${address}`,
-        'Confirmar Ubicación',
-        undefined,
-        {
-          label: 'Confirmar',
-          onPress: () => {
-            console.log('[MAP_LONG_PRESS] User confirmed selection');
-            const shortAddress = extractShortAddress(address);
-            if (mapSelectionMode === 'pickup') {
-              setPickupLocation(coordinate);
-              setPickupAddress(shortAddress);
-            } else if (mapSelectionMode === 'destination') {
-              setDestinationLocation(coordinate);
-              setDestinationAddress(shortAddress);
-            } else if (mapSelectionMode === 'second_pickup') {
-              setSecondPickupLocation(coordinate);
-              setSecondPickupAddress(shortAddress);
-              setSecondPickupLocationSource('custom');
-            } else if (mapSelectionMode === 'second_destination') {
-              setSecondDestinationLocation(coordinate);
-              setSecondDestinationAddress(shortAddress);
-              setSecondDestinationLocationSource('custom');
-            }
+      showStatus('info', `¿Usar esta ubicación?\n\n${address}`, 'Confirmar Ubicación', undefined, {
+        label: 'Confirmar',
+        onPress: () => {
+          console.log('[MAP_LONG_PRESS] User confirmed selection');
+          const shortAddress = extractShortAddress(address);
+          if (mapSelectionMode === 'pickup') {
+            setPickupLocation(coordinate);
+            setPickupAddress(shortAddress);
+          } else if (mapSelectionMode === 'destination') {
+            setDestinationLocation(coordinate);
+            setDestinationAddress(shortAddress);
+          } else if (mapSelectionMode === 'second_pickup') {
+            setSecondPickupLocation(coordinate);
+            setSecondPickupAddress(shortAddress);
+            setSecondPickupLocationSource('custom');
+          } else if (mapSelectionMode === 'second_destination') {
+            setSecondDestinationLocation(coordinate);
+            setSecondDestinationAddress(shortAddress);
+            setSecondDestinationLocationSource('custom');
+          }
 
-            // Reset selection mode
-            setMapSelectionMode('none');
-            setTempMarkerLocation(null);
-            setIsPanelCollapsed(false);
-          },
-        }
-      );
+          // Reset selection mode
+          setMapSelectionMode('none');
+          setTempMarkerLocation(null);
+          setIsPanelCollapsed(false);
+        },
+      });
     } catch (error) {
       console.error('[MAP_LONG_PRESS] Reverse geocoding error:', error);
 
@@ -2036,7 +2111,7 @@ export default function PassengerHomeScreen() {
       setIsEditingPickup(false);
 
       // Get short address for current location
-      const locationData = await mapsService.reverseGeocode(
+      const locationData = await reverseGeocode(
         currentLocation.latitude,
         currentLocation.longitude
       );
@@ -2148,7 +2223,7 @@ export default function PassengerHomeScreen() {
         destinationAddress: destinationFullAddress || destinationAddress, // Use full address for precision
         vehicleType: vehicleType,
         paymentMethodId: 'cash', // Default to cash
-        pickupPoints,      // Req. 6.5, 6.7
+        pickupPoints, // Req. 6.5, 6.7
         destinationPoints, // Req. 6.5, 6.7
       });
 
@@ -2197,7 +2272,10 @@ export default function PassengerHomeScreen() {
 
       // Handle specific error cases with user-friendly messages
       if (error.response?.status === 404) {
-        showToast('Lo sentimos, no hay conductores disponibles en tu área en este momento.', 'error');
+        showToast(
+          'Lo sentimos, no hay conductores disponibles en tu área en este momento.',
+          'error'
+        );
       } else if (error.response?.status === 401) {
         showToast('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.', 'error');
       } else {
@@ -2378,13 +2456,10 @@ export default function PassengerHomeScreen() {
         ? error.response.data.error.message
         : 'No se pudo procesar el pago. Por favor intenta nuevamente.';
 
-      showStatus(
-        'error',
-        errorMessage,
-        'No se pudo completar el pago',
-        undefined,
-        { label: 'Reintentar', onPress: handleProcessPayment }
-      );
+      showStatus('error', errorMessage, 'No se pudo completar el pago', undefined, {
+        label: 'Reintentar',
+        onPress: handleProcessPayment,
+      });
     }
   };
 
@@ -2425,12 +2500,15 @@ export default function PassengerHomeScreen() {
       if (paymentData.method === 'mobile_payment' && paymentData.referencia) {
         // P2C payment - already verified by the modal, just show success
         console.log('✅ P2C Payment already verified:', paymentData);
-        
+
         // Ocultar loading
         setIsRequestingRide(false);
 
         // Mostrar confirmación de éxito
-        showToast('Tu Pago Móvil ha sido verificado exitosamente. El conductor ha sido notificado.', 'success');
+        showToast(
+          'Tu Pago Móvil ha sido verificado exitosamente. El conductor ha sido notificado.',
+          'success'
+        );
       } else {
         // Legacy payment methods (transfer, cash)
         const response = await paymentAPI.completePayment(activeRide.id, {
@@ -2448,7 +2526,10 @@ export default function PassengerHomeScreen() {
         setIsRequestingRide(false);
 
         // Mostrar confirmación de éxito
-        showToast('Tu pago ha sido procesado exitosamente. El conductor ha sido notificado.', 'success');
+        showToast(
+          'Tu pago ha sido procesado exitosamente. El conductor ha sido notificado.',
+          'success'
+        );
       }
     } catch (error: any) {
       console.error('❌ Payment processing failed:', error);
@@ -2465,13 +2546,10 @@ export default function PassengerHomeScreen() {
         errorMessage = error.message;
       }
 
-      showStatus(
-        'error',
-        errorMessage,
-        'Error al Procesar Pago',
-        undefined,
-        { label: 'Reintentar', onPress: () => setShowMobilePaymentModal(true) }
-      );
+      showStatus('error', errorMessage, 'Error al Procesar Pago', undefined, {
+        label: 'Reintentar',
+        onPress: () => setShowMobilePaymentModal(true),
+      });
     }
   };
 
@@ -2512,9 +2590,12 @@ export default function PassengerHomeScreen() {
       });
 
       // Update local ride state (Req. 3.3)
-      setActiveRide(prev => prev ? { ...prev, paymentMode: 'pago_movil' } : prev);
+      setActiveRide(prev => (prev ? { ...prev, paymentMode: 'pago_movil' } : prev));
 
-      showToast('Tu método de pago ha sido cambiado a Pago Móvil. El conductor ha sido notificado.', 'success');
+      showToast(
+        'Tu método de pago ha sido cambiado a Pago Móvil. El conductor ha sido notificado.',
+        'success'
+      );
     } catch (error: any) {
       // On failure, keep original method (Req. 3.5)
       const msg =
@@ -2796,10 +2877,7 @@ export default function PassengerHomeScreen() {
         {/* Recenter on Driver Button */}
         {showDriverMarker && userInteractedWithMap && (
           <TouchableOpacity
-            style={[
-              styles.recenterDriverButton,
-              { top: insets.top + 44 },
-            ]}
+            style={[styles.recenterDriverButton, { top: insets.top + 44 }]}
             onPress={handleRecenterOnDriver}
             activeOpacity={0.7}
           >
@@ -2840,7 +2918,13 @@ export default function PassengerHomeScreen() {
                 <Text style={styles.mapSelectionBannerTitle}>Modo de Selección Activo</Text>
                 <Text style={styles.mapSelectionBannerText}>
                   Mantén presionado en el mapa para marcar{' '}
-                  {mapSelectionMode === 'pickup' ? 'recogida' : mapSelectionMode === 'second_pickup' ? '2do punto de recogida' : mapSelectionMode === 'second_destination' ? '2do punto de destino' : 'destino'}
+                  {mapSelectionMode === 'pickup'
+                    ? 'recogida'
+                    : mapSelectionMode === 'second_pickup'
+                      ? '2do punto de recogida'
+                      : mapSelectionMode === 'second_destination'
+                        ? '2do punto de destino'
+                        : 'destino'}
                 </Text>
               </View>
             </View>
@@ -3061,48 +3145,51 @@ export default function PassengerHomeScreen() {
 
                   {/* Vehicle Type Selector */}
                   <View style={styles.vehicleSelector}>
-                      <TouchableOpacity
+                    <TouchableOpacity
+                      style={[
+                        styles.vehicleButton,
+                        vehicleType === 'taxi' && styles.vehicleButtonActive,
+                      ]}
+                      onPress={() => setVehicleType('taxi')}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name="car"
+                        size={22}
+                        color={vehicleType === 'taxi' ? '#fff' : '#6B7280'}
+                      />
+                      <Text
                         style={[
-                          styles.vehicleButton,
-                          vehicleType === 'taxi' && styles.vehicleButtonActive,
+                          styles.vehicleButtonText,
+                          vehicleType === 'taxi' && styles.vehicleButtonTextActive,
                         ]}
-                        onPress={() => setVehicleType('taxi')}
-                        activeOpacity={0.8}
                       >
-                        <Ionicons
-                          name="car"
-                          size={22}
-                          color={vehicleType === 'taxi' ? '#fff' : '#6B7280'}
-                        />
-                        <Text
-                          style={[
-                            styles.vehicleButtonText,
-                            vehicleType === 'taxi' && styles.vehicleButtonTextActive,
-                          ]}
-                        >
-                          Carro
-                        </Text>
-                      </TouchableOpacity>
+                        Carro
+                      </Text>
+                    </TouchableOpacity>
 
-                      <TouchableOpacity
+                    <TouchableOpacity
+                      style={[
+                        styles.vehicleButton,
+                        vehicleType === 'moto_taxi' && styles.vehicleButtonActive,
+                      ]}
+                      onPress={() => setVehicleType('moto_taxi')}
+                      activeOpacity={0.8}
+                    >
+                      {/* Moto SVG icon */}
+                      <MotoIcon
+                        color={vehicleType === 'moto_taxi' ? '#fff' : '#6B7280'}
+                        size={22}
+                      />
+                      <Text
                         style={[
-                          styles.vehicleButton,
-                          vehicleType === 'moto_taxi' && styles.vehicleButtonActive,
+                          styles.vehicleButtonText,
+                          vehicleType === 'moto_taxi' && styles.vehicleButtonTextActive,
                         ]}
-                        onPress={() => setVehicleType('moto_taxi')}
-                        activeOpacity={0.8}
                       >
-                        {/* Moto SVG icon */}
-                        <MotoIcon color={vehicleType === 'moto_taxi' ? '#fff' : '#6B7280'} size={22} />
-                        <Text
-                          style={[
-                            styles.vehicleButtonText,
-                            vehicleType === 'moto_taxi' && styles.vehicleButtonTextActive,
-                          ]}
-                        >
-                          Moto
-                        </Text>
-                      </TouchableOpacity>
+                        Moto
+                      </Text>
+                    </TouchableOpacity>
                   </View>
 
                   {/* Moto Quantity Selector */}
@@ -3157,56 +3244,68 @@ export default function PassengerHomeScreen() {
                   {/* Route Card — pickup + destination unified */}
                   <View style={styles.routeCard}>
                     {/* Pickup row */}
-                      <View style={styles.routeRow}>
-                        <TouchableOpacity onPress={handleUseCurrentLocation} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                          <Ionicons name="location" size={20} color="#22c55e" />
-                        </TouchableOpacity>
-                        <View style={styles.routeRowContent}>
-                          {isEditingPickup ? (
-                            <AddressAutocomplete
-                              value={pickupAddress}
-                              onChangeText={setPickupAddress}
-                              onSelectPlace={(place) => {
-                                setPickupLocation({ latitude: place.latitude, longitude: place.longitude });
-                                setPickupAddress(place.name); // Show short name in input
-                                setPickupFullAddress(place.description || place.name); // Save full address internally
-                                setPickupLocationSource(place.source ?? null);
-                                setIsEditingPickup(false);
-                              }}
-                              placeholder="Punto de recogida"
-                              currentLocation={currentLocation ?? undefined}
-                              bare
-                              style={styles.routeAutocomplete}
-                              suggestionsStyle={styles.routeSuggestionsDropdown}
-                            />
-                          ) : (
-                            <TouchableOpacity
-                              style={styles.routeTextButton}
-                              onPress={() => setIsEditingPickup(true)}
-                              activeOpacity={0.7}
-                            >
-                              <Text style={styles.routeLabel}>Punto de recogida</Text>
-                              <Text style={styles.routeValue} numberOfLines={1}>
-                                {pickupAddress || 'Ubicación actual'}
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                        <View style={styles.routeActions}>
+                    <View style={styles.routeRow}>
+                      <TouchableOpacity
+                        onPress={handleUseCurrentLocation}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="location" size={20} color="#22c55e" />
+                      </TouchableOpacity>
+                      <View style={styles.routeRowContent}>
+                        {isEditingPickup ? (
+                          <AddressAutocomplete
+                            value={pickupAddress}
+                            onChangeText={setPickupAddress}
+                            onSelectPlace={place => {
+                              setPickupLocation({
+                                latitude: place.latitude,
+                                longitude: place.longitude,
+                              });
+                              setPickupAddress(place.name); // Show short name in input
+                              setPickupFullAddress(place.description || place.name); // Save full address internally
+                              setPickupLocationSource(place.source ?? null);
+                              setIsEditingPickup(false);
+                            }}
+                            placeholder="Punto de recogida"
+                            currentLocation={currentLocation ?? undefined}
+                            bare
+                            style={styles.routeAutocomplete}
+                            suggestionsStyle={styles.routeSuggestionsDropdown}
+                          />
+                        ) : (
                           <TouchableOpacity
-                            style={styles.routeActionBtn}
-                            onPress={isEditingPickup ? handleSearchPickup : () => setIsEditingPickup(true)}
+                            style={styles.routeTextButton}
+                            onPress={() => setIsEditingPickup(true)}
+                            activeOpacity={0.7}
                           >
-                            <Ionicons name={isEditingPickup ? 'search' : 'pencil'} size={15} color="#22c55e" />
+                            <Text style={styles.routeLabel}>Punto de recogida</Text>
+                            <Text style={styles.routeValue} numberOfLines={1}>
+                              {pickupAddress || 'Ubicación actual'}
+                            </Text>
                           </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.routeActionBtn}
-                            onPress={() => handleEnableMapSelection('pickup')}
-                          >
-                            <Ionicons name="map-outline" size={15} color="#22c55e" />
-                          </TouchableOpacity>
-                        </View>
+                        )}
                       </View>
+                      <View style={styles.routeActions}>
+                        <TouchableOpacity
+                          style={styles.routeActionBtn}
+                          onPress={
+                            isEditingPickup ? handleSearchPickup : () => setIsEditingPickup(true)
+                          }
+                        >
+                          <Ionicons
+                            name={isEditingPickup ? 'search' : 'pencil'}
+                            size={15}
+                            color="#22c55e"
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.routeActionBtn}
+                          onPress={() => handleEnableMapSelection('pickup')}
+                        >
+                          <Ionicons name="map-outline" size={15} color="#22c55e" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
 
                     {/* Divider with connector line */}
                     <View style={styles.routeDivider}>
@@ -3225,8 +3324,11 @@ export default function PassengerHomeScreen() {
                               <AddressAutocomplete
                                 value={secondPickupAddress}
                                 onChangeText={setSecondPickupAddress}
-                                onSelectPlace={(place) => {
-                                  setSecondPickupLocation({ latitude: place.latitude, longitude: place.longitude });
+                                onSelectPlace={place => {
+                                  setSecondPickupLocation({
+                                    latitude: place.latitude,
+                                    longitude: place.longitude,
+                                  });
                                   setSecondPickupAddress(place.name);
                                   setSecondPickupFullAddress(place.description || place.name);
                                   setSecondPickupLocationSource(place.source ?? null);
@@ -3254,20 +3356,34 @@ export default function PassengerHomeScreen() {
                           <View style={styles.routeActions}>
                             <TouchableOpacity
                               style={styles.routeActionBtn}
-                              onPress={isEditingSecondPickup
-                                ? async () => {
-                                    if (!secondPickupAddress.trim()) return;
-                                    try {
-                                      const loc = await mapsService.geocodeAddress(secondPickupAddress + ', San Juan de los Morros, Guárico, Venezuela');
-                                      if (loc) {
-                                        setSecondPickupLocation({ latitude: loc.latitude, longitude: loc.longitude });
-                                        setIsEditingSecondPickup(false);
+                              onPress={
+                                isEditingSecondPickup
+                                  ? async () => {
+                                      if (!secondPickupAddress.trim()) return;
+                                      try {
+                                        const loc = await geocodeAddress(
+                                          secondPickupAddress +
+                                            ', San Juan de los Morros, Guárico, Venezuela'
+                                        );
+                                        if (loc) {
+                                          setSecondPickupLocation({
+                                            latitude: loc.latitude,
+                                            longitude: loc.longitude,
+                                          });
+                                          setIsEditingSecondPickup(false);
+                                        }
+                                      } catch {
+                                        /* ignore */
                                       }
-                                    } catch { /* ignore */ }
-                                  }
-                                : () => setIsEditingSecondPickup(true)}
+                                    }
+                                  : () => setIsEditingSecondPickup(true)
+                              }
                             >
-                              <Ionicons name={isEditingSecondPickup ? 'search' : 'pencil'} size={15} color="#6366f1" />
+                              <Ionicons
+                                name={isEditingSecondPickup ? 'search' : 'pencil'}
+                                size={15}
+                                color="#6366f1"
+                              />
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={styles.routeActionBtn}
@@ -3298,40 +3414,43 @@ export default function PassengerHomeScreen() {
                     )}
 
                     {/* Destination row */}
-                      <View style={styles.routeRow}>
-                        <Ionicons name="location" size={20} color="#22c55e" />
-                        <View style={styles.routeRowContent}>
-                          <AddressAutocomplete
-                            value={destinationAddress}
-                            onChangeText={setDestinationAddress}
-                            onSelectPlace={(place) => {
-                              setDestinationLocation({ latitude: place.latitude, longitude: place.longitude });
-                              setDestinationAddress(place.name); // Show short name in input
-                              setDestinationFullAddress(place.description || place.name); // Save full address internally
-                              setDestinationLocationSource(place.source ?? null);
-                            }}
-                            placeholder="¿A dónde vas?"
-                            currentLocation={currentLocation ?? undefined}
-                            bare
-                            style={styles.routeAutocomplete}
-                            suggestionsStyle={styles.routeSuggestionsDropdown}
-                          />
-                        </View>
-                        <View style={styles.routeActions}>
-                          <TouchableOpacity
-                            style={styles.routeActionBtn}
-                            onPress={handleSearchDestination}
-                          >
-                            <Ionicons name="search" size={15} color="#22c55e" />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.routeActionBtn}
-                            onPress={() => handleEnableMapSelection('destination')}
-                          >
-                            <Ionicons name="map-outline" size={15} color="#22c55e" />
-                          </TouchableOpacity>
-                        </View>
+                    <View style={styles.routeRow}>
+                      <Ionicons name="location" size={20} color="#22c55e" />
+                      <View style={styles.routeRowContent}>
+                        <AddressAutocomplete
+                          value={destinationAddress}
+                          onChangeText={setDestinationAddress}
+                          onSelectPlace={place => {
+                            setDestinationLocation({
+                              latitude: place.latitude,
+                              longitude: place.longitude,
+                            });
+                            setDestinationAddress(place.name); // Show short name in input
+                            setDestinationFullAddress(place.description || place.name); // Save full address internally
+                            setDestinationLocationSource(place.source ?? null);
+                          }}
+                          placeholder="¿A dónde vas?"
+                          currentLocation={currentLocation ?? undefined}
+                          bare
+                          style={styles.routeAutocomplete}
+                          suggestionsStyle={styles.routeSuggestionsDropdown}
+                        />
                       </View>
+                      <View style={styles.routeActions}>
+                        <TouchableOpacity
+                          style={styles.routeActionBtn}
+                          onPress={handleSearchDestination}
+                        >
+                          <Ionicons name="search" size={15} color="#22c55e" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.routeActionBtn}
+                          onPress={() => handleEnableMapSelection('destination')}
+                        >
+                          <Ionicons name="map-outline" size={15} color="#22c55e" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
 
                     {/* Second Destination Row — shown when enabled (Req. 6.2, 6.4) */}
                     {showSecondDestination && (
@@ -3350,8 +3469,11 @@ export default function PassengerHomeScreen() {
                               <AddressAutocomplete
                                 value={secondDestinationAddress}
                                 onChangeText={setSecondDestinationAddress}
-                                onSelectPlace={(place) => {
-                                  setSecondDestinationLocation({ latitude: place.latitude, longitude: place.longitude });
+                                onSelectPlace={place => {
+                                  setSecondDestinationLocation({
+                                    latitude: place.latitude,
+                                    longitude: place.longitude,
+                                  });
                                   setSecondDestinationAddress(place.name);
                                   setSecondDestinationFullAddress(place.description || place.name);
                                   setSecondDestinationLocationSource(place.source ?? null);
@@ -3379,20 +3501,34 @@ export default function PassengerHomeScreen() {
                           <View style={styles.routeActions}>
                             <TouchableOpacity
                               style={styles.routeActionBtn}
-                              onPress={isEditingSecondDestination
-                                ? async () => {
-                                    if (!secondDestinationAddress.trim()) return;
-                                    try {
-                                      const loc = await mapsService.geocodeAddress(secondDestinationAddress + ', San Juan de los Morros, Guárico, Venezuela');
-                                      if (loc) {
-                                        setSecondDestinationLocation({ latitude: loc.latitude, longitude: loc.longitude });
-                                        setIsEditingSecondDestination(false);
+                              onPress={
+                                isEditingSecondDestination
+                                  ? async () => {
+                                      if (!secondDestinationAddress.trim()) return;
+                                      try {
+                                        const loc = await geocodeAddress(
+                                          secondDestinationAddress +
+                                            ', San Juan de los Morros, Guárico, Venezuela'
+                                        );
+                                        if (loc) {
+                                          setSecondDestinationLocation({
+                                            latitude: loc.latitude,
+                                            longitude: loc.longitude,
+                                          });
+                                          setIsEditingSecondDestination(false);
+                                        }
+                                      } catch {
+                                        /* ignore */
                                       }
-                                    } catch { /* ignore */ }
-                                  }
-                                : () => setIsEditingSecondDestination(true)}
+                                    }
+                                  : () => setIsEditingSecondDestination(true)
+                              }
                             >
-                              <Ionicons name={isEditingSecondDestination ? 'search' : 'pencil'} size={15} color="#e11d48" />
+                              <Ionicons
+                                name={isEditingSecondDestination ? 'search' : 'pencil'}
+                                size={15}
+                                color="#e11d48"
+                              />
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={styles.routeActionBtn}
@@ -3455,40 +3591,44 @@ export default function PassengerHomeScreen() {
                     <View style={styles.fareContainer}>
                       {/* Zone Badge - shows fare source */}
                       <View style={styles.zoneBadge}>
-                        <Ionicons 
-                          name={fareBreakdown.usedFallback ? "pricetag" : "grid"} 
-                          size={14} 
-                          color="#22c55e" 
+                        <Ionicons
+                          name={fareBreakdown.usedFallback ? 'pricetag' : 'grid'}
+                          size={14}
+                          color="#22c55e"
                         />
                         <Text style={styles.zoneBadgeText}>
-                          {fareBreakdown.segmentBreakdown && fareBreakdown.segmentBreakdown.length > 1
+                          {fareBreakdown.segmentBreakdown &&
+                          fareBreakdown.segmentBreakdown.length > 1
                             ? 'Tarifa multipunto'
                             : fareBreakdown.fallbackType === 'zone_origin'
-                              ? (fareBreakdown.originZoneName || 'Tarifa de zona')
+                              ? fareBreakdown.originZoneName || 'Tarifa de zona'
                               : fareBreakdown.fallbackType === 'zone_destination'
-                                ? (fareBreakdown.destinationZoneName || 'Tarifa de zona')
+                                ? fareBreakdown.destinationZoneName || 'Tarifa de zona'
                                 : fareBreakdown.fallbackType === 'policy_default'
                                   ? 'Tarifa base'
                                   : fareBreakdown.fareType === 'ZONA'
-                                    ? (fareBreakdown.originZoneName || 'Tarifa de zona')
-                                    : 'Tarifa estimada'
-                          }
+                                    ? fareBreakdown.originZoneName || 'Tarifa de zona'
+                                    : 'Tarifa estimada'}
                           {fareBreakdown.timeSurcharge?.applied ? ' + Recargo' : ''}
                         </Text>
                       </View>
-                      
+
                       {/* Time Surcharge Indicator - only when zone name is shown and surcharge applies */}
-                      {zoneInfo?.zoneName && zoneInfo.zoneName !== 'Desconocida' && fareBreakdown.timeSurcharge?.applied && (
-                        <View style={styles.surchargeIndicator}>
-                          <Ionicons name="time" size={12} color="#f59e0b" />
-                          <Text style={styles.surchargeText}>
-                            + Recargo de horario ({fareBreakdown.timeSurcharge.type === 'percentage' 
-                              ? `${fareBreakdown.timeSurcharge.value}%` 
-                              : formatCurrency(fareBreakdown.timeSurcharge.value, fareCurrency)})
-                          </Text>
-                        </View>
-                      )}
-                      
+                      {zoneInfo?.zoneName &&
+                        zoneInfo.zoneName !== 'Desconocida' &&
+                        fareBreakdown.timeSurcharge?.applied && (
+                          <View style={styles.surchargeIndicator}>
+                            <Ionicons name="time" size={12} color="#f59e0b" />
+                            <Text style={styles.surchargeText}>
+                              + Recargo de horario (
+                              {fareBreakdown.timeSurcharge.type === 'percentage'
+                                ? `${fareBreakdown.timeSurcharge.value}%`
+                                : formatCurrency(fareBreakdown.timeSurcharge.value, fareCurrency)}
+                              )
+                            </Text>
+                          </View>
+                        )}
+
                       {/* Trip Info: Distance and Duration */}
                       {(fareBreakdown.distance || fareBreakdown.duration) && (
                         <View style={styles.tripInfoContainer}>
@@ -3521,7 +3661,8 @@ export default function PassengerHomeScreen() {
                       {/* Fare Breakdown */}
                       <View style={styles.fareBreakdown}>
                         {/* Multi-point segment breakdown */}
-                            {fareBreakdown.segmentBreakdown && fareBreakdown.segmentBreakdown.length > 1 ? (
+                        {fareBreakdown.segmentBreakdown &&
+                        fareBreakdown.segmentBreakdown.length > 1 ? (
                           <>
                             {fareBreakdown.segmentBreakdown.map((seg, idx) => {
                               let label: string;
@@ -3542,17 +3683,22 @@ export default function PassengerHomeScreen() {
                               }
                               return (
                                 <View key={idx} style={styles.fareBreakdownRow}>
-                                  <Text style={styles.fareBreakdownLabel}>
-                                    {label}:
-                                  </Text>
+                                  <Text style={styles.fareBreakdownLabel}>{label}:</Text>
                                   <Text style={styles.fareBreakdownValue}>
                                     {showPrice ? formatCurrency(seg.price, 'VES') : 'Cubierto'}
                                   </Text>
                                 </View>
                               );
                             })}
-                            <View style={[styles.fareBreakdownRow, { borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 6 }]}>
-                              <Text style={[styles.fareBreakdownLabel, { fontWeight: '700' }]}>Total:</Text>
+                            <View
+                              style={[
+                                styles.fareBreakdownRow,
+                                { borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 6 },
+                              ]}
+                            >
+                              <Text style={[styles.fareBreakdownLabel, { fontWeight: '700' }]}>
+                                Total:
+                              </Text>
                               <Text style={[styles.fareBreakdownValue, { fontWeight: '700' }]}>
                                 {formatCurrency(estimatedFare, fareCurrency)}
                               </Text>
@@ -3581,9 +3727,11 @@ export default function PassengerHomeScreen() {
                         {fareBreakdown.timeSurcharge?.applied && (
                           <View style={styles.fareBreakdownRow}>
                             <Text style={styles.fareBreakdownLabel}>
-                              Recargo de horario ({fareBreakdown.timeSurcharge.type === 'percentage' 
-                                ? `${fareBreakdown.timeSurcharge.value}%` 
-                                : 'fijo'}):
+                              Recargo de horario (
+                              {fareBreakdown.timeSurcharge.type === 'percentage'
+                                ? `${fareBreakdown.timeSurcharge.value}%`
+                                : 'fijo'}
+                              ):
                             </Text>
                             <Text style={styles.fareBreakdownValue}>
                               {formatCurrency(fareBreakdown.timeSurcharge.amount, fareCurrency)}
@@ -3609,25 +3757,25 @@ export default function PassengerHomeScreen() {
                   )}
 
                   {/* Request Ride Button */}
-                    <TouchableOpacity
-                      style={[
-                        styles.requestButton,
-                        destinationLocation &&
-                          !isRequestingRide &&
-                          !isSearchingDriver &&
-                          styles.requestButtonEnabled,
-                        (!destinationLocation || isRequestingRide || isSearchingDriver) &&
-                          styles.requestButtonDisabled,
-                      ]}
-                      onPress={handleRequestRide}
-                      disabled={!destinationLocation || isRequestingRide || isSearchingDriver}
-                    >
-                      {isRequestingRide ? (
-                        <ActivityIndicator color="#fff" />
-                      ) : (
-                        <Text style={styles.requestButtonText}>Solicitar Viaje</Text>
-                      )}
-                    </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.requestButton,
+                      destinationLocation &&
+                        !isRequestingRide &&
+                        !isSearchingDriver &&
+                        styles.requestButtonEnabled,
+                      (!destinationLocation || isRequestingRide || isSearchingDriver) &&
+                        styles.requestButtonDisabled,
+                    ]}
+                    onPress={handleRequestRide}
+                    disabled={!destinationLocation || isRequestingRide || isSearchingDriver}
+                  >
+                    {isRequestingRide ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.requestButtonText}>Solicitar Viaje</Text>
+                    )}
+                  </TouchableOpacity>
                 </>
               )}
             </KeyboardAwareScrollView>
@@ -3832,7 +3980,10 @@ export default function PassengerHomeScreen() {
                           styles.paymentMethodOption,
                           paymentMethod === 'cash' && styles.paymentMethodOptionSelected,
                         ]}
-                        onPress={() => { setPaymentMethod('cash'); setSelectedPlatformMethod(null); }}
+                        onPress={() => {
+                          setPaymentMethod('cash');
+                          setSelectedPlatformMethod(null);
+                        }}
                       >
                         <View
                           style={[
@@ -3873,7 +4024,10 @@ export default function PassengerHomeScreen() {
                               styles.paymentMethodOption,
                               isSelected && styles.paymentMethodOptionSelected,
                             ]}
-                            onPress={() => { setPaymentMethod(methodType); setSelectedPlatformMethod(pm); }}
+                            onPress={() => {
+                              setPaymentMethod(methodType);
+                              setSelectedPlatformMethod(pm);
+                            }}
                           >
                             <View
                               style={[
@@ -3882,7 +4036,7 @@ export default function PassengerHomeScreen() {
                               ]}
                             >
                               <Ionicons
-                                name={isPagoMovil ? "phone-portrait" : "business"}
+                                name={isPagoMovil ? 'phone-portrait' : 'business'}
                                 size={28}
                                 color={isSelected ? '#22c55e' : '#8E8E93'}
                               />
@@ -3915,7 +4069,10 @@ export default function PassengerHomeScreen() {
                           styles.paymentMethodOption,
                           paymentMethod === 'card' && styles.paymentMethodOptionSelected,
                         ]}
-                        onPress={() => { setPaymentMethod('card'); setSelectedPlatformMethod(null); }}
+                        onPress={() => {
+                          setPaymentMethod('card');
+                          setSelectedPlatformMethod(null);
+                        }}
                       >
                         <View
                           style={[
@@ -3950,7 +4107,10 @@ export default function PassengerHomeScreen() {
                           styles.paymentMethodOption,
                           paymentMethod === 'digital_wallet' && styles.paymentMethodOptionSelected,
                         ]}
-                        onPress={() => { setPaymentMethod('digital_wallet'); setSelectedPlatformMethod(null); }}
+                        onPress={() => {
+                          setPaymentMethod('digital_wallet');
+                          setSelectedPlatformMethod(null);
+                        }}
                       >
                         <View
                           style={[
@@ -4008,7 +4168,13 @@ export default function PassengerHomeScreen() {
                       <>
                         <Ionicons name="checkmark-done" size={22} color="#fff" />
                         <Text style={styles.processPaymentButtonText}>
-                          {paymentMethod === 'cash' ? 'Confirmar Pago' : paymentMethod === 'pago_movil' ? 'Pagar con Pago Móvil' : paymentMethod === 'bank_transfer' ? 'Pagar con Transferencia' : 'Procesar Pago'}
+                          {paymentMethod === 'cash'
+                            ? 'Confirmar Pago'
+                            : paymentMethod === 'pago_movil'
+                              ? 'Pagar con Pago Móvil'
+                              : paymentMethod === 'bank_transfer'
+                                ? 'Pagar con Transferencia'
+                                : 'Procesar Pago'}
                         </Text>
                       </>
                     )}

@@ -5,7 +5,15 @@
  * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 8.2
  */
 
-import React, { useState, useEffect, useCallback, useMemo, Component, ErrorInfo, ReactNode } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  Component,
+  ErrorInfo,
+  ReactNode,
+} from 'react';
 import {
   View,
   Text,
@@ -17,7 +25,8 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Colors as colors } from '@/constants/theme';
-import walletService, {
+import {
+  walletService,
   WalletResponseDto,
   WalletTransactionDto,
   ExchangeRateResponse,
@@ -75,41 +84,44 @@ function DriverEarningsScreenContent() {
   /**
    * Load initial wallet data and first page of transactions in parallel
    */
-  const loadInitialData = useCallback(async (isRefresh = false, filter?: string) => {
-    try {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
+  const loadInitialData = useCallback(
+    async (isRefresh = false, filter?: string) => {
+      try {
+        if (isRefresh) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
+        setError(null);
+
+        const activeFilter = filter || dateFilter;
+        const dateParams = getDateParams(activeFilter);
+
+        const [walletData, txData, rate] = await Promise.all([
+          walletService.getMyWallet(),
+          walletService.getTransactions(PAGE_SIZE, 0, dateParams),
+          getExchangeRate().catch(() => null),
+        ]);
+
+        setWallet(walletData);
+        setTransactions(txData.transactions);
+        setTotalTransactions(txData.totalTransactions);
+        setOffset(txData.transactions.length);
+        setHasMore(txData.transactions.length < txData.totalTransactions);
+        setExchangeRate(rate);
+      } catch (err: any) {
+        const message =
+          err?.response?.data?.message ||
+          err?.message ||
+          'No se pudo cargar la información de ganancias';
+        setError(message);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-      setError(null);
-
-      const activeFilter = filter || dateFilter;
-      const dateParams = getDateParams(activeFilter);
-
-      const [walletData, txData, rate] = await Promise.all([
-        walletService.getMyWallet(),
-        walletService.getTransactions(PAGE_SIZE, 0, dateParams),
-        getExchangeRate().catch(() => null),
-      ]);
-
-      setWallet(walletData);
-      setTransactions(txData.transactions);
-      setTotalTransactions(txData.totalTransactions);
-      setOffset(txData.transactions.length);
-      setHasMore(txData.transactions.length < txData.totalTransactions);
-      setExchangeRate(rate);
-    } catch (err: any) {
-      const message =
-        err?.response?.data?.message ||
-        err?.message ||
-        'No se pudo cargar la información de ganancias';
-      setError(message);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [dateFilter, getDateParams]);
+    },
+    [dateFilter, getDateParams]
+  );
 
   /**
    * Load more transactions when user scrolls to the end
@@ -126,7 +138,7 @@ function DriverEarningsScreenContent() {
       setOffset(newOffset);
       setTotalTransactions(data.totalTransactions);
       setHasMore(newOffset < data.totalTransactions);
-    } catch (err: any) {
+    } catch {
       // Non-fatal: just stop loading more, user can scroll again
     } finally {
       setLoadingMore(false);
@@ -138,7 +150,7 @@ function DriverEarningsScreenContent() {
   }, [loadInitialData]);
 
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextState) => {
+    const subscription = AppState.addEventListener('change', nextState => {
       if (nextState === 'active') {
         loadInitialData(true);
       }
@@ -150,10 +162,13 @@ function DriverEarningsScreenContent() {
     loadInitialData(true);
   }, [loadInitialData]);
 
-  const handleDateFilter = useCallback((filter: 'all' | 'today' | 'week' | 'month') => {
-    setDateFilter(filter);
-    loadInitialData(false, filter);
-  }, [loadInitialData]);
+  const handleDateFilter = useCallback(
+    (filter: 'all' | 'today' | 'week' | 'month') => {
+      setDateFilter(filter);
+      loadInitialData(false, filter);
+    },
+    [loadInitialData]
+  );
 
   const isEmpty = (!wallet || wallet.balance === 0) && transactions.length === 0;
   const currency = wallet?.currency ?? 'VES';
@@ -167,23 +182,22 @@ function DriverEarningsScreenContent() {
   }, [transactions]);
 
   const avgPerRide = useMemo(() => {
-    return totalTransactions > 0 && wallet
-      ? wallet.balance / totalTransactions
-      : 0;
+    return totalTransactions > 0 && wallet ? wallet.balance / totalTransactions : 0;
   }, [totalTransactions, wallet]);
 
   const bcvRate = exchangeRate?.bcv ?? 0;
   const otherCurrency: Currency = currency === 'USD' ? 'VES' : 'USD';
-  const balanceOtherCurrency = !wallet ? 0
+  const balanceOtherCurrency = !wallet
+    ? 0
     : currency === 'USD'
       ? wallet.balance * bcvRate
-      : bcvRate > 0 ? wallet.balance / bcvRate : 0;
-  const todayEarningsOther = currency === 'USD'
-    ? todayEarnings * bcvRate
-    : bcvRate > 0 ? todayEarnings / bcvRate : 0;
-  const avgPerRideOther = currency === 'USD'
-    ? avgPerRide * bcvRate
-    : bcvRate > 0 ? avgPerRide / bcvRate : 0;
+      : bcvRate > 0
+        ? wallet.balance / bcvRate
+        : 0;
+  const todayEarningsOther =
+    currency === 'USD' ? todayEarnings * bcvRate : bcvRate > 0 ? todayEarnings / bcvRate : 0;
+  const avgPerRideOther =
+    currency === 'USD' ? avgPerRide * bcvRate : bcvRate > 0 ? avgPerRide / bcvRate : 0;
 
   // Initial loading state
   if (loading) {
@@ -219,7 +233,7 @@ function DriverEarningsScreenContent() {
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
       data={transactions}
-      keyExtractor={item => item.id}
+      keyExtractor={(item, index) => `${item.id}-${index}`}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -248,17 +262,25 @@ function DriverEarningsScreenContent() {
             <Text style={styles.balanceLabel}>Balance Actual</Text>
             <View style={styles.dualAmountRow}>
               <View style={styles.dualAmountItem}>
-                <Text style={styles.dualAmountValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+                <Text
+                  style={styles.dualAmountValue}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.5}
+                >
                   {formatCurrency(wallet?.balance ?? 0, currency)}
                 </Text>
-                <Text style={styles.dualAmountCurrency}>
-                  {currency === 'USD' ? 'USD' : 'VES'}
-                </Text>
+                <Text style={styles.dualAmountCurrency}>{currency === 'USD' ? 'USD' : 'VES'}</Text>
               </View>
               {bcvRate > 0 && (
                 <View style={styles.dualAmountItem}>
                   <View style={styles.dualAmountDivider} />
-                  <Text style={styles.dualAmountValueSecondary} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+                  <Text
+                    style={styles.dualAmountValueSecondary}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.5}
+                  >
                     {formatCurrency(balanceOtherCurrency, otherCurrency)}
                   </Text>
                   <Text style={styles.dualAmountCurrencySecondary}>
@@ -267,9 +289,7 @@ function DriverEarningsScreenContent() {
                 </View>
               )}
             </View>
-            {isEmpty && (
-              <Text style={styles.noEarningsText}>Sin ganancias aún</Text>
-            )}
+            {isEmpty && <Text style={styles.noEarningsText}>Sin ganancias aún</Text>}
             <Text style={styles.currencyLabel}>
               Tasa BCV: {bcvRate > 0 ? `Bs. ${bcvRate.toFixed(2)}` : 'No disponible'}
             </Text>
@@ -283,7 +303,12 @@ function DriverEarningsScreenContent() {
             <View style={styles.summaryCard}>
               <Ionicons name="cash-outline" size={20} color={colors.primary} />
               <View style={styles.dualSummaryRow}>
-                <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                <Text
+                  style={styles.summaryValue}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.6}
+                >
                   {formatCurrency(todayEarnings, currency)}
                 </Text>
                 {bcvRate > 0 && (
@@ -303,8 +328,15 @@ function DriverEarningsScreenContent() {
             <View style={styles.summaryCard}>
               <Ionicons name="trending-up-outline" size={20} color={colors.primary} />
               <View style={styles.dualSummaryRow}>
-                <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-                  {totalTransactions > 0 ? formatCurrency(avgPerRide, currency) : formatCurrency(0, currency)}
+                <Text
+                  style={styles.summaryValue}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.6}
+                >
+                  {totalTransactions > 0
+                    ? formatCurrency(avgPerRide, currency)
+                    : formatCurrency(0, currency)}
                 </Text>
                 {bcvRate > 0 && (
                   <Text style={styles.summaryValueSecondary}>
@@ -317,7 +349,9 @@ function DriverEarningsScreenContent() {
             <View style={styles.summaryCard}>
               <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
               <Text style={[styles.summaryValue, { fontSize: 22 }]}>
-                {typeof totalTransactions !== 'undefined' ? `${Math.round((transactions.filter(tx => tx.type === 'EARNING').length / Math.max(totalTransactions, 1)) * 100)}%` : '0%'}
+                {typeof totalTransactions !== 'undefined'
+                  ? `${Math.round((transactions.filter(tx => tx.type === 'EARNING').length / Math.max(totalTransactions, 1)) * 100)}%`
+                  : '0%'}
               </Text>
               <Text style={styles.summaryValueSecondary}>tasa de éxito</Text>
               <Text style={styles.summaryLabel}>Tasa Éxito</Text>
@@ -332,7 +366,12 @@ function DriverEarningsScreenContent() {
                 style={[styles.filterChip, dateFilter === chip.key && styles.filterChipActive]}
                 onPress={() => handleDateFilter(chip.key)}
               >
-                <Text style={[styles.filterChipText, dateFilter === chip.key && styles.filterChipTextActive]}>
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    dateFilter === chip.key && styles.filterChipTextActive,
+                  ]}
+                >
                   {chip.label}
                 </Text>
               </TouchableOpacity>
@@ -394,7 +433,10 @@ function DriverEarningsScreenContent() {
  * Wraps the earnings screen with an error boundary to prevent
  * unhandled rendering errors from crashing the global app.
  */
-class EarningsErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+class EarningsErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
   constructor(props: { children: ReactNode }) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -474,10 +516,10 @@ function TransactionItem({
       ? transaction.amount * exchangeRate
       : transaction.amount / exchangeRate
     : 0;
-  const wasConverted = !!(transaction.originalCurrency && transaction.originalCurrency !== txCurrency);
-  const conversionLabel = wasConverted
-    ? `${transaction.originalCurrency} → ${txCurrency}`
-    : null;
+  const wasConverted = !!(
+    transaction.originalCurrency && transaction.originalCurrency !== txCurrency
+  );
+  const conversionLabel = wasConverted ? `${transaction.originalCurrency} → ${txCurrency}` : null;
 
   return (
     <View style={styles.transactionItem}>
@@ -500,21 +542,28 @@ function TransactionItem({
             </View>
           </View>
           <View style={{ alignItems: 'flex-end', maxWidth: '55%' }}>
-            <Text style={[styles.transactionAmount, { color: amountColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-              {isEarning ? '+' : '-'}{formatCurrency(transaction.amount, txCurrency)}
+            <Text
+              style={[styles.transactionAmount, { color: amountColor }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {isEarning ? '+' : '-'}
+              {formatCurrency(transaction.amount, txCurrency)}
             </Text>
-            <Text style={[styles.transactionCurrencyLabel]}>
-              {txCurrency}
-            </Text>
+            <Text style={[styles.transactionCurrencyLabel]}>{txCurrency}</Text>
             {hasDual && (
               <>
                 <View style={{ height: 3 }} />
-                <Text style={[styles.transactionAmountSecondary, { color: amountColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                <Text
+                  style={[styles.transactionAmountSecondary, { color: amountColor }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                >
                   {formatCurrency(otherAmount, otherCurrency)}
                 </Text>
-                <Text style={[styles.transactionCurrencyLabelSecondary]}>
-                  {otherCurrency}
-                </Text>
+                <Text style={[styles.transactionCurrencyLabelSecondary]}>{otherCurrency}</Text>
               </>
             )}
           </View>

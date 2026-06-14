@@ -1,11 +1,11 @@
 /**
  * VehicleIconRenderer Usage Examples
- * 
+ *
  * Demonstrates how to use the VehicleIconRenderer component
  * with react-native-maps and MapRoutingService
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { VehicleIconRenderer, calculateOrientation } from './VehicleIconRenderer';
@@ -13,7 +13,7 @@ import { mapRoutingService } from '../../services/MapRoutingService';
 
 /**
  * Example 1: Static Taxi Icon
- * 
+ *
  * Displays a taxi icon at a fixed location without orientation
  */
 export const StaticTaxiIconExample: React.FC = () => {
@@ -40,7 +40,7 @@ export const StaticTaxiIconExample: React.FC = () => {
 
 /**
  * Example 2: Taxi Icon with Orientation
- * 
+ *
  * Displays a taxi icon oriented towards its destination
  */
 export const OrientedTaxiIconExample: React.FC = () => {
@@ -68,11 +68,7 @@ export const OrientedTaxiIconExample: React.FC = () => {
     >
       {/* Taxi icon oriented towards destination */}
       <Marker coordinate={currentLocation}>
-        <VehicleIconRenderer 
-          vehicleType="TAXI" 
-          orientation={orientation}
-          size={50}
-        />
+        <VehicleIconRenderer vehicleType="TAXI" orientation={orientation} size={50} />
       </Marker>
 
       {/* Destination marker */}
@@ -83,7 +79,7 @@ export const OrientedTaxiIconExample: React.FC = () => {
 
 /**
  * Example 3: Moving Taxi with Route
- * 
+ *
  * Displays a taxi moving along a route with dynamic orientation
  */
 export const MovingTaxiExample: React.FC = () => {
@@ -91,24 +87,27 @@ export const MovingTaxiExample: React.FC = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [orientation, setOrientation] = useState(0);
 
-  const origin = {
-    latitude: 19.4326,
-    longitude: -99.1332,
-  };
+  const origin = useMemo(
+    () => ({
+      latitude: 19.4326,
+      longitude: -99.1332,
+    }),
+    []
+  );
 
-  const destination = {
-    latitude: 19.4978,
-    longitude: -99.1269,
-  };
+  const destination = useMemo(
+    () => ({
+      latitude: 19.4978,
+      longitude: -99.1269,
+    }),
+    []
+  );
 
   // Calculate route on mount
   useEffect(() => {
     const loadRoute = async () => {
       try {
-        const routeData = await mapRoutingService.calculateTaxiRoute(
-          origin,
-          destination
-        );
+        const routeData = await mapRoutingService.calculateTaxiRoute(origin, destination);
         setRoute(routeData);
       } catch (error) {
         console.error('Error loading route:', error);
@@ -116,7 +115,7 @@ export const MovingTaxiExample: React.FC = () => {
     };
 
     loadRoute();
-  }, []);
+  }, [destination, origin]);
 
   // Simulate movement along route
   useEffect(() => {
@@ -161,19 +160,11 @@ export const MovingTaxiExample: React.FC = () => {
       }}
     >
       {/* Route polyline */}
-      <Polyline
-        coordinates={route.coordinates}
-        strokeColor="#22c55e"
-        strokeWidth={4}
-      />
+      <Polyline coordinates={route.coordinates} strokeColor="#22c55e" strokeWidth={4} />
 
       {/* Moving taxi icon */}
       <Marker coordinate={currentPosition}>
-        <VehicleIconRenderer 
-          vehicleType="TAXI" 
-          orientation={orientation}
-          size={50}
-        />
+        <VehicleIconRenderer vehicleType="TAXI" orientation={orientation} size={50} />
       </Marker>
 
       {/* Origin marker */}
@@ -187,7 +178,7 @@ export const MovingTaxiExample: React.FC = () => {
 
 /**
  * Example 4: Multiple Vehicles
- * 
+ *
  * Displays multiple vehicles with different types and orientations
  */
 export const MultipleVehiclesExample: React.FC = () => {
@@ -201,13 +192,13 @@ export const MultipleVehiclesExample: React.FC = () => {
     {
       id: '2',
       type: 'TAXI' as const,
-      location: { latitude: 19.4400, longitude: -99.1300 },
+      location: { latitude: 19.44, longitude: -99.13 },
       heading: 180,
     },
     {
       id: '3',
       type: 'GENERIC' as const,
-      location: { latitude: 19.4500, longitude: -99.1250 },
+      location: { latitude: 19.45, longitude: -99.125 },
       heading: 270,
     },
   ];
@@ -216,19 +207,15 @@ export const MultipleVehiclesExample: React.FC = () => {
     <MapView
       style={styles.map}
       initialRegion={{
-        latitude: 19.4400,
-        longitude: -99.1300,
+        latitude: 19.44,
+        longitude: -99.13,
         latitudeDelta: 0.05,
         longitudeDelta: 0.05,
       }}
     >
       {vehicles.map(vehicle => (
         <Marker key={vehicle.id} coordinate={vehicle.location}>
-          <VehicleIconRenderer 
-            vehicleType={vehicle.type} 
-            orientation={vehicle.heading}
-            size={45}
-          />
+          <VehicleIconRenderer vehicleType={vehicle.type} orientation={vehicle.heading} size={45} />
         </Marker>
       ))}
     </MapView>
@@ -237,7 +224,7 @@ export const MultipleVehiclesExample: React.FC = () => {
 
 /**
  * Example 5: Real-time Vehicle Tracking
- * 
+ *
  * Tracks a vehicle's position and updates orientation in real-time
  */
 export const RealTimeTrackingExample: React.FC<{
@@ -249,7 +236,6 @@ export const RealTimeTrackingExample: React.FC<{
     longitude: -99.1332,
   });
   const [orientation, setOrientation] = useState(0);
-  const [previousLocation, setPreviousLocation] = useState(vehicleLocation);
 
   // Simulate real-time updates (replace with actual socket/API calls)
   useEffect(() => {
@@ -264,8 +250,6 @@ export const RealTimeTrackingExample: React.FC<{
         // Calculate orientation based on movement
         const newOrientation = calculateOrientation(prev, newLocation);
         setOrientation(newOrientation);
-
-        setPreviousLocation(prev);
 
         if (onLocationUpdate) {
           onLocationUpdate(newLocation);
@@ -289,11 +273,7 @@ export const RealTimeTrackingExample: React.FC<{
       followsUserLocation
     >
       <Marker coordinate={vehicleLocation}>
-        <VehicleIconRenderer 
-          vehicleType="TAXI" 
-          orientation={orientation}
-          size={50}
-        />
+        <VehicleIconRenderer vehicleType="TAXI" orientation={orientation} size={50} />
       </Marker>
     </MapView>
   );

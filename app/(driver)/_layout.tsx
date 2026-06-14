@@ -2,7 +2,7 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 // import { walkthroughable, CopilotStep } from 'react-native-copilot';
-import { TouchableOpacity, Text, View, StyleSheet } from 'react-native';
+import { TouchableOpacity } from 'react-native';
 
 // const WalkthroughTouchableOpacity = walkthroughable(TouchableOpacity);
 
@@ -21,9 +21,7 @@ export default function DriverLayout() {
           options={{
             title: 'Inicio',
             tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
-            tabBarButton: (props: any) => (
-              <TouchableOpacity {...props} />
-            ),
+            tabBarButton: (props: any) => <TouchableOpacity {...props} />,
           }}
         />
         <Tabs.Screen
@@ -31,9 +29,7 @@ export default function DriverLayout() {
           options={{
             title: 'Historial',
             tabBarIcon: ({ color, size }) => <Ionicons name="time" size={size} color={color} />,
-            tabBarButton: (props: any) => (
-              <TouchableOpacity {...props} />
-            ),
+            tabBarButton: (props: any) => <TouchableOpacity {...props} />,
           }}
         />
         <Tabs.Screen
@@ -41,9 +37,7 @@ export default function DriverLayout() {
           options={{
             title: 'Ganancias',
             tabBarIcon: ({ color, size }) => <Ionicons name="wallet" size={size} color={color} />,
-            tabBarButton: (props: any) => (
-              <TouchableOpacity {...props} />
-            ),
+            tabBarButton: (props: any) => <TouchableOpacity {...props} />,
           }}
         />
         <Tabs.Screen
@@ -51,9 +45,7 @@ export default function DriverLayout() {
           options={{
             title: 'Perfil',
             tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
-            tabBarButton: (props: any) => (
-              <TouchableOpacity {...props} />
-            ),
+            tabBarButton: (props: any) => <TouchableOpacity {...props} />,
           }}
         />
 

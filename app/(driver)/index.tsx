@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, Modal, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
+  StyleSheet,
+  Modal,
+  ScrollView,
+} from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -18,7 +26,6 @@ import { Colors as colors } from '@/constants/theme';
 import { useSocketReconnect } from '@/hooks/useSocketReconnect';
 import { useSound } from '@/hooks/useSound';
 import { Ionicons } from '@expo/vector-icons';
-import { logError } from '@/utils/errorLogger';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import type { Socket } from 'socket.io-client';
 import { DriverTaxiIcon } from '@/src/components/map/markers';
@@ -30,11 +37,17 @@ import CenterLocationButton from '@/components/CenterLocationButton';
 // const WalkthroughTouchableOpacity = walkthroughable(TouchableOpacity);
 // const WalkthroughCenterLocationButton = walkthroughable(CenterLocationButton);
 
-
 export default function DriverHomeScreen() {
   const { user, token } = useAuthStore();
-  const { isAvailable, isUpdatingAvailability, setIsAvailable, toggleAvailability, balanceVES, balanceUSD, transactions } =
-    useDriverStore();
+  const {
+    isAvailable,
+    isUpdatingAvailability,
+    setIsAvailable,
+    toggleAvailability,
+    balanceVES,
+    balanceUSD,
+    transactions,
+  } = useDriverStore();
   const { playNotificationSound } = useSound();
   const { showToast, showError, showStatus } = useUnifiedNotifications();
   const router = useRouter();
@@ -56,10 +69,10 @@ export default function DriverHomeScreen() {
   useSocketReconnect();
 
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [heading, setHeading] = useState<number | null>(null); // Add heading state
+  const [, setHeading] = useState<number | null>(null); // Add heading state
   const [loading, setLoading] = useState(true);
-  const [socketInstance, setSocketInstance] = useState<Socket | null>(null);
-  const [isSocketConnected, setIsSocketConnected] = useState(false);
+  const [, setSocketInstance] = useState<Socket | null>(null);
+  const [, setIsSocketConnected] = useState(false);
 
   // Smart Tutorial state
   // const { start: startTour } = useCopilot();
@@ -85,8 +98,10 @@ export default function DriverHomeScreen() {
         } catch {}
       };
       checkActiveRide();
-      return () => { cancelled = true; };
-    }, [])
+      return () => {
+        cancelled = true;
+      };
+    }, [router])
   );
 
   // Function to toggle driver availability - now uses custom toast notifications
@@ -156,7 +171,11 @@ export default function DriverHomeScreen() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        showStatus('warning', 'Se necesita acceso a la ubicación para usar esta función. Por favor habilita los permisos de ubicación en la configuración de tu dispositivo.', 'Permiso Denegado');
+        showStatus(
+          'warning',
+          'Se necesita acceso a la ubicación para usar esta función. Por favor habilita los permisos de ubicación en la configuración de tu dispositivo.',
+          'Permiso Denegado'
+        );
         setLoading(false);
         return;
       }
@@ -207,7 +226,11 @@ export default function DriverHomeScreen() {
         setLocation(fallbackCoords);
         setLoading(false);
 
-        showStatus('warning', 'Los servicios de ubicación están deshabilitados. Se está usando una ubicación de prueba.\n\nPara usar tu ubicación real, habilita los servicios de ubicación y reinicia la aplicación.', 'Ubicación No Disponible');
+        showStatus(
+          'warning',
+          'Los servicios de ubicación están deshabilitados. Se está usando una ubicación de prueba.\n\nPara usar tu ubicación real, habilita los servicios de ubicación y reinicia la aplicación.',
+          'Ubicación No Disponible'
+        );
 
         // Send fallback location to server
         const socket = getSocket();
@@ -224,7 +247,13 @@ export default function DriverHomeScreen() {
         setLocation(fallbackCoords);
         setLoading(false);
 
-        showStatus('warning', 'No se pudo obtener tu ubicación. Se está usando una ubicación de prueba.\n\nVerifica que los servicios de ubicación estén habilitados, tengas buena señal GPS y estés en un lugar con visibilidad al cielo.', 'Tiempo de Espera Agotado', undefined, { label: 'Reintentar', onPress: () => initializeLocation() });
+        showStatus(
+          'warning',
+          'No se pudo obtener tu ubicación. Se está usando una ubicación de prueba.\n\nVerifica que los servicios de ubicación estén habilitados, tengas buena señal GPS y estés en un lugar con visibilidad al cielo.',
+          'Tiempo de Espera Agotado',
+          undefined,
+          { label: 'Reintentar', onPress: () => initializeLocation() }
+        );
 
         // Send fallback location to server
         const socket = getSocket();
@@ -241,7 +270,12 @@ export default function DriverHomeScreen() {
         setLocation(fallbackCoords);
         setLoading(false);
 
-        showStatus('error', 'No se pudo obtener tu ubicación. Se está usando una ubicación de prueba.\n\nPara usar tu ubicación real, verifica que los servicios de ubicación estén habilitados.', 'Error de Ubicación', undefined, { label: 'Reintentar', onPress: () => initializeLocation() }
+        showStatus(
+          'error',
+          'No se pudo obtener tu ubicación. Se está usando una ubicación de prueba.\n\nPara usar tu ubicación real, verifica que los servicios de ubicación estén habilitados.',
+          'Error de Ubicación',
+          undefined,
+          { label: 'Reintentar', onPress: () => initializeLocation() }
         );
 
         // Send fallback location to server
@@ -304,7 +338,7 @@ export default function DriverHomeScreen() {
       // Show alert to driver
       showStatus('ride_cancelled', message, 'Viaje Cancelado');
     },
-    [playNotificationSound]
+    [playNotificationSound, showStatus]
   );
 
   // Memoized callback for handling driver availability changes
@@ -342,7 +376,7 @@ export default function DriverHomeScreen() {
         console.log('[DRIVER] ⏸️ You are now unavailable');
       }
     },
-    []
+    [setIsAvailable]
   );
 
   const setupSocketListeners = useCallback(
@@ -507,7 +541,7 @@ export default function DriverHomeScreen() {
       console.error('[DRIVER] ========================================');
       setSocketInstance(null);
     }
-  }, [user, token, setupSocketListeners]);
+  }, [user?.id, user?.role, token, setupSocketListeners]);
 
   useEffect(() => {
     // Set mounted flag
@@ -610,8 +644,7 @@ export default function DriverHomeScreen() {
       }
       // Don't disconnect socket here - keep it alive for the session
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, token]);
+  }, [user?.id, user?.role, token]);
 
   if (loading || !location) {
     return (
@@ -678,7 +711,7 @@ export default function DriverHomeScreen() {
         style={[
           styles.availabilityStatus,
           isAvailable ? styles.available : styles.unavailable,
-          { top: insets.top + 4 }
+          { top: insets.top + 4 },
         ]}
         onPress={handleToggleAvailability}
         disabled={isUpdatingAvailability}
@@ -689,10 +722,7 @@ export default function DriverHomeScreen() {
         ) : (
           <>
             <View
-              style={[
-                styles.statusDot,
-                isAvailable ? styles.dotAvailable : styles.dotUnavailable,
-              ]}
+              style={[styles.statusDot, isAvailable ? styles.dotAvailable : styles.dotUnavailable]}
             />
             <Text style={styles.statusText}>{isAvailable ? 'Disponible' : 'No Disponible'}</Text>
           </>
@@ -713,10 +743,7 @@ export default function DriverHomeScreen() {
                 <Text style={styles.walletTitle}>Mi Billetera</Text>
                 <Text style={styles.walletSubtitle}>Tus ganancias acumuladas</Text>
               </View>
-              <TouchableOpacity 
-                onPress={() => setShowWallet(false)}
-                style={styles.closeButton}
-              >
+              <TouchableOpacity onPress={() => setShowWallet(false)} style={styles.closeButton}>
                 <Ionicons name="close" size={24} color={colors.darkGray} />
               </TouchableOpacity>
             </View>
@@ -731,7 +758,7 @@ export default function DriverHomeScreen() {
                     <Ionicons name="cash-outline" size={40} color="rgba(255,255,255,0.2)" />
                   </View>
                 </View>
-                
+
                 <View style={[styles.balanceCard, { backgroundColor: colors.darkGray }]}>
                   <Text style={styles.balanceLabel}>Dólares (USD)</Text>
                   <Text style={styles.balanceValueText}>$ {balanceUSD.toFixed(2)}</Text>
@@ -744,41 +771,48 @@ export default function DriverHomeScreen() {
               {/* Transactions History */}
               <View style={styles.historySection}>
                 <Text style={styles.historyTitle}>Historial de Ganancias</Text>
-                
+
                 {transactions.length === 0 ? (
                   <View style={styles.emptyHistory}>
                     <Ionicons name="receipt-outline" size={48} color={colors.lightGray} />
                     <Text style={styles.emptyHistoryText}>No tienes transacciones aún</Text>
                   </View>
                 ) : (
-                  transactions.map((item) => (
+                  transactions.map(item => (
                     <View key={item.id} style={styles.transactionItem}>
                       <View style={styles.transactionIconBox}>
-                        <Ionicons 
-                          name={item.type === 'credit' ? 'arrow-down-circle' : 'arrow-up-circle'} 
-                          size={24} 
-                          color={item.type === 'credit' ? colors.primary : colors.error} 
+                        <Ionicons
+                          name={item.type === 'credit' ? 'arrow-down-circle' : 'arrow-up-circle'}
+                          size={24}
+                          color={item.type === 'credit' ? colors.primary : colors.error}
                         />
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.transactionDesc}>{item.description}</Text>
                         <Text style={styles.transactionDate}>
-                          {new Date(item.date).toLocaleDateString()} • {new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(item.date).toLocaleDateString()} •{' '}
+                          {new Date(item.date).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
                         </Text>
                       </View>
-                      <Text style={[
-                        styles.transactionAmount,
-                        { color: item.type === 'credit' ? colors.primary : colors.error }
-                      ]}>
-                        {item.type === 'credit' ? '+' : '-'} {item.currency === 'VES' ? 'Bs.' : '$'} {item.amount.toFixed(2)}
+                      <Text
+                        style={[
+                          styles.transactionAmount,
+                          { color: item.type === 'credit' ? colors.primary : colors.error },
+                        ]}
+                      >
+                        {item.type === 'credit' ? '+' : '-'} {item.currency === 'VES' ? 'Bs.' : '$'}{' '}
+                        {item.amount.toFixed(2)}
                       </Text>
                     </View>
                   ))
                 )}
               </View>
             </ScrollView>
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               style={styles.withdrawButton}
               onPress={() => showToast('Funcionalidad de retiro próximamente disponible', 'info')}
             >
@@ -1017,4 +1051,3 @@ const styles = StyleSheet.create({
     top: undefined,
   },
 });
-

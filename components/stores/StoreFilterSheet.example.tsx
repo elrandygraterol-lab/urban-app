@@ -1,6 +1,6 @@
 /**
  * StoreFilterSheet Usage Example
- * 
+ *
  * This example demonstrates how to use the StoreFilterSheet component
  * in your store listing screens.
  */
@@ -91,7 +91,7 @@ export function StoreFilterSheetExample() {
 
 /**
  * Integration with Store List Screen
- * 
+ *
  * Example of how to integrate the filter sheet with a store list:
  */
 

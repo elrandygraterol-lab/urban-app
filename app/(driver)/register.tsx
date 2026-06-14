@@ -6,12 +6,11 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
-import { Colors as COLORS, Fonts as FONTS } from '@/constants/theme';
+import { Colors as COLORS } from '@/constants/theme';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 
 export default function DriverRegistrationScreen() {
@@ -76,10 +75,16 @@ export default function DriverRegistrationScreen() {
         vehicleModel: formData.vehicleModel,
       });
 
-      showStatus('success', 'Tu cuenta ha sido creada correctamente. Ahora puedes iniciar sesión.', 'Registro exitoso', undefined, {
-        label: 'Ir a Login',
-        onPress: () => router.replace('/(auth)/login'),
-      });
+      showStatus(
+        'success',
+        'Tu cuenta ha sido creada correctamente. Ahora puedes iniciar sesión.',
+        'Registro exitoso',
+        undefined,
+        {
+          label: 'Ir a Login',
+          onPress: () => router.replace('/(auth)/login'),
+        }
+      );
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Registro fallido', 'error');
     }

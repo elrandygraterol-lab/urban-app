@@ -13,7 +13,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import RNMapView, { Marker, Polyline } from 'react-native-maps';
 import { useTranslation } from 'react-i18next';
-import logger from '../utils/logger';
+import { logger } from '../utils/logger';
 
 interface Location {
   latitude: number;
@@ -25,7 +25,7 @@ interface MapViewComponentProps {
   pickupLocation?: Location;
   dropoffLocation?: Location;
   driverLocation?: Location;
-  routeCoordinates?: Array<[number, number]>;
+  routeCoordinates?: [number, number][];
   onMapReady?: () => void;
   onLocationChange?: (location: Location) => void;
   isOfflineMode?: boolean;
@@ -63,30 +63,6 @@ export const MapViewComponent: React.FC<MapViewComponentProps> = ({
     return [-74.006, 40.7128];
   };
 
-  // Calcular bounds para mostrar todas las ubicaciones
-  const calculateBounds = () => {
-    const locations = [pickupLocation, dropoffLocation, driverLocation].filter(
-      loc => loc !== undefined
-    ) as Location[];
-
-    if (locations.length === 0) return null;
-
-    const lats = locations.map(loc => loc.latitude);
-    const lngs = locations.map(loc => loc.longitude);
-
-    const minLat = Math.min(...lats);
-    const maxLat = Math.max(...lats);
-    const minLng = Math.min(...lngs);
-    const maxLng = Math.max(...lngs);
-
-    return {
-      latitude: (minLat + maxLat) / 2,
-      longitude: (minLng + maxLng) / 2,
-      latitudeDelta: maxLat - minLat + 0.05,
-      longitudeDelta: maxLng - minLng + 0.05,
-    };
-  };
-
   // Manejar carga del mapa
   const handleMapReady = async () => {
     try {
@@ -104,38 +80,49 @@ export const MapViewComponent: React.FC<MapViewComponentProps> = ({
     }
   };
 
-  // Manejar errores del mapa
-  const handleMapError = (error: any) => {
-    logger.error('Error en mapa', { error });
-    setMapError(t('errors.mapError'));
-  };
-
   // Actualizar cámara cuando cambian las ubicaciones
   useEffect(() => {
     if (!mapRef.current) return;
 
-    const bounds = calculateBounds();
+    const locations = [pickupLocation, dropoffLocation, driverLocation].filter(
+      loc => loc !== undefined
+    ) as Location[];
+
+    if (locations.length === 0) return;
+
+    const lats = locations.map(loc => loc.latitude);
+    const lngs = locations.map(loc => loc.longitude);
+
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+
+    const bounds = {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: maxLat - minLat + 0.05,
+      longitudeDelta: maxLng - minLng + 0.05,
+    };
 
     try {
-      if (bounds) {
-        // Mostrar todas las ubicaciones
-        mapRef.current.fitToCoordinates(
-          [
-            {
-              latitude: bounds.latitude - bounds.latitudeDelta / 2,
-              longitude: bounds.longitude - bounds.longitudeDelta / 2,
-            },
-            {
-              latitude: bounds.latitude + bounds.latitudeDelta / 2,
-              longitude: bounds.longitude + bounds.longitudeDelta / 2,
-            },
-          ],
+      // Mostrar todas las ubicaciones
+      mapRef.current.fitToCoordinates(
+        [
           {
-            edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-            animated: true,
-          }
-        );
-      }
+            latitude: bounds.latitude - bounds.latitudeDelta / 2,
+            longitude: bounds.longitude - bounds.longitudeDelta / 2,
+          },
+          {
+            latitude: bounds.latitude + bounds.latitudeDelta / 2,
+            longitude: bounds.longitude + bounds.longitudeDelta / 2,
+          },
+        ],
+        {
+          edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+          animated: true,
+        }
+      );
     } catch (error) {
       logger.error('Error actualizando cámara', { error });
     }

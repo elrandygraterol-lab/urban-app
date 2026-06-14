@@ -1,12 +1,12 @@
 /**
  * NavigationPanel Example Usage
- * 
+ *
  * Demonstrates how to use the NavigationPanel component in a driver screen.
  */
 
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Button, Text } from 'react-native';
-import NavigationPanel from './NavigationPanel';
+import { NavigationPanel } from './NavigationPanel';
 import type { NavigationStep, Location } from '../../services/MapRoutingService';
 
 /**
@@ -16,7 +16,7 @@ import type { NavigationStep, Location } from '../../services/MapRoutingService'
 export function BasicNavigationExample() {
   const [currentLocation, setCurrentLocation] = useState<Location>({
     latitude: 40.7128,
-    longitude: -74.0060,
+    longitude: -74.006,
   });
 
   const destination: Location = {
@@ -38,10 +38,7 @@ export function BasicNavigationExample() {
 
   return (
     <View style={styles.container}>
-      <NavigationPanel
-        currentLocation={currentLocation}
-        destination={destination}
-      />
+      <NavigationPanel currentLocation={currentLocation} destination={destination} />
     </View>
   );
 }
@@ -53,14 +50,16 @@ export function BasicNavigationExample() {
 export function SequentialNavigationExample() {
   const [currentLocation, setCurrentLocation] = useState<Location>({
     latitude: 40.7128,
-    longitude: -74.0060,
+    longitude: -74.006,
   });
 
-  const [currentPhase, setCurrentPhase] = useState<'pickup' | 'destination' | 'completed'>('pickup');
+  const [currentPhase, setCurrentPhase] = useState<'pickup' | 'destination' | 'completed'>(
+    'pickup'
+  );
 
   const pickupLocation: Location = {
     latitude: 40.7489,
-    longitude: -73.9680,
+    longitude: -73.968,
   };
 
   const destination: Location = {
@@ -117,7 +116,7 @@ export function SequentialNavigationExample() {
 export function NavigationWithCallbackExample() {
   const [currentLocation, setCurrentLocation] = useState<Location>({
     latitude: 40.7128,
-    longitude: -74.0060,
+    longitude: -74.006,
   });
 
   const [routeSummary, setRouteSummary] = useState<{
@@ -131,11 +130,7 @@ export function NavigationWithCallbackExample() {
     longitude: -73.9851,
   };
 
-  const handleRouteCalculated = (
-    steps: NavigationStep[],
-    distance: number,
-    duration: number
-  ) => {
+  const handleRouteCalculated = (steps: NavigationStep[], distance: number, duration: number) => {
     console.log(`Route calculated: ${distance.toFixed(1)}km, ${duration.toFixed(0)} minutes`);
     setRouteSummary({
       distance,
@@ -161,7 +156,8 @@ export function NavigationWithCallbackExample() {
       {routeSummary && (
         <View style={styles.summaryBar}>
           <Text style={styles.summaryText}>
-            {routeSummary.distance.toFixed(1)}km • {routeSummary.duration.toFixed(0)} min • {routeSummary.steps} steps
+            {routeSummary.distance.toFixed(1)}km • {routeSummary.duration.toFixed(0)} min •{' '}
+            {routeSummary.steps} steps
           </Text>
         </View>
       )}
@@ -181,7 +177,7 @@ export function NavigationWithCallbackExample() {
 export function InteractiveNavigationExample() {
   const [currentLocation, setCurrentLocation] = useState<Location>({
     latitude: 40.7128,
-    longitude: -74.0060,
+    longitude: -74.006,
   });
 
   const destination: Location = {
@@ -220,7 +216,7 @@ export function InteractiveNavigationExample() {
   const reset = () => {
     setCurrentLocation({
       latitude: 40.7128,
-      longitude: -74.0060,
+      longitude: -74.006,
     });
   };
 
@@ -245,10 +241,7 @@ export function InteractiveNavigationExample() {
           Current: {currentLocation.latitude.toFixed(4)}, {currentLocation.longitude.toFixed(4)}
         </Text>
       </View>
-      <NavigationPanel
-        currentLocation={currentLocation}
-        destination={destination}
-      />
+      <NavigationPanel currentLocation={currentLocation} destination={destination} />
     </View>
   );
 }
@@ -260,15 +253,17 @@ export function InteractiveNavigationExample() {
 export function FullTaxiTripExample() {
   const [currentLocation, setCurrentLocation] = useState<Location>({
     latitude: 40.7128,
-    longitude: -74.0060,
+    longitude: -74.006,
   });
 
   const [tripStatus, setTripStatus] = useState<'idle' | 'navigating' | 'completed'>('idle');
-  const [currentPhase, setCurrentPhase] = useState<'pickup' | 'destination' | 'completed'>('pickup');
+  const [currentPhase, setCurrentPhase] = useState<'pickup' | 'destination' | 'completed'>(
+    'pickup'
+  );
 
   const pickupLocation: Location = {
     latitude: 40.7489,
-    longitude: -73.9680,
+    longitude: -73.968,
   };
 
   const destination: Location = {
@@ -293,11 +288,7 @@ export function FullTaxiTripExample() {
     }
   };
 
-  const handleRouteCalculated = (
-    steps: NavigationStep[],
-    distance: number,
-    duration: number
-  ) => {
+  const handleRouteCalculated = (steps: NavigationStep[], distance: number, duration: number) => {
     console.log(`Route: ${distance.toFixed(1)}km, ETA: ${duration.toFixed(0)} min`);
     // In real app: display fare estimate to driver
   };

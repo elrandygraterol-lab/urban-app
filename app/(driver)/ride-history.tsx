@@ -52,41 +52,44 @@ export default function DriverRideHistoryScreen() {
     return params;
   }, [startDate, endDate]);
 
-  const loadRides = useCallback(async (pageNum: number, append = false) => {
-    try {
-      const filterParams = getFilterParams();
-      const response = await rideAPI.getRideHistory({
-        ...filterParams,
-        page: pageNum.toString(),
-        limit: PAGE_SIZE.toString(),
-      } as any);
+  const loadRides = useCallback(
+    async (pageNum: number, append = false) => {
+      try {
+        const filterParams = getFilterParams();
+        const response = await rideAPI.getRideHistory({
+          ...filterParams,
+          page: pageNum.toString(),
+          limit: PAGE_SIZE.toString(),
+        } as any);
 
-      const payload = response.data?.data ?? response.data;
-      let ridesData: RideHistoryItem[] = [];
-      let total = 0;
-      let pages = 1;
+        const payload = response.data?.data ?? response.data;
+        let ridesData: RideHistoryItem[] = [];
+        let total = 0;
+        let pages = 1;
 
-      if (payload?.rides && Array.isArray(payload.rides)) {
-        ridesData = payload.rides;
-        total = payload.total ?? ridesData.length;
-        pages = payload.totalPages ?? 1;
-      } else if (Array.isArray(payload)) {
-        ridesData = payload;
-        total = ridesData.length;
+        if (payload?.rides && Array.isArray(payload.rides)) {
+          ridesData = payload.rides;
+          total = payload.total ?? ridesData.length;
+          pages = payload.totalPages ?? 1;
+        } else if (Array.isArray(payload)) {
+          ridesData = payload;
+          total = ridesData.length;
+        }
+
+        if (append) {
+          setRides(prev => [...prev, ...ridesData]);
+        } else {
+          setRides(ridesData);
+        }
+        setTotalRides(total);
+        setTotalPages(pages);
+        setPage(pageNum);
+      } catch {
+        if (!append) setRides([]);
       }
-
-      if (append) {
-        setRides(prev => [...prev, ...ridesData]);
-      } else {
-        setRides(ridesData);
-      }
-      setTotalRides(total);
-      setTotalPages(pages);
-      setPage(pageNum);
-    } catch (error) {
-      if (!append) setRides([]);
-    }
-  }, [getFilterParams]);
+    },
+    [getFilterParams]
+  );
 
   useEffect(() => {
     setLoading(true);
@@ -132,12 +135,18 @@ export default function DriverRideHistoryScreen() {
 
   const getStatusConfig = (status: string) => {
     switch (status) {
-      case 'completed': return { label: 'Completado', color: '#16a34a', bg: '#f0fdf4' };
-      case 'cancelled': return { label: 'Cancelado', color: '#dc2626', bg: '#fef2f2' };
-      case 'in_progress': return { label: 'En progreso', color: '#2563eb', bg: '#eff6ff' };
-      case 'accepted': return { label: 'Aceptado', color: '#d97706', bg: '#fffbeb' };
-      case 'arrived': return { label: 'Llegó', color: '#7c3aed', bg: '#f5f3ff' };
-      default: return { label: 'Pendiente', color: '#6b7280', bg: '#f9fafb' };
+      case 'completed':
+        return { label: 'Completado', color: '#16a34a', bg: '#f0fdf4' };
+      case 'cancelled':
+        return { label: 'Cancelado', color: '#dc2626', bg: '#fef2f2' };
+      case 'in_progress':
+        return { label: 'En progreso', color: '#2563eb', bg: '#eff6ff' };
+      case 'accepted':
+        return { label: 'Aceptado', color: '#d97706', bg: '#fffbeb' };
+      case 'arrived':
+        return { label: 'Llegó', color: '#7c3aed', bg: '#f5f3ff' };
+      default:
+        return { label: 'Pendiente', color: '#6b7280', bg: '#f9fafb' };
     }
   };
 
@@ -163,18 +172,12 @@ export default function DriverRideHistoryScreen() {
               />
             </View>
             <View>
-              <Text style={styles.rideDate}>
-                {dateStr ? formatDate(dateStr) : '—'}
-              </Text>
-              <Text style={styles.rideTime}>
-                {dateStr ? formatTime(dateStr) : ''}
-              </Text>
+              <Text style={styles.rideDate}>{dateStr ? formatDate(dateStr) : '—'}</Text>
+              <Text style={styles.rideTime}>{dateStr ? formatTime(dateStr) : ''}</Text>
             </View>
           </View>
           <View style={styles.rideCardRight}>
-            <Text style={styles.rideFareAmount}>
-              {formatCurrency(fare, rideCurrency)}
-            </Text>
+            <Text style={styles.rideFareAmount}>{formatCurrency(fare, rideCurrency)}</Text>
             <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
               <View style={[styles.statusDot, { backgroundColor: statusConfig.color }]} />
               <Text style={[styles.statusText, { color: statusConfig.color }]}>
@@ -246,10 +249,7 @@ export default function DriverRideHistoryScreen() {
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Detalles del Viaje</Text>
-              <TouchableOpacity
-                style={styles.modalCloseBtn}
-                onPress={() => setSelectedRide(null)}
-              >
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setSelectedRide(null)}>
                 <Ionicons name="close" size={22} color="#6b7280" />
               </TouchableOpacity>
             </View>
@@ -266,12 +266,48 @@ export default function DriverRideHistoryScreen() {
 
             <FlatList
               data={[
-                { icon: 'calendar-outline' as const, label: 'Fecha y Hora', value: `${formatDate(selectedRide.completedAt || selectedRide.requestedAt)} — ${formatTime(selectedRide.completedAt || selectedRide.requestedAt)}` },
-                { icon: 'location-outline' as const, label: 'Origen', value: selectedRide.pickup?.address || '—' },
-                { icon: 'flag-outline' as const, label: 'Destino', value: selectedRide.destination?.address || '—' },
-                ...(selectedRide.passenger ? [{ icon: 'person-outline' as const, label: 'Pasajero', value: selectedRide.passenger.name }] : []),
-                ...(selectedRide.distance != null ? [{ icon: 'navigate-outline' as const, label: 'Distancia', value: `${selectedRide.distance.toFixed(2)} km` }] : []),
-                ...(selectedRide.duration != null ? [{ icon: 'time-outline' as const, label: 'Duración', value: `${selectedRide.duration} minutos` }] : []),
+                {
+                  icon: 'calendar-outline' as const,
+                  label: 'Fecha y Hora',
+                  value: `${formatDate(selectedRide.completedAt || selectedRide.requestedAt)} — ${formatTime(selectedRide.completedAt || selectedRide.requestedAt)}`,
+                },
+                {
+                  icon: 'location-outline' as const,
+                  label: 'Origen',
+                  value: selectedRide.pickup?.address || '—',
+                },
+                {
+                  icon: 'flag-outline' as const,
+                  label: 'Destino',
+                  value: selectedRide.destination?.address || '—',
+                },
+                ...(selectedRide.passenger
+                  ? [
+                      {
+                        icon: 'person-outline' as const,
+                        label: 'Pasajero',
+                        value: selectedRide.passenger.name,
+                      },
+                    ]
+                  : []),
+                ...(selectedRide.distance != null
+                  ? [
+                      {
+                        icon: 'navigate-outline' as const,
+                        label: 'Distancia',
+                        value: `${selectedRide.distance.toFixed(2)} km`,
+                      },
+                    ]
+                  : []),
+                ...(selectedRide.duration != null
+                  ? [
+                      {
+                        icon: 'time-outline' as const,
+                        label: 'Duración',
+                        value: `${selectedRide.duration} minutos`,
+                      },
+                    ]
+                  : []),
               ]}
               keyExtractor={(_, i) => i.toString()}
               renderItem={({ item }) => (
@@ -311,10 +347,7 @@ export default function DriverRideHistoryScreen() {
           <View style={styles.modalHandle} />
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Filtrar por Fecha</Text>
-            <TouchableOpacity
-              style={styles.modalCloseBtn}
-              onPress={() => setShowFilters(false)}
-            >
+            <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowFilters(false)}>
               <Ionicons name="close" size={22} color="#6b7280" />
             </TouchableOpacity>
           </View>
@@ -354,10 +387,7 @@ export default function DriverRideHistoryScreen() {
 
           <View style={styles.filterSection}>
             <Text style={styles.filterLabel}>Fecha de Fin</Text>
-            <TouchableOpacity
-              style={styles.dateButton}
-              onPress={() => setShowEndDatePicker(true)}
-            >
+            <TouchableOpacity style={styles.dateButton} onPress={() => setShowEndDatePicker(true)}>
               <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
               <Text style={[styles.dateButtonText, endDate && { color: '#1f2937' }]}>
                 {endDate ? formatDate(endDate.toISOString()) : 'Seleccionar fecha'}
@@ -387,13 +417,13 @@ export default function DriverRideHistoryScreen() {
 
           <View style={styles.filterButtons}>
             <TouchableOpacity
-              style={[styles.filterBtn, styles.filterBtnOutline]}
+              style={[styles.modalFilterBtn, styles.filterBtnOutline]}
               onPress={clearFilters}
             >
               <Text style={styles.filterBtnOutlineText}>Limpiar</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.filterBtn, styles.filterBtnPrimary]}
+              style={[styles.modalFilterBtn, styles.filterBtnPrimary]}
               onPress={applyFilters}
             >
               <Text style={styles.filterBtnPrimaryText}>Aplicar filtros</Text>
@@ -486,7 +516,11 @@ export default function DriverRideHistoryScreen() {
         keyExtractor={item => item.id}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.primary}
+          />
         }
         onEndReached={onEndReached}
         onEndReachedThreshold={0.4}
@@ -922,15 +956,15 @@ const styles = StyleSheet.create({
     marginTop: 8,
     gap: 12,
   },
-  filterBtn: {
+  filterBtnPrimary: {
+    backgroundColor: Colors.primary,
+  },
+  modalFilterBtn: {
     flex: 1,
     height: 50,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  filterBtnPrimary: {
-    backgroundColor: Colors.primary,
   },
   filterBtnOutline: {
     backgroundColor: '#fff',

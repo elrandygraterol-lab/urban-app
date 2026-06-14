@@ -48,17 +48,12 @@ export const GlobalNotificationOverlay: React.FC = () => {
   };
 
   return (
-    <Modal
-      visible={isVisible}
-      transparent={true}
-      animationType="fade"
-      statusBarTranslucent={true}
-    >
+    <Modal visible={isVisible} transparent={true} animationType="fade" statusBarTranslucent={true}>
       <View style={styles.overlay}>
         {/* Toasts at the top */}
         {toastQueue.length > 0 && (
           <SafeAreaView style={styles.toastArea}>
-            {toastQueue.map((toast) => (
+            {toastQueue.map(toast => (
               <ToastNotification key={toast.id} toast={toast} onDismiss={dismissToast} />
             ))}
           </SafeAreaView>

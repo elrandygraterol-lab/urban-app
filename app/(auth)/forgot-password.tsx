@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -61,63 +60,66 @@ export default function ForgotPasswordScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <Text style={styles.logo}>UrbanTaxi</Text>
-          <Text style={styles.tagline}>¿Listo para tu siguiente destino?</Text>
-          <Text style={styles.title}>Recuperar contraseña</Text>
-          <Text style={styles.subtitle}>
-            Ingresa tu email y te enviaremos un enlace para restablecer tu contraseña
-          </Text>
-        </View>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.header}>
+            <Text style={styles.logo}>UrbanTaxi</Text>
+            <Text style={styles.tagline}>¿Listo para tu siguiente destino?</Text>
+            <Text style={styles.title}>Recuperar contraseña</Text>
+            <Text style={styles.subtitle}>
+              Ingresa tu email y te enviaremos un enlace para restablecer tu contraseña
+            </Text>
+          </View>
 
-        <View style={styles.form}>
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#A9A9A9"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isLoading}
-          />
+          <View style={styles.form}>
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor="#A9A9A9"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isLoading}
+            />
 
-          <TouchableOpacity
-            style={[styles.resetButton, isLoading && styles.resetButtonDisabled]}
-            onPress={handleResetPassword}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.resetButtonText}>Enviar enlace</Text>
-            )}
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.resetButton, isLoading && styles.resetButtonDisabled]}
+              onPress={handleResetPassword}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.resetButtonText}>Enviar enlace</Text>
+              )}
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.push('/(auth)/reset-password' as any)}
-            disabled={isLoading}
-          >
-            <Text style={styles.backButtonText}>Ya tengo un código de recuperación</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.push('/(auth)/reset-password' as any)}
+              disabled={isLoading}
+            >
+              <Text style={styles.backButtonText}>Ya tengo un código de recuperación</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.push('/(auth)/login' as any)}
-            disabled={isLoading}
-          >
-            <Text style={styles.backButtonText}>Volver al inicio de sesión</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.push('/(auth)/login' as any)}
+              disabled={isLoading}
+            >
+              <Text style={styles.backButtonText}>Volver al inicio de sesión</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

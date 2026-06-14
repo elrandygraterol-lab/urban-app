@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Typography, BorderRadius, Spacing } from '@/constants/theme';
+import { Colors, Typography, Spacing } from '@/constants/theme';
 // import { useCopilot, walkthroughable, CopilotStep } from 'react-native-copilot';
 import { useSmartTutorial } from '@/hooks/useSmartTutorial';
 import { setActiveTutorialScreen } from '@/utils/tutorialState';
@@ -22,19 +22,19 @@ export default function StoresPlaceholderScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-            <Text style={styles.headerTitle}>Tiendas</Text>
+        <Text style={styles.headerTitle}>Tiendas</Text>
       </View>
 
       <View style={styles.content}>
-          <View style={styles.iconContainer}>
-            <Ionicons name="storefront-outline" size={80} color={Colors.lightGray} />
-            <Ionicons
-              name="construct-outline"
-              size={40}
-              color={Colors.primary}
-              style={styles.constructIcon}
-            />
-          </View>
+        <View style={styles.iconContainer}>
+          <Ionicons name="storefront-outline" size={80} color={Colors.lightGray} />
+          <Ionicons
+            name="construct-outline"
+            size={40}
+            color={Colors.primary}
+            style={styles.constructIcon}
+          />
+        </View>
         <Text style={styles.title}>Estamos construyendo esta sección</Text>
         <Text style={styles.subtitle}>
           Pronto estará lista para su uso. De momento, la función principal es de taxis.

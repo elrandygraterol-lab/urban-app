@@ -15,9 +15,7 @@ describe('SharedRideInvitationModal Integration', () => {
       inviterId: 'user-456',
       inviterName: 'Juan Pérez',
       inviterCode: 'USR-A3F7',
-      pickupPoints: [
-        { latitude: 10.5, longitude: -66.9, address: 'Av. Principal, Caracas' },
-      ],
+      pickupPoints: [{ latitude: 10.5, longitude: -66.9, address: 'Av. Principal, Caracas' }],
       destinationPoints: [
         { latitude: 10.6, longitude: -66.8, address: 'Centro Comercial, Caracas' },
       ],

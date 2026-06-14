@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Typography, BorderRadius, Spacing } from '@/constants/theme';
+import { Colors, Typography, Spacing } from '@/constants/theme';
 
 export default function StoreDetailPlaceholderScreen() {
   const router = useRouter();

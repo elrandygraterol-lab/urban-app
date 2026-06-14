@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { RideRequestData } from '@/context/NotificationContext';
 import { computeSecondsRemaining } from '@/utils/notificationUtils';
-import { formatCurrency, Currency } from '@/utils/currency';
+
 import { Colors } from '@/constants/theme';
 
 interface RideRequestModalProps {
@@ -42,9 +42,7 @@ export default function RideRequestModal({
   onExpire,
 }: RideRequestModalProps) {
   const totalSeconds = useRef(computeSecondsRemaining(data.expiresAt));
-  const [secondsRemaining, setSecondsRemaining] = useState(
-    computeSecondsRemaining(data.expiresAt)
-  );
+  const [secondsRemaining, setSecondsRemaining] = useState(computeSecondsRemaining(data.expiresAt));
   const progressAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -66,7 +64,7 @@ export default function RideRequestModal({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [data.expiresAt]);
+  }, [data.expiresAt, onExpire, progressAnim]);
 
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],
@@ -86,8 +84,7 @@ export default function RideRequestModal({
                 styles.progressBar,
                 {
                   width: progressWidth,
-                  backgroundColor:
-                    secondsRemaining <= 5 ? Colors.error : Colors.primary,
+                  backgroundColor: secondsRemaining <= 5 ? Colors.error : Colors.primary,
                 },
               ]}
             />
@@ -113,23 +110,16 @@ export default function RideRequestModal({
         {/* ── Passenger Card ──────────────────────────────────── */}
         <View style={styles.passengerCard}>
           {data.passengerProfilePhoto ? (
-            <Image
-              source={{ uri: data.passengerProfilePhoto }}
-              style={styles.passengerPhoto}
-            />
+            <Image source={{ uri: data.passengerProfilePhoto }} style={styles.passengerPhoto} />
           ) : (
             <View style={styles.passengerAvatar}>
-              <Text style={styles.avatarText}>
-                {(data.passengerName || 'P')[0].toUpperCase()}
-              </Text>
+              <Text style={styles.avatarText}>{(data.passengerName || 'P')[0].toUpperCase()}</Text>
             </View>
           )}
           <View style={styles.passengerInfo}>
             <Text style={styles.passengerName}>{data.passengerName || 'Pasajero'}</Text>
             <View style={styles.ratingRow}>
-              <Text style={styles.stars}>
-                {renderStars(data.passengerRating || 0)}
-              </Text>
+              <Text style={styles.stars}>{renderStars(data.passengerRating || 0)}</Text>
               <Text style={styles.ratingText}>
                 {data.passengerRating ? data.passengerRating.toFixed(1) : 'Nuevo'}
               </Text>
@@ -166,16 +156,12 @@ export default function RideRequestModal({
 
           <View style={styles.detailGrid}>
             <View style={styles.detailCard}>
-              <Text style={styles.detailCardValue}>
-                Bs. {data.estimatedFare.toFixed(2)}
-              </Text>
+              <Text style={styles.detailCardValue}>Bs. {data.estimatedFare.toFixed(2)}</Text>
               <Text style={styles.detailCardLabel}>Tarifa estimada</Text>
             </View>
 
             <View style={styles.detailCard}>
-              <Text style={styles.detailCardValue}>
-                {data.distance.toFixed(1)} km
-              </Text>
+              <Text style={styles.detailCardValue}>{data.distance.toFixed(1)} km</Text>
               <Text style={styles.detailCardLabel}>Distancia</Text>
             </View>
 

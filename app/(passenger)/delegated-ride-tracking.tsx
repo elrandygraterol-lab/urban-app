@@ -1,33 +1,21 @@
 /**
  * Delegated Ride Tracking Screen
- * 
+ *
  * Allows the requester (registered passenger who paid) to track a delegated ride in real-time.
  * Shows ride status, driver location, and beneficiary information.
- * 
+ *
  * Requirements: 9.10
  * Task: 14.5.3
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-  Linking,
-  Platform,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  DriverTaxiIcon,
-  PickupIcon,
-  DropoffIcon,
-} from '@/src/components/map/markers';
+import { DriverTaxiIcon, PickupIcon, DropoffIcon } from '@/src/components/map/markers';
 import { useAuthStore } from '@/store/authStore';
 import { rideAPI } from '@/services/api';
 import {
@@ -124,7 +112,7 @@ export default function DelegatedRideTrackingScreen() {
 
       if (response.data.success && response.data.data) {
         const data = response.data.data;
-        
+
         setRideData({
           id: data.rideId,
           status: data.status,
@@ -146,11 +134,8 @@ export default function DelegatedRideTrackingScreen() {
 
         // Fit map to show all markers
         if (mapRef.current) {
-          const coordinates = [
-            data.pickup,
-            data.destination,
-          ];
-          
+          const coordinates = [data.pickup, data.destination];
+
           if (data.driver?.location) {
             coordinates.push(data.driver.location);
           }
@@ -167,14 +152,15 @@ export default function DelegatedRideTrackingScreen() {
       }
     } catch (error: any) {
       logError('DelegatedRideTracking', error, { context: 'Loading ride data' });
-      
-      const errorMessage = error.response?.data?.error?.message || error.message || 'Error desconocido';
-      
+
+      const errorMessage =
+        error.response?.data?.error?.message || error.message || 'Error desconocido';
+
       showToast(`No se pudo cargar la información del viaje: ${errorMessage}`, 'error');
     } finally {
       setLoading(false);
     }
-  }, [rideId, token, router]);
+  }, [rideId, token, router, showToast]);
 
   // Setup WebSocket connection and listeners
   useEffect(() => {
@@ -188,7 +174,7 @@ export default function DelegatedRideTrackingScreen() {
       try {
         logInfo('DelegatedRideTracking', 'Connecting socket...');
         await connectSocket(token);
-        
+
         if (mounted) {
           setIsSocketConnected(true);
           logInfo('DelegatedRideTracking', 'Socket connected, joining ride room');
@@ -224,14 +210,22 @@ export default function DelegatedRideTrackingScreen() {
     // Listen for ride status changes
     const handleRideStatusChanged = (data: any) => {
       logInfo('DelegatedRideTracking', 'Ride status changed', { status: data.status });
-      
-      setRideData(prev => prev ? { ...prev, status: data.status } : null);
+
+      setRideData(prev => (prev ? { ...prev, status: data.status } : null));
 
       // Show alerts for important status changes
       if (data.status === 'arrived') {
-        showStatus('info', `El conductor ha llegado al punto de recogida para ${rideData?.beneficiaryName}.`, '📍 Conductor en el Punto de Recogida');
+        showStatus(
+          'info',
+          `El conductor ha llegado al punto de recogida para ${rideData?.beneficiaryName}.`,
+          '📍 Conductor en el Punto de Recogida'
+        );
       } else if (data.status === 'in_progress') {
-        showStatus('info', `El viaje de ${rideData?.beneficiaryName} está en progreso.`, '🚀 Viaje en Progreso');
+        showStatus(
+          'info',
+          `El viaje de ${rideData?.beneficiaryName} está en progreso.`,
+          '🚀 Viaje en Progreso'
+        );
       }
     };
 
@@ -252,35 +246,55 @@ export default function DelegatedRideTrackingScreen() {
     const handleETAUpdate = (data: any) => {
       logInfo('DelegatedRideTracking', 'ETA update', { eta: data.eta });
 
-      setRideData(prev => prev ? {
-        ...prev,
-        eta: {
-          estimatedMinutes: data.eta.estimatedMinutes,
-          distanceKm: data.eta.distanceKm,
-        },
-      } : null);
+      setRideData(prev =>
+        prev
+          ? {
+              ...prev,
+              eta: {
+                estimatedMinutes: data.eta.estimatedMinutes,
+                distanceKm: data.eta.distanceKm,
+              },
+            }
+          : null
+      );
     };
 
     // Listen for ride completed
     const cleanupCompleted = onRideCompleted((data: any) => {
       logInfo('DelegatedRideTracking', 'Ride completed', { rideId: data.rideId });
 
-      setRideData(prev => prev ? {
-        ...prev,
-        status: 'completed',
-        finalFare: data.finalFare,
-      } : null);
+      setRideData(prev =>
+        prev
+          ? {
+              ...prev,
+              status: 'completed',
+              finalFare: data.finalFare,
+            }
+          : null
+      );
 
-      showStatus('info', `El viaje de ${rideData?.beneficiaryName} ha sido completado exitosamente.`, '✅ Viaje Completado', undefined, { label: 'Ver Historial', onPress: () => router.push('/(passenger)/history') });
+      showStatus(
+        'info',
+        `El viaje de ${rideData?.beneficiaryName} ha sido completado exitosamente.`,
+        '✅ Viaje Completado',
+        undefined,
+        { label: 'Ver Historial', onPress: () => router.push('/(passenger)/history') }
+      );
     });
 
     // Listen for ride cancelled
     const cleanupCancelled = onRideCancelled((data: any) => {
       logInfo('DelegatedRideTracking', 'Ride cancelled', { rideId: data.rideId });
 
-      setRideData(prev => prev ? { ...prev, status: 'cancelled' } : null);
+      setRideData(prev => (prev ? { ...prev, status: 'cancelled' } : null));
 
-      showStatus('info', `El viaje de ${rideData?.beneficiaryName} ha sido cancelado.\n\nMotivo: ${data.cancellationReason}`, '❌ Viaje Cancelado', undefined, { label: 'Entendido', onPress: () => router.back() });
+      showStatus(
+        'info',
+        `El viaje de ${rideData?.beneficiaryName} ha sido cancelado.\n\nMotivo: ${data.cancellationReason}`,
+        '❌ Viaje Cancelado',
+        undefined,
+        { label: 'Entendido', onPress: () => router.back() }
+      );
     });
 
     onRideStatusChanged(handleRideStatusChanged);
@@ -291,7 +305,7 @@ export default function DelegatedRideTrackingScreen() {
       cleanupCompleted();
       cleanupCancelled();
     };
-  }, [rideId, isSocketConnected, rideData?.beneficiaryName, router]);
+  }, [rideId, isSocketConnected, rideData?.beneficiaryName, router, showStatus]);
 
   // Load ride data on mount
   useEffect(() => {
@@ -306,17 +320,23 @@ export default function DelegatedRideTrackingScreen() {
     }
 
     const phoneUrl = `tel:${rideData.beneficiaryPhone}`;
-    
-    showStatus('info', `¿Deseas llamar a ${rideData.beneficiaryName}?`, 'Llamar al Beneficiario', undefined, {
-      label: 'Llamar',
-      onPress: () => {
-        Linking.openURL(phoneUrl).catch(err => {
-          logError('DelegatedRideTracking', err, { context: 'Opening phone dialer' });
-          showToast('No se pudo abrir el marcador telefónico', 'error');
-        });
-      },
-    });
-  }, [rideData]);
+
+    showStatus(
+      'info',
+      `¿Deseas llamar a ${rideData.beneficiaryName}?`,
+      'Llamar al Beneficiario',
+      undefined,
+      {
+        label: 'Llamar',
+        onPress: () => {
+          Linking.openURL(phoneUrl).catch(err => {
+            logError('DelegatedRideTracking', err, { context: 'Opening phone dialer' });
+            showToast('No se pudo abrir el marcador telefónico', 'error');
+          });
+        },
+      }
+    );
+  }, [rideData, showStatus, showToast]);
 
   // Handle call driver
   const handleCallDriver = useCallback(() => {
@@ -326,17 +346,23 @@ export default function DelegatedRideTrackingScreen() {
     }
 
     const phoneUrl = `tel:${rideData.driver.phone}`;
-    
-    showStatus('info', `¿Deseas llamar a ${rideData.driver.name}?`, 'Llamar al Conductor', undefined, {
-      label: 'Llamar',
-      onPress: () => {
-        Linking.openURL(phoneUrl).catch(err => {
-          logError('DelegatedRideTracking', err, { context: 'Opening phone dialer' });
-          showToast('No se pudo abrir el marcador telefónico', 'error');
-        });
-      },
-    });
-  }, [rideData]);
+
+    showStatus(
+      'info',
+      `¿Deseas llamar a ${rideData.driver.name}?`,
+      'Llamar al Conductor',
+      undefined,
+      {
+        label: 'Llamar',
+        onPress: () => {
+          Linking.openURL(phoneUrl).catch(err => {
+            logError('DelegatedRideTracking', err, { context: 'Opening phone dialer' });
+            showToast('No se pudo abrir el marcador telefónico', 'error');
+          });
+        },
+      }
+    );
+  }, [rideData, showStatus, showToast]);
 
   // Get status label and color
   const getStatusInfo = (status: string) => {
@@ -344,7 +370,11 @@ export default function DelegatedRideTrackingScreen() {
       case 'pending':
         return { label: 'Buscando Conductor', color: '#f59e0b', icon: 'search' as const };
       case 'accepted':
-        return { label: 'Conductor Asignado', color: Colors.primary, icon: 'checkmark-circle' as const };
+        return {
+          label: 'Conductor Asignado',
+          color: Colors.primary,
+          icon: 'checkmark-circle' as const,
+        };
       case 'arrived':
         return { label: 'Conductor en el Punto', color: '#8b5cf6', icon: 'location' as const };
       case 'in_progress':
@@ -468,10 +498,7 @@ export default function DelegatedRideTrackingScreen() {
                 <Text style={styles.beneficiaryPhone}>{rideData.beneficiaryPhone}</Text>
               </View>
             </View>
-            <TouchableOpacity
-              style={styles.callButton}
-              onPress={handleCallBeneficiary}
-            >
+            <TouchableOpacity style={styles.callButton} onPress={handleCallBeneficiary}>
               <Ionicons name="call" size={20} color="#fff" />
             </TouchableOpacity>
           </View>
@@ -489,7 +516,8 @@ export default function DelegatedRideTrackingScreen() {
                 <View style={styles.driverDetails}>
                   <Text style={styles.driverName}>{rideData.driver.name}</Text>
                   <Text style={styles.driverVehicle}>
-                    {rideData.driver.vehicleInfo?.model || 'Vehículo'} - {rideData.driver.vehicleInfo?.licensePlate || 'N/A'}
+                    {rideData.driver.vehicleInfo?.model || 'Vehículo'} -{' '}
+                    {rideData.driver.vehicleInfo?.licensePlate || 'N/A'}
                   </Text>
                   <View style={styles.driverRating}>
                     <Ionicons name="star" size={14} color="#f59e0b" />
@@ -497,10 +525,7 @@ export default function DelegatedRideTrackingScreen() {
                   </View>
                 </View>
               </View>
-              <TouchableOpacity
-                style={styles.callButton}
-                onPress={handleCallDriver}
-              >
+              <TouchableOpacity style={styles.callButton} onPress={handleCallDriver}>
                 <Ionicons name="call" size={20} color="#fff" />
               </TouchableOpacity>
             </View>
@@ -512,14 +537,11 @@ export default function DelegatedRideTrackingScreen() {
           <View style={styles.etaCard}>
             <Ionicons name="time-outline" size={20} color={Colors.primary} />
             <Text style={styles.etaText}>
-              {rideData.status === 'in_progress' 
+              {rideData.status === 'in_progress'
                 ? `Llegada en ${Math.ceil(rideData.eta.estimatedMinutes)} min`
-                : `Conductor llegará en ${Math.ceil(rideData.eta.estimatedMinutes)} min`
-              }
+                : `Conductor llegará en ${Math.ceil(rideData.eta.estimatedMinutes)} min`}
             </Text>
-            <Text style={styles.etaDistance}>
-              ({rideData.eta.distanceKm.toFixed(1)} km)
-            </Text>
+            <Text style={styles.etaDistance}>({rideData.eta.distanceKm.toFixed(1)} km)</Text>
           </View>
         )}
 
