@@ -1386,11 +1386,26 @@ export default function PassengerHomeScreen() {
         secondDestination: secondDestinationLocation,
       });
 
-      // Build ordered waypoints: Pickup_1 → Pickup_2 (if exists) → Destination_1 → Destination_2 (if exists)
-      const waypoints: LocationCoords[] = [pickupLocation];
+      // Build ordered waypoints: Current location → Pickup → Destination
+      const waypoints: LocationCoords[] = [];
+      // Start from where the passenger actually is
+      if (currentLocation) {
+        waypoints.push(currentLocation);
+      }
+      if (pickupLocation && (!currentLocation || 
+          Math.abs(pickupLocation.latitude - currentLocation.latitude) > 0.0001 ||
+          Math.abs(pickupLocation.longitude - currentLocation.longitude) > 0.0001)) {
+        waypoints.push(pickupLocation);
+      }
       if (secondPickupLocation) waypoints.push(secondPickupLocation);
-      waypoints.push(destinationLocation);
+      if (destinationLocation) waypoints.push(destinationLocation);
       if (secondDestinationLocation) waypoints.push(secondDestinationLocation);
+
+      // Si no hay suficientes waypoints, usar solo pickup→destination como fallback
+      if (waypoints.length < 2) {
+        if (pickupLocation) waypoints.unshift(pickupLocation);
+        if (!waypoints.includes(destinationLocation!) && destinationLocation) waypoints.push(destinationLocation);
+      }
 
       let allRouteCoords: RouteCoordinates[] = [];
 
@@ -1446,7 +1461,7 @@ export default function PassengerHomeScreen() {
 
       // Fallback to straight line if OSRM fails
       logWarning('PassengerHomeScreen', 'Falling back to straight line route');
-      const fallbackRoute = [pickupLocation, destinationLocation];
+      const fallbackRoute = waypoints.length >= 2 ? waypoints : [pickupLocation, destinationLocation].filter(Boolean) as LocationCoords[];
       setRouteCoordinates(fallbackRoute);
       setIsApproximateRoute(true);
 
@@ -2121,7 +2136,6 @@ export default function PassengerHomeScreen() {
 
   const handleMapPress = (event: any) => {
     // Normal map press - just collapse panel
-    console.log('[MAP_PRESS] Normal press, collapsing panel');
     if (!isPanelCollapsed) {
       setIsPanelCollapsed(true);
       Keyboard.dismiss();
@@ -2193,17 +2207,17 @@ export default function PassengerHomeScreen() {
         onPress: () => {
           console.log('[MAP_LONG_PRESS] User confirmed selection');
           const shortAddress = extractShortAddress(address);
-          if (mapSelectionMode === 'pickup') {
-            setPickupLocation(coordinate);
-            setPickupAddress(shortAddress);
-          } else if (mapSelectionMode === 'destination') {
-            setDestinationLocation(coordinate);
-            setDestinationAddress(shortAddress);
-          } else if (mapSelectionMode === 'second_pickup') {
-            setSecondPickupLocation(coordinate);
-            setSecondPickupAddress(shortAddress);
-            setSecondPickupLocationSource('custom');
-          } else if (mapSelectionMode === 'second_destination') {
+           if (mapSelectionMode === 'pickup') {
+             setPickupLocation(coordinate);
+             setPickupAddress(shortAddress);
+           } else if (mapSelectionMode === 'destination') {
+             setDestinationLocation(coordinate);
+             setDestinationAddress(shortAddress);
+           } else if (mapSelectionMode === 'second_pickup') {
+             setSecondPickupLocation(coordinate);
+             setSecondPickupAddress(shortAddress);
+             setSecondPickupLocationSource('custom');
+           } else if (mapSelectionMode === 'second_destination') {
             setSecondDestinationLocation(coordinate);
             setSecondDestinationAddress(shortAddress);
             setSecondDestinationLocationSource('custom');
@@ -3100,6 +3114,13 @@ export default function PassengerHomeScreen() {
               {/* Active Ride - Driver Info */}
               {activeRide && activeRide.driver && (
                 <View style={styles.ridePanel}>
+                  {/* Dynamic title based on status */}
+                  <Text style={styles.rideTitle}>
+                    {activeRide.status === 'accepted' ? 'Conductor en camino' : 
+                     activeRide.status === 'arrived' ? 'El conductor ha llegado' : 
+                     activeRide.status === 'in_progress' ? 'Viaje en curso' : ''}
+                  </Text>
+
                   {/* Status badge */}
                   <View style={styles.rideStatusRow}>
                     <View style={[styles.rideStatusBadge, activeRide.status === 'accepted' && styles.rideStatusAccepted, activeRide.status === 'arrived' && styles.rideStatusArrived, activeRide.status === 'in_progress' && styles.rideStatusInProgress]}>
@@ -5350,6 +5371,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#f0f0f0',
+  },
+  rideTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1f2937',
+    textAlign: 'center',
+    marginBottom: 12,
   },
   rideDriverRatingBox: {
     flexDirection: 'row',
