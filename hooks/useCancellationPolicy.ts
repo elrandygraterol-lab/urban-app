@@ -9,8 +9,10 @@ interface CancellationPolicy {
   type: 'free' | 'standard' | 'penalty' | 'not_allowed';
   fee: number;
   refundAmount?: number;
+  description?: string;
   timeElapsed: number;
   gracePeriodRemaining?: number;
+  exchangeRate?: number;
   warnings: string[];
 }
 
@@ -80,8 +82,10 @@ export function useCancellationPolicy(
           type: apiData.policy.type,
           fee: apiData.policy.fee,
           refundAmount: apiData.policy.refundAmount,
+          description: apiData.policy.description,
           timeElapsed: apiData.policy.timeElapsed,
           gracePeriodRemaining: apiData.policy.gracePeriodRemaining,
+          exchangeRate: apiData.exchangeRate,
           warnings: apiData.warnings,
         };
         

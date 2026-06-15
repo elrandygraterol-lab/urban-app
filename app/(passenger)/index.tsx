@@ -23,7 +23,7 @@ import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import {
   DriverTaxiIcon,
-  PickupIcon,
+  PassengerIcon,
   DropoffIcon,
   SecondPickupIcon,
   SecondDropoffIcon,
@@ -302,6 +302,51 @@ export default function PassengerHomeScreen() {
   // Safe area insets for modal
   const insets = useSafeAreaInsets();
 
+  // Restaurar viaje activo al montar, cuando el token esta listo, y al volver a primer plano
+  const restoreAttemptedRef = useRef(false);
+  useEffect(() => {
+    if (!token) return;
+
+    let isMounted = true;
+
+    const restoreActiveRide = async () => {
+      try {
+        const response = await rideAPI.getActiveRides();
+        const rides = response.data?.data ?? response.data;
+        if (rides && Array.isArray(rides) && rides.length > 0) {
+          const ride = rides[0];
+          if (['pending', 'accepted', 'arrived', 'in_progress'].includes(ride.status)) {
+            if (isMounted) {
+              if (ride.driver && (ride.driver.rating === undefined || ride.driver.rating === null)) {
+                ride.driver.rating = 0;
+              }
+              setActiveRide(prev => {
+                if (prev && prev.id === ride.id) return prev;
+                restoreAttemptedRef.current = true;
+                return ride;
+              });
+              setIsSearchingDriver(ride.status === 'pending');
+            }
+          }
+        }
+      } catch (err) {
+        console.log('[PASSENGER] restoreActiveRide - error:', err);
+      }
+    };
+
+    restoreActiveRide();
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        restoreActiveRide();
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.remove();
+    };
+  }, [token]);
 
 
   /** Handle search timeout - auto-cancel after 60 seconds */
@@ -317,12 +362,12 @@ export default function PassengerHomeScreen() {
         'No encontramos conductores disponibles en tu zona en este momento. Por favor intenta nuevamente.',
         'info'
       );
-    } catch {
-      showToast('No se pudo cancelar la búsqueda automáticamente.', 'error');
-    } finally {
       setActiveRide(null);
       setIsSearchingDriver(false);
       setDriverLocation(null);
+    } catch {
+      showToast('No se pudo cancelar la búsqueda automáticamente.', 'error');
+    } finally {
       setSearchDuration(0);
     }
   }, [activeRide, rideAPI, showToast]);
@@ -807,26 +852,10 @@ export default function PassengerHomeScreen() {
         `${data.driver?.name || 'Tu conductor'} ha aceptado tu viaje y se dirige hacia ti.\n\n` +
           `🚙 Vehículo: ${vehicleText}\n` +
           `${ratingText ? `${ratingText}\n` : ''}` +
-          `\nPuedes ver su ubicación en el mapa.`,
+          `\nRealiza el pago para confirmar el viaje.`,
         '🚗 ¡Tu Conductor Viene en Camino!',
         undefined,
-        {
-          label: 'Ver en Mapa',
-          onPress: () => {
-            // Focus map on driver location if available
-            if (data.driver?.currentLocation && mapRef.current) {
-              mapRef.current.animateToRegion(
-                {
-                  latitude: data.driver.currentLocation.latitude,
-                  longitude: data.driver.currentLocation.longitude,
-                  latitudeDelta: 0.02,
-                  longitudeDelta: 0.02,
-                },
-                1000
-              );
-            }
-          },
-        }
+        undefined
       );
     };
 
@@ -1218,12 +1247,15 @@ export default function PassengerHomeScreen() {
         // Start watching location
         locationSubscription = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.Balanced,
-            timeInterval: 10000, // Update every 10 seconds
-            distanceInterval: 50, // Or when moved 50 meters
+            accuracy: Location.Accuracy.High,
+            timeInterval: 3000, // Update every 3 seconds (same as driver)
+            distanceInterval: 5, // Or when moved 5 meters (same as driver)
           },
           location => {
             const { latitude, longitude } = location.coords;
+
+            // Actualizar posicion en el mapa
+            setCurrentLocation({ latitude, longitude });
 
             // Send location update via socket
             const socket = getSocket();
@@ -2476,20 +2508,6 @@ export default function PassengerHomeScreen() {
     }
 
     setShowCancelModal(true);
-
-    // Trigger animations with staggered timing for smooth entrance
-    modalOpacity.value = withTiming(1, {
-      duration: 250,
-      easing: Easing.out(Easing.ease),
-    });
-    modalScale.value = withSpring(1, {
-      damping: 15,
-      stiffness: 150,
-    });
-    modalTranslateY.value = withSpring(0, {
-      damping: 20,
-      stiffness: 100,
-    });
   };
 
   const handleConfirmCancellation = async () => {
@@ -2502,11 +2520,12 @@ export default function PassengerHomeScreen() {
 
       console.log('✅ Ride cancelled:', response.data);
 
-      // Close modal
+      // Limpiar estado inmediatamente (no depender solo del WebSocket)
+      setActiveRide(null);
+      setDriverLocation(null);
+      setIsSearchingDriver(false);
       setShowCancelModal(false);
       setIsCancelling(false);
-
-      // The ride:cancelled event will handle the rest via WebSocket
     } catch (error: any) {
       console.error('Cancel ride error:', error);
       logError('PassengerHomeScreen', error, { context: 'Cancel ride' });
@@ -2522,28 +2541,8 @@ export default function PassengerHomeScreen() {
   };
 
   const handleCloseCancelModal = () => {
-    // Animate out with smooth exit
-    modalScale.value = withTiming(0.9, {
-      duration: 200,
-      easing: Easing.in(Easing.ease),
-    });
-    modalOpacity.value = withTiming(0, {
-      duration: 200,
-      easing: Easing.in(Easing.ease),
-    });
-    modalTranslateY.value = withTiming(50, {
-      duration: 200,
-      easing: Easing.in(Easing.ease),
-    });
-
-    // Close modal after animation
-    setTimeout(() => {
-      setShowCancelModal(false);
-      setCancellationFeeWarning(null);
-      // Reset animation values
-      modalScale.value = 0;
-      modalTranslateY.value = 50;
-    }, 200);
+    setShowCancelModal(false);
+    setCancellationFeeWarning(null);
   };
 
   const handleProcessPayment = async () => {
@@ -2879,6 +2878,8 @@ export default function PassengerHomeScreen() {
             }}
             showsUserLocation={false}
             showsMyLocationButton={false}
+            followsUserLocation={false}
+            showsCompass={false}
             onPress={handleMapPress}
             onLongPress={handleMapLongPress}
             scrollEnabled={true}
@@ -2905,15 +2906,15 @@ export default function PassengerHomeScreen() {
               </Marker>
             )}
 
-            {/* Recogida */}
-            {pickupLocation && (
+            {/* Ubicacion actual del pasajero */}
+            {currentLocation && (
               <Marker
-                coordinate={pickupLocation}
-                title="Punto de recogida"
-                identifier="pickup"
+                coordinate={currentLocation}
+                title="Tu ubicacion"
+                identifier="passenger_location"
                 anchor={{ x: 0.5, y: 0.5 }}
               >
-                <PickupIcon />
+                <PassengerIcon size={44} />
               </Marker>
             )}
 
@@ -3529,8 +3530,8 @@ export default function PassengerHomeScreen() {
                       <View style={styles.routeConnectorLine} />
                     </View>
 
-                    {/* Second Pickup Row — shown when enabled (Req. 6.1, 6.3) */}
-                    {showSecondPickup && (
+                    {/* Second Pickup Row — Oculto para v1.0.0 */}
+                    {false && showSecondPickup && (
                       <>
                         <View style={styles.routeRow}>
                           <View style={styles.secondPickupIconContainer}>
@@ -3669,8 +3670,8 @@ export default function PassengerHomeScreen() {
                       </View>
                     </View>
 
-                    {/* Second Destination Row — shown when enabled (Req. 6.2, 6.4) */}
-                    {showSecondDestination && (
+                    {/* Second Destination Row — Oculto para v1.0.0 */}
+                    {false && showSecondDestination && (
                       <>
                         {/* Divider */}
                         <View style={styles.routeDivider}>
@@ -3771,7 +3772,8 @@ export default function PassengerHomeScreen() {
                     )}
                   </View>
 
-                  {/* Buttons for adding extra points — unified horizontal list style */}
+                  {/* Buttons for adding extra points — Oculto para v1.0.0 */}
+                  {false && (
                   <View style={styles.addPointsContainer}>
                     {!showSecondPickup && (
                       <TouchableOpacity
@@ -3795,6 +3797,7 @@ export default function PassengerHomeScreen() {
                       </TouchableOpacity>
                     )}
                   </View>
+                  )}
 
                   {/* Fare Estimate */}
                   {isCalculatingFare && (
@@ -4003,132 +4006,96 @@ export default function PassengerHomeScreen() {
         <Modal
           visible={showCancelModal}
           transparent={true}
-          animationType="none"
+          animationType="fade"
           onRequestClose={handleCloseCancelModal}
         >
-          <Animated.View
-            style={[
-              styles.modalOverlay,
-              {
-                opacity: modalOpacity,
-                paddingTop: Math.max(insets.top, 20),
-                paddingBottom: Math.max(insets.bottom, 20),
-              },
-            ]}
-          >
-            <Animated.View
-              style={[
-                styles.cancelModalContent,
-                {
-                  transform: [{ scale: modalScale }, { translateY: modalTranslateY }],
-                },
-              ]}
-            >
-              {/* Header with Icon */}
+          <View style={styles.modalOverlay}>
+            <View style={styles.cancelModalContent}>
+              {/* Header */}
               <View style={styles.cancelModalHeader}>
-                <View style={styles.cancelIconContainer}>
-                  <Ionicons name="close-circle" size={56} color="#EF4444" />
-                </View>
-                <Text style={styles.cancelModalTitle}>¿Cancelar Viaje?</Text>
-                <Text style={styles.cancelModalSubtitle}>
-                  {cancellationPolicy?.warnings[0] || 'Esta acción no se puede deshacer'}
-                </Text>
+                <Ionicons name="alert-circle-outline" size={32} color="#6b7280" />
+                <Text style={styles.cancelModalTitle}>Confirmar cancelación</Text>
+                {cancellationPolicy && (
+                  <Text style={styles.cancelModalSubtitle}>
+                    {cancellationPolicy.type === 'free'
+                      ? 'La cancelación es gratuita en este momento'
+                      : cancellationPolicy.type === 'standard'
+                        ? 'Se aplicará la tarifa de cancelación configurada'
+                        : 'Se aplicará una penalización del 50%'}
+                  </Text>
+                )}
               </View>
 
-              {/* Cancellation Fee Warning */}
+              {/* Fare breakdown card */}
               {cancellationPolicy && cancellationPolicy.fee > 0 && (
-                <View style={styles.cancelWarningCard}>
-                  <View style={styles.cancelWarningHeader}>
-                    <Ionicons name="alert-circle" size={24} color="#ea580c" />
-                    <Text style={styles.cancelWarningTitle}>
-                      {cancellationPolicy.type === 'penalty'
-                        ? 'Penalización por Cancelación'
-                        : 'Tarifa de Cancelación'}
+                <View style={styles.cancelFeeCard}>
+                  <View style={styles.cancelFeeRow}>
+                    <Text style={styles.cancelFeeLabel}>
+                      {cancellationPolicy.type === 'penalty' ? 'Penalización' : 'Tarifa'}
+                    </Text>
+                    <Text style={styles.cancelFeeAmount}>
+                      {formatCurrency(cancellationPolicy.fee, fareCurrency)}
                     </Text>
                   </View>
-                  <Text style={styles.cancelWarningText}>
-                    {cancellationPolicy.type === 'penalty'
-                      ? `Se cobrará ${formatCurrency(cancellationPolicy.fee * 2, fareCurrency)}. ` +
-                        `Recibirás un reembolso de ${formatCurrency(cancellationPolicy.refundAmount!, fareCurrency)} en 24 horas.`
-                      : `Se cobrará una tarifa de ${formatCurrency(cancellationPolicy.fee, fareCurrency)}`}
-                  </Text>
+                  <View style={styles.cancelFeeDualRow}>
+                    {fareCurrency === 'VES' ? (
+                      <Text style={styles.cancelFeeDualText}>
+                        ≈ {cancellationPolicy?.exchangeRate && cancellationPolicy.exchangeRate > 0
+                          ? `$ ${(cancellationPolicy.fee / cancellationPolicy.exchangeRate).toFixed(2)} USD`
+                          : '$ —.— USD'}
+                      </Text>
+                    ) : (
+                      <Text style={styles.cancelFeeDualText}>
+                        ≈ {cancellationPolicy?.exchangeRate && cancellationPolicy.exchangeRate > 0
+                          ? `Bs. ${(cancellationPolicy.fee * cancellationPolicy.exchangeRate).toFixed(2)}`
+                          : 'Bs. —.—'}
+                      </Text>
+                    )}
+                  </View>
+                  {cancellationPolicy.description && (
+                    <View style={styles.cancelFeeDescRow}>
+                      <Ionicons name="information-circle-outline" size={14} color="#6b7280" />
+                      <Text style={styles.cancelFeeDescText}>{cancellationPolicy.description}</Text>
+                    </View>
+                  )}
+                  {cancellationPolicy.type === 'penalty' && cancellationPolicy.refundAmount && (
+                    <View style={styles.cancelFeeRefundRow}>
+                      <Ionicons name="time-outline" size={14} color="#6b7280" />
+                      <Text style={styles.cancelFeeRefundText}>
+                        Reembolso de {formatCurrency(cancellationPolicy.refundAmount, fareCurrency)} en 24 horas
+                      </Text>
+                    </View>
+                  )}
                 </View>
               )}
 
-              {/* Cancellation Policy */}
-              <View style={styles.cancelPolicyCard}>
-                <Text style={styles.cancelPolicyTitle}>Política de Cancelación</Text>
-                <View style={styles.cancelPolicyItem}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={cancellationPolicy?.type === 'free' ? '#22c55e' : '#9ca3af'}
-                  />
-                  <Text style={styles.cancelPolicyText}>
-                    Gratis en los primeros 2 minutos
-                    {cancellationPolicy?.gracePeriodRemaining &&
-                      cancellationPolicy.gracePeriodRemaining > 0 &&
-                      ` (${cancellationPolicy.gracePeriodRemaining}s restantes)`}
-                  </Text>
+              {/* Policy info */}
+              <View style={styles.cancelPolicySection}>
+                <View style={styles.cancelPolicyRow}>
+                  <Ionicons name="checkmark-circle-outline" size={18} color="#22c55e" />
+                  <Text style={styles.cancelPolicyRowText}>Gratis durante los primeros 2 minutos</Text>
                 </View>
-                <View style={styles.cancelPolicyItem}>
-                  <Ionicons
-                    name="information-circle"
-                    size={20}
-                    color={cancellationPolicy?.type === 'standard' ? '#ea580c' : '#9ca3af'}
-                  />
-                  <Text style={styles.cancelPolicyText}>
-                    {formatCurrency(5, fareCurrency)} si el conductor aceptó
-                  </Text>
+                <View style={styles.cancelPolicyRow}>
+                  <Ionicons name="time-outline" size={18} color="#6b7280" />
+                  <Text style={styles.cancelPolicyRowText}>Con tarifa si el conductor ya aceptó</Text>
                 </View>
-                <View style={styles.cancelPolicyItem}>
-                  <Ionicons
-                    name="warning"
-                    size={20}
-                    color={cancellationPolicy?.type === 'penalty' ? '#EF4444' : '#9ca3af'}
-                  />
-                  <Text style={styles.cancelPolicyText}>
-                    50% del viaje si el conductor llegó (reembolso en 24h)
-                  </Text>
+                <View style={styles.cancelPolicyRow}>
+                  <Ionicons name="warning-outline" size={18} color="#6b7280" />
+                  <Text style={styles.cancelPolicyRowText}>50% si el conductor ya llegó al punto</Text>
                 </View>
               </View>
 
-              {/* Action Buttons */}
-              <View
-                style={[styles.cancelModalButtons, { paddingBottom: Math.max(insets.bottom, 16) }]}
-              >
-                <TouchableOpacity
-                  style={styles.cancelKeepButton}
-                  onPress={handleCloseCancelModal}
-                  disabled={isCancelling}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.cancelKeepButtonText}>Mantener Viaje</Text>
+              {/* Action buttons */}
+              <View style={styles.cancelModalActions}>
+                <TouchableOpacity style={styles.cancelBtnKeep} onPress={handleCloseCancelModal} disabled={isCancelling} activeOpacity={0.7}>
+                  <Text style={styles.cancelBtnKeepText}>Mantener viaje</Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.cancelConfirmButton, isCancelling && styles.cancelButtonDisabled]}
-                  onPress={handleConfirmCancellation}
-                  disabled={isCancelling}
-                  activeOpacity={0.8}
-                >
-                  {isCancelling ? (
-                    <View style={styles.loadingContainer}>
-                      <ActivityIndicator color="#fff" size="small" />
-                      <Text style={[styles.cancelConfirmButtonText, { marginLeft: 8 }]}>
-                        Cancelando...
-                      </Text>
-                    </View>
-                  ) : (
-                    <>
-                      <Ionicons name="close-circle-outline" size={20} color="#fff" />
-                      <Text style={styles.cancelConfirmButtonText}>Cancelar Viaje</Text>
-                    </>
-                  )}
+                <TouchableOpacity style={[styles.cancelBtnConfirm, isCancelling && { opacity: 0.6 }]} onPress={handleConfirmCancellation} disabled={isCancelling} activeOpacity={0.8}>
+                  {isCancelling ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.cancelBtnConfirmText}>Cancelar viaje</Text>}
                 </TouchableOpacity>
               </View>
-            </Animated.View>
-          </Animated.View>
+            </View>
+          </View>
         </Modal>
 
         {/* Payment Modal */}
@@ -4584,39 +4551,75 @@ export default function PassengerHomeScreen() {
           animationType="fade"
           onRequestClose={() => setShowContactModal(false)}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.contactModalContent}>
-              <Text style={styles.contactModalTitle}>Contactar conductor</Text>
-              <Text style={styles.contactModalSubtitle}>
-                ¿Cómo deseas contactar a {activeRide?.driver?.name || 'el conductor'}?
-              </Text>
-
-              <View style={styles.contactOptionsContainer}>
-                <TouchableOpacity style={styles.contactOptionButton} onPress={handlePhoneCall}>
-                  <View style={styles.contactOptionIconContainer}>
-                    <Ionicons name="call" size={28} color="#22c55e" />
-                  </View>
-                  <Text style={styles.contactOptionTitle}>Llamada telefónica</Text>
-                  <Text style={styles.contactOptionDescription}>Llamar directamente al número</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.contactOptionButton} onPress={handleWhatsAppCall}>
-                  <View style={styles.contactOptionIconContainer}>
-                    <Ionicons name="logo-whatsapp" size={28} color="#25D366" />
-                  </View>
-                  <Text style={styles.contactOptionTitle}>WhatsApp</Text>
-                  <Text style={styles.contactOptionDescription}>Abrir chat de WhatsApp</Text>
-                </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowContactModal(false)}
+          >
+            <TouchableOpacity
+              style={styles.contactModalContent}
+              activeOpacity={1}
+              onPress={() => {}}
+            >
+              <View style={styles.contactDriverHeader}>
+                <View style={styles.contactDriverAvatar}>
+                  <Ionicons name="person" size={32} color="#fff" />
+                </View>
+                <Text style={styles.contactDriverName}>
+                  {activeRide?.driver?.name || 'Conductor'}
+                </Text>
+                <View style={styles.contactPhoneRow}>
+                  <Ionicons name="call-outline" size={14} color="#6b7280" />
+                  <Text style={styles.contactPhoneText}>
+                    {activeRide?.driver?.phone || 'No disponible'}
+                  </Text>
+                </View>
               </View>
-
+              {activeRide?.driver?.vehicleModel && (
+                <View style={styles.contactVehicleRow}>
+                  <Ionicons name="car-outline" size={16} color="#6b7280" />
+                  <Text style={styles.contactVehicleText}>
+                    {activeRide.driver.vehicleModel}
+                    {activeRide.driver.vehicleColor ? ` · ${activeRide.driver.vehicleColor}` : ''}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.contactDivider} />
+              <Text style={styles.contactOptionsTitle}>Selecciona el método de contacto</Text>
+              <TouchableOpacity style={styles.contactOptionRow} onPress={handlePhoneCall}>
+                <View style={[styles.contactOptionIcon, { backgroundColor: '#dcfce7' }]}>
+                  <Ionicons name="call" size={22} color="#22c55e" />
+                </View>
+                <View style={styles.contactOptionInfo}>
+                  <Text style={styles.contactOptionLabel}>Llamada telefónica</Text>
+                  <Text style={styles.contactOptionDesc}>Llamar directamente al conductor</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.contactOptionRow} onPress={handleWhatsAppCall}>
+                <View style={[styles.contactOptionIcon, { backgroundColor: '#dcfce7' }]}>
+                  <Ionicons name="logo-whatsapp" size={22} color="#25D366" />
+                </View>
+                <View style={styles.contactOptionInfo}>
+                  <Text style={styles.contactOptionLabel}>WhatsApp</Text>
+                  <Text style={styles.contactOptionDesc}>Abrir conversación en WhatsApp</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
+              </TouchableOpacity>
+              <View style={styles.contactNote}>
+                <Ionicons name="information-circle-outline" size={16} color="#22c55e" />
+                <Text style={styles.contactNoteText}>
+                  Contacta al conductor solo si es necesario para coordinar el viaje.
+                </Text>
+              </View>
               <TouchableOpacity
-                style={styles.contactModalCancelButton}
+                style={styles.contactCancelBtn}
                 onPress={() => setShowContactModal(false)}
               >
-                <Text style={styles.contactModalCancelText}>Cancelar</Text>
+                <Text style={styles.contactCancelBtnText}>Cancelar</Text>
               </TouchableOpacity>
-            </View>
-          </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
         </Modal>
       </View>
     </ErrorBoundary>
@@ -5748,114 +5751,126 @@ const styles = StyleSheet.create({
   modalButtonDisabled: {
     backgroundColor: '#E6C896',
   },
-  // Redesigned Cancel Modal Styles
+  // Cancel Modal Styles — Professional redesign
   cancelModalContent: {
     backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 28,
+    borderRadius: 16,
+    padding: 24,
     width: '100%',
-    maxWidth: 420,
+    maxWidth: 360,
   },
   cancelModalHeader: {
     alignItems: 'center',
-    marginBottom: 24,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  cancelIconContainer: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   cancelModalTitle: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
+    color: '#1f2937',
+    marginTop: 10,
+    marginBottom: 6,
     textAlign: 'center',
   },
   cancelModalSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6b7280',
     textAlign: 'center',
+    lineHeight: 18,
   },
-  cancelWarningCard: {
-    backgroundColor: '#fff7ed',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-  },
-  cancelWarningHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
-  },
-  cancelWarningTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#ea580c',
-  },
-  cancelWarningText: {
-    fontSize: 14,
-    color: '#111827',
-    lineHeight: 20,
-    fontWeight: '500',
-  },
-  cancelPolicyCard: {
+  cancelFeeCard: {
     backgroundColor: '#f9fafb',
     borderRadius: 12,
-    padding: 18,
-    marginBottom: 24,
-  },
-  cancelPolicyTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
+    padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
-  cancelPolicyItem: {
+  cancelFeeRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-    gap: 12,
+    marginBottom: 6,
   },
-  cancelPolicyText: {
+  cancelFeeLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  cancelFeeAmount: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  cancelFeeDualRow: {
+    alignItems: 'flex-end',
+    marginBottom: 8,
+  },
+  cancelFeeDualText: {
+    fontSize: 13,
+    color: '#9ca3af',
+  },
+  cancelFeeDescRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginBottom: 4,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  cancelFeeDescText: {
+    fontSize: 12,
+    color: '#6b7280',
     flex: 1,
-    fontSize: 14,
-    color: '#111827',
-    lineHeight: 20,
-    fontWeight: '500',
+    lineHeight: 17,
   },
-  cancelModalButtons: {
-    gap: 12,
-  },
-  cancelKeepButton: {
-    backgroundColor: '#22c55e',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  cancelKeepButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  cancelConfirmButton: {
-    backgroundColor: '#EF4444',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
+  cancelFeeRefundRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
+    alignItems: 'center',
+    gap: 6,
   },
-  cancelConfirmButtonText: {
+  cancelFeeRefundText: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  cancelPolicySection: {
+    marginBottom: 20,
+  },
+  cancelPolicyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 10,
+  },
+  cancelPolicyRowText: {
+    fontSize: 13,
+    color: '#6b7280',
+    flex: 1,
+  },
+  cancelModalActions: {
+    gap: 10,
+  },
+  cancelBtnKeep: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  cancelBtnKeepText: {
+    color: '#4b5563',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  cancelBtnConfirm: {
+    backgroundColor: '#4b5563',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  cancelBtnConfirmText: {
     color: '#fff',
     fontSize: 15,
-    fontWeight: '700',
-  },
-  cancelButtonDisabled: {
-    opacity: 0.5,
+    fontWeight: '600',
   },
   // Payment Modal Styles
   paymentModalContent: {
@@ -6305,67 +6320,126 @@ const styles = StyleSheet.create({
   contactModalContent: {
     backgroundColor: '#fff',
     borderRadius: 24,
-    padding: 28,
+    padding: 24,
     width: '90%',
-    maxWidth: 400,
+    maxWidth: 380,
   },
-  contactModalTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  contactModalSubtitle: {
-    fontSize: 15,
-    color: '#6b7280',
-    marginBottom: 24,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  contactOptionsContainer: {
-    gap: 12,
-    marginBottom: 20,
-  },
-  contactOptionButton: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 16,
-    padding: 20,
+  contactDriverHeader: {
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
+    marginBottom: 12,
   },
-  contactOptionIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#fff',
+  contactDriverAvatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#22c55e',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
-  contactOptionTitle: {
-    fontSize: 18,
+  contactDriverName: {
+    fontSize: 20,
     fontWeight: '700',
     color: '#111827',
     marginBottom: 4,
   },
-  contactOptionDescription: {
+  contactPhoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  contactPhoneText: {
     fontSize: 14,
     color: '#6b7280',
-    textAlign: 'center',
   },
-  contactModalCancelButton: {
+  contactVehicleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  contactVehicleText: {
+    fontSize: 13,
+    color: '#4b5563',
+    fontWeight: '500',
+  },
+  contactDivider: {
+    height: 1,
+    backgroundColor: '#f0f0f0',
+    marginBottom: 16,
+  },
+  contactOptionsTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#9ca3af',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+  },
+  contactOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  contactOptionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  contactOptionInfo: {
+    flex: 1,
+  },
+  contactOptionLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  contactOptionDesc: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  contactNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#f0fdf4',
+    borderRadius: 10,
+    padding: 12,
+    gap: 8,
+    marginTop: 2,
+  },
+  contactNoteText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#065f46',
+    lineHeight: 18,
+  },
+  contactCancelBtn: {
+    marginTop: 16,
     backgroundColor: '#fff',
     borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 13,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
-  contactModalCancelText: {
+  contactCancelBtnText: {
     color: '#6b7280',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
   },
   centerLocationButton: {

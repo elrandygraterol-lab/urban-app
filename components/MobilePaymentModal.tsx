@@ -64,7 +64,7 @@ const TEST_PAYMENT_DATA = {
     referencia: '123456',
     fecha: '15/12/2024',
     banco: '0102',
-    telefonoP: '5844122144339',
+    telefonoP: '04125317509',
     identificacion: 'V25213842',
     pagador: 'Juan Pérez',
   },
@@ -373,12 +373,12 @@ export default function MobilePaymentModal({
     try {
       await rideAPI.cancelRide(rideId, { reason: 'payment_timeout' });
       showToast('Tiempo agotado. El viaje ha sido cancelado.', 'error');
+      resetForm();
+      onCancel();
     } catch {
       showToast('Error al cancelar el viaje por tiempo agotado.', 'error');
     } finally {
       setIsAutoCancelling(false);
-      resetForm();
-      onCancel();
     }
   }, [rideId, resetForm, onCancel, showToast]);
 
@@ -486,8 +486,8 @@ export default function MobilePaymentModal({
       showToast('Completa todos los campos del Pago Móvil.', 'warning');
       return;
     }
-    if (referencia.length !== 6 || !/^\d{6}$/.test(referencia)) {
-      showToast('La referencia debe tener 6 dígitos numéricos.', 'error');
+    if (referencia.length < 1 || referencia.length > 12 || !/^\d{1,12}$/.test(referencia)) {
+      showToast('La referencia debe tener entre 1 y 12 dígitos numéricos.', 'error');
       return;
     }
     if (!/^\d{2}\/\d{2}\/\d{4}$/.test(fecha)) {
@@ -512,6 +512,12 @@ export default function MobilePaymentModal({
       showToast('El nombre del pagador es muy corto.', 'error');
       return;
     }
+    // Defensive reformat: garantiza DD/MM/YYYY antes del API call
+    const fechaParts = fecha.split('/');
+    const safeFecha = fechaParts.length === 3
+      ? `${fechaParts[0].padStart(2, '0')}/${fechaParts[1].padStart(2, '0')}/${fechaParts[2]}`
+      : fecha;
+
     setIsProcessing(true);
     // Mark that payment is being processed to prevent auto-cancel
     isPaymentCompletedRef.current = true;
@@ -519,7 +525,7 @@ export default function MobilePaymentModal({
       const selectedBankData = VENEZUELAN_BANKS.find((b) => b.id === selectedBank);
       const response = await paymentAPI.verifyP2CPayment(rideId, {
         referencia,
-        fecha,
+        fecha: safeFecha,
         banco: selectedBankData?.code || selectedBank,
         telefonoP,
         monto: amount,
@@ -599,7 +605,18 @@ export default function MobilePaymentModal({
       undefined,
       {
         label: 'Sí, Cancelar',
-        onPress: () => { resetForm(); onCancel(); },
+        onPress: async () => {
+          setIsAutoCancelling(true);
+          try {
+            await rideAPI.cancelRide(rideId, { reason: 'passenger_cancelled' });
+            resetForm();
+            onCancel();
+          } catch {
+            showToast('No se pudo cancelar el viaje. Intenta nuevamente.', 'error');
+          } finally {
+            setIsAutoCancelling(false);
+          }
+        },
       },
       12000
     );
@@ -834,7 +851,7 @@ export default function MobilePaymentModal({
                   />
 
                   {/* Referencia */}
-                  <Text style={styles.fieldLabel}>Referencia (6 dígitos)</Text>
+                  <Text style={styles.fieldLabel}>Referencia</Text>
                   <View style={styles.fieldRow}>
                     <Ionicons name="document-text-outline" size={15} color="#9ca3af" />
                     <TextInput
@@ -844,7 +861,7 @@ export default function MobilePaymentModal({
                       value={referencia}
                       onChangeText={setReferencia}
                       keyboardType="number-pad"
-                      maxLength={6}
+                      maxLength={12}
                     />
                   </View>
 
@@ -874,7 +891,7 @@ export default function MobilePaymentModal({
                     <Ionicons name="call-outline" size={15} color="#9ca3af" />
                     <TextInput
                       style={styles.fieldInput}
-                      placeholder="5844122144339"
+                      placeholder="04125317509"
                       placeholderTextColor="#c4c4c4"
                       value={telefonoP}
                       onChangeText={setTelefonoP}

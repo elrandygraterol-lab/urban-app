@@ -8,8 +8,6 @@ import {
   ActivityIndicator,
   StyleSheet,
   ViewStyle,
-  Modal,
-  TouchableWithoutFeedback,
   Dimensions,
   Keyboard,
 } from 'react-native';
@@ -59,12 +57,6 @@ export default function AddressAutocomplete({
   const [suggestions, setSuggestions] = useState<Place[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [dropdownLayout, setDropdownLayout] = useState<{
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  } | null>(null);
   const [maxDropdownHeight, setMaxDropdownHeight] = useState<number>(300);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const containerRef = useRef<View>(null);
@@ -153,7 +145,6 @@ export default function AddressAutocomplete({
         const calculatedMaxHeight = Math.min(spaceBelow, idealHeight, 300);
 
         setMaxDropdownHeight(Math.max(calculatedMaxHeight, 150)); // Mínimo 150px
-        setDropdownLayout({ x, y, width, height });
       });
     }
   };
@@ -165,11 +156,6 @@ export default function AddressAutocomplete({
     setSuggestions([]);
     setShowSuggestions(false);
     Keyboard.dismiss();
-  };
-
-  const handleDismiss = () => {
-    // Solo cerrar si el usuario toca fuera, no mantener el teclado
-    setShowSuggestions(false);
   };
 
   const handleInputFocus = () => {
@@ -188,15 +174,6 @@ export default function AddressAutocomplete({
         setShowSuggestions(false);
       }
     }, 250);
-  };
-
-  // Función para cerrar sugerencias cuando se toca fuera (solo para modo modal)
-  const handleModalBackdropPress = () => {
-    if (bare) {
-      setShowSuggestions(false);
-      // Cerrar teclado al tocar fuera
-      Keyboard.dismiss();
-    }
   };
 
   const renderSuggestionItem = ({ item }: { item: Place }) => (
@@ -230,8 +207,6 @@ export default function AddressAutocomplete({
       </View>
     </TouchableOpacity>
   );
-
-  const showDropdown = bare && showSuggestions && suggestions.length > 0;
 
   return (
     <View ref={containerRef} style={[styles.container, style]} onLayout={measureContainer}>
@@ -267,8 +242,8 @@ export default function AddressAutocomplete({
         )}
       </View>
 
-      {/* Inline suggestions (non-bare mode) */}
-      {!bare && showSuggestions && suggestions.length > 0 && (
+      {/* Inline suggestions — same for bare and non-bare modes */}
+      {showSuggestions && suggestions.length > 0 && (
         <View style={[styles.suggestionsContainer, { maxHeight: maxDropdownHeight }]}>
           <FlatList
             data={suggestions}
@@ -282,48 +257,6 @@ export default function AddressAutocomplete({
             showsVerticalScrollIndicator={suggestions.length > MAX_VISIBLE_SUGGESTIONS}
           />
         </View>
-      )}
-
-      {/* Modal dropdown (bare mode) — renders above everything */}
-      {showDropdown && dropdownLayout && (
-        <Modal
-          visible={true}
-          transparent
-          animationType="none"
-          onRequestClose={handleDismiss}
-          supportedOrientations={['portrait']}
-        >
-          <TouchableWithoutFeedback onPress={handleModalBackdropPress}>
-            <View style={styles.modalOverlay}>
-              <TouchableWithoutFeedback onPress={() => {}}>
-                <View
-                  style={[
-                    styles.modalDropdown,
-                    {
-                      top: dropdownLayout.y + dropdownLayout.height + 4,
-                      left: dropdownLayout.x,
-                      width: dropdownLayout.width,
-                      maxHeight: maxDropdownHeight,
-                    },
-                    suggestionsStyle,
-                  ]}
-                >
-                  <FlatList
-                    data={suggestions}
-                    keyExtractor={item => item.id}
-                    renderItem={renderSuggestionItem}
-                    keyboardShouldPersistTaps="always"
-                    keyboardDismissMode="none"
-                    scrollEnabled={suggestions.length > MAX_VISIBLE_SUGGESTIONS}
-                    nestedScrollEnabled={true}
-                    ItemSeparatorComponent={() => <View style={styles.separator} />}
-                    showsVerticalScrollIndicator={suggestions.length > MAX_VISIBLE_SUGGESTIONS}
-                  />
-                </View>
-              </TouchableWithoutFeedback>
-            </View>
-          </TouchableWithoutFeedback>
-        </Modal>
       )}
     </View>
   );
@@ -374,22 +307,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  modalOverlay: {
-    flex: 1,
-  },
-  modalDropdown: {
-    position: 'absolute',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 20,
-  },
+
   suggestionItem: {
     flexDirection: 'row',
     alignItems: 'center',
