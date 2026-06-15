@@ -132,6 +132,8 @@ interface ActiveRide {
   paymentMode?: 'cash' | 'pago_movil' | 'dual';
   isShared?: boolean;
   sharedPassengerId?: string;
+  pickupAddress?: string;
+  destinationAddress?: string;
   driver?: DriverInfo;
   eta?: {
     estimatedMinutes: number;
@@ -325,6 +327,9 @@ export default function PassengerHomeScreen() {
                 restoreAttemptedRef.current = true;
                 return ride;
               });
+              // Restaurar direcciones
+              if (ride.pickupAddress) setPickupAddress(ride.pickupAddress);
+              if (ride.destinationAddress) setDestinationAddress(ride.destinationAddress);
               setIsSearchingDriver(ride.status === 'pending');
             }
           }
@@ -3092,177 +3097,106 @@ export default function PassengerHomeScreen() {
               resetScrollToCoords={{ x: 0, y: 0 }}
               scrollEnabled={true}
             >
-              {/* Active Ride - Driver Info Full Screen */}
+              {/* Active Ride - Driver Info */}
               {activeRide && activeRide.driver && (
-                <View style={styles.driverInfoFullContainer}>
-                  {/* Driver Header Section */}
-                  <View style={styles.driverHeaderSection}>
-                    <View style={styles.driverAvatarContainer}>
-                      <View style={styles.driverAvatar}>
-                        {resolveFileUrl(activeRide.driver.profilePhotoUrl) ? (
-                          <Image
-                            source={{ uri: resolveFileUrl(activeRide.driver.profilePhotoUrl) }}
-                            style={styles.driverAvatarImage}
-                          />
-                        ) : (
-                          <View style={styles.driverAvatarPlaceholder}>
-                            <Text style={styles.driverAvatarText}>
-                              {activeRide.driver.name.charAt(0).toUpperCase()}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-
-                    <View style={styles.driverInfoContent}>
-                      <View style={styles.driverNameRow}>
-                        <Text style={styles.driverName}>{activeRide.driver.name}</Text>
-                        <View
-                          style={[
-                            styles.statusBadge,
-                            activeRide.status === 'accepted' && styles.statusBadgeAccepted,
-                            activeRide.status === 'arrived' && styles.statusBadgeArrived,
-                            activeRide.status === 'in_progress' && styles.statusBadgeInProgress,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.statusBadgeText,
-                              activeRide.status === 'accepted' && styles.statusBadgeTextAccepted,
-                              activeRide.status === 'arrived' && styles.statusBadgeTextArrived,
-                              activeRide.status === 'in_progress' &&
-                                styles.statusBadgeTextInProgress,
-                            ]}
-                          >
-                            {getRideStatusText(activeRide.status)}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.driverRatingContainer}>
-                        <Ionicons name="star" size={16} color="#FFD700" />
-                        <Text style={styles.driverRatingText}>
-                          {activeRide.driver.rating ? activeRide.driver.rating.toFixed(1) : '0.0'}
-                        </Text>
-                      </View>
+                <View style={styles.ridePanel}>
+                  {/* Status badge */}
+                  <View style={styles.rideStatusRow}>
+                    <View style={[styles.rideStatusBadge, activeRide.status === 'accepted' && styles.rideStatusAccepted, activeRide.status === 'arrived' && styles.rideStatusArrived, activeRide.status === 'in_progress' && styles.rideStatusInProgress]}>
+                      <Text style={[styles.rideStatusText, activeRide.status === 'accepted' && styles.rideStatusTextAccepted, activeRide.status === 'arrived' && styles.rideStatusTextArrived, activeRide.status === 'in_progress' && styles.rideStatusTextInProgress]}>
+                        {getRideStatusText(activeRide.status)}
+                      </Text>
                     </View>
                   </View>
 
-                  {/* Vehicle Details Section */}
-                  <View style={styles.vehicleDetailsSection}>
-                    <View style={styles.vehicleDetailItem}>
-                      <View style={styles.vehicleDetailIconBox}>
-                        <Ionicons name="car-sport-outline" size={22} color="#6B7280" />
-                      </View>
-                      <View style={styles.vehicleDetailContent}>
-                        <Text style={styles.vehicleDetailLabel}>Vehículo</Text>
-                        <Text style={styles.vehicleDetailValue}>
-                          {activeRide.driver.vehicleInfo?.model ||
-                            activeRide.driver.vehicleModel ||
-                            'No disponible'}
-                        </Text>
-                      </View>
+                  {/* Driver header row */}
+                  <View style={styles.rideDriverRow}>
+                    <View style={styles.rideDriverAvatar}>
+                      {resolveFileUrl(activeRide.driver.profilePhotoUrl) ? (
+                        <Image source={{ uri: resolveFileUrl(activeRide.driver.profilePhotoUrl) }} style={styles.rideDriverAvatarImg} />
+                      ) : (
+                        <Text style={styles.rideDriverAvatarLetter}>{activeRide.driver.name.charAt(0).toUpperCase()}</Text>
+                      )}
                     </View>
-
-                    <View style={styles.vehicleDetailItem}>
-                      <View style={styles.vehicleDetailIconBox}>
-                        <Ionicons name="color-palette-outline" size={22} color="#6B7280" />
-                      </View>
-                      <View style={styles.vehicleDetailContent}>
-                        <Text style={styles.vehicleDetailLabel}>Color</Text>
-                        <Text style={styles.vehicleDetailValue}>
-                          {activeRide.driver.vehicleInfo?.color ||
-                            activeRide.driver.vehicleColor ||
-                            'No especificado'}
-                        </Text>
-                      </View>
+                    <View style={styles.rideDriverInfo}>
+                      <Text style={styles.rideDriverName} numberOfLines={1}>{activeRide.driver.name}</Text>
+                      <Text style={styles.rideDriverVehicle} numberOfLines={1}>
+                        {activeRide.driver.vehicleModel || 'Vehículo'}
+                        {activeRide.driver.vehicleColor ? ` · ${activeRide.driver.vehicleColor}` : ''}
+                        {activeRide.driver.licensePlate ? ` · ${activeRide.driver.licensePlate}` : ''}
+                      </Text>
                     </View>
+                    {typeof activeRide.driver.rating === 'number' && activeRide.driver.rating > 0 && (
+                      <View style={styles.rideDriverRatingBox}>
+                        <Ionicons name="star" size={12} color="#f59e0b" />
+                        <Text style={styles.rideDriverRating}>{activeRide.driver.rating.toFixed(1)}</Text>
+                      </View>
+                    )}
+                  </View>
 
-                    <View style={styles.vehicleDetailItem}>
-                      <View style={styles.vehicleDetailIconBox}>
-                        <Ionicons name="document-text-outline" size={22} color="#6B7280" />
-                      </View>
-                      <View style={styles.vehicleDetailContent}>
-                        <Text style={styles.vehicleDetailLabel}>Placa</Text>
-                        <Text style={styles.vehiclePlateText}>
-                          {activeRide.driver.vehicleInfo?.licensePlate ||
-                            activeRide.driver.licensePlate ||
-                            'N/A'}
+                  {/* Trip info: fare + addresses */}
+                  <View style={styles.rideTripInfo}>
+                    {/* Fare row with dual display */}
+                    <View style={styles.rideTripRow}>
+                      <Ionicons name="cash-outline" size={14} color="#6b7280" />
+                      <Text style={styles.rideTripLabel}>Tarifa</Text>
+                      <Text style={styles.rideTripValue}>{formatCurrency(estimatedFare || 0, fareCurrency)}</Text>
+                      {fareBreakdown?.exchangeRate && fareBreakdown.exchangeRate > 0 && (
+                        <Text style={styles.rideTripDual}>
+                          {fareCurrency === 'VES'
+                            ? `≈ $ ${((estimatedFare || 0) / fareBreakdown.exchangeRate).toFixed(2)}`
+                            : `≈ Bs. ${((estimatedFare || 0) * fareBreakdown.exchangeRate).toFixed(2)}`}
                         </Text>
-                      </View>
+                      )}
+                    </View>
+                    {/* Pickup row */}
+                    <View style={styles.rideTripRow}>
+                      <View style={styles.rideTripDot} />
+                      <Text style={styles.rideTripLabel}>Recogida</Text>
+                      <Text style={styles.rideTripValueSm} numberOfLines={1}>{pickupAddress || 'No especificada'}</Text>
+                    </View>
+                    {/* Destination row */}
+                    <View style={styles.rideTripRow}>
+                      <View style={[styles.rideTripDot, { backgroundColor: '#ef4444' }]} />
+                      <Text style={styles.rideTripLabel}>Destino</Text>
+                      <Text style={styles.rideTripValueSm} numberOfLines={1}>{destinationAddress || 'No especificado'}</Text>
                     </View>
                   </View>
 
-                  {/* ETA Section */}
+                  {/* ETA strip */}
                   {activeRide.eta && (
-                    <View style={styles.etaSection}>
-                      <View style={styles.etaIconBox}>
-                        <Ionicons name="time-outline" size={24} color="#22c55e" />
-                      </View>
-                      <View style={styles.etaContent}>
-                        <Text style={styles.etaLabelText}>
-                          {activeRide.status === 'accepted'
-                            ? 'Llegada estimada'
-                            : activeRide.status === 'in_progress'
-                              ? 'Tiempo al destino'
-                              : 'Tiempo estimado'}
-                        </Text>
-                        <Text style={styles.etaValueText}>
-                          {Math.round(activeRide.eta.estimatedMinutes)} min ·{' '}
-                          {activeRide.eta.distanceKm.toFixed(1)} km
-                        </Text>
-                      </View>
+                    <View style={styles.rideEtaStrip}>
+                      <Ionicons name="time-outline" size={14} color="#22c55e" />
+                      <Text style={styles.rideEtaText}>
+                        {Math.round(activeRide.eta.estimatedMinutes)} min · {activeRide.eta.distanceKm.toFixed(1)} km
+                      </Text>
+                      <Text style={styles.rideEtaLabel}>
+                        {activeRide.status === 'accepted' ? 'hasta la recogida' : activeRide.status === 'in_progress' ? 'hasta el destino' : ''}
+                      </Text>
                     </View>
                   )}
 
-                  {/* Action Buttons Section */}
-                  <View style={styles.actionButtonsSection}>
-                    {/* Call button - disabled when ride is in progress (passenger is already in the taxi) */}
-                    <TouchableOpacity
-                      style={[
-                        styles.callButton,
-                        activeRide.status === 'in_progress' && styles.callButtonDisabled,
-                      ]}
-                      onPress={handleContactDriver}
-                      disabled={activeRide.status === 'in_progress'}
-                    >
-                      <Ionicons
-                        name="call-outline"
-                        size={20}
-                        color={activeRide.status === 'in_progress' ? '#9CA3AF' : '#fff'}
-                      />
-                      <Text
-                        style={[
-                          styles.callButtonText,
-                          activeRide.status === 'in_progress' && styles.callButtonTextDisabled,
-                        ]}
-                      >
-                        {activeRide.status === 'in_progress' ? 'En el taxi' : 'Llamar'}
+                  {/* Action buttons */}
+                  <View style={styles.rideActionsRow}>
+                    <TouchableOpacity style={[styles.rideBtnCall, activeRide.status === 'in_progress' && styles.rideBtnDisabled]} onPress={handleContactDriver} disabled={activeRide.status === 'in_progress'}>
+                      <Ionicons name="call-outline" size={16} color={activeRide.status === 'in_progress' ? '#9ca3af' : '#fff'} />
+                      <Text style={[styles.rideBtnCallText, activeRide.status === 'in_progress' && styles.rideBtnTextDisabled]}>
+                        {activeRide.status === 'in_progress' ? 'En viaje' : 'Llamar'}
                       </Text>
                     </TouchableOpacity>
 
-                    {(activeRide.status === 'pending' ||
-                      activeRide.status === 'accepted' ||
-                      activeRide.status === 'arrived') && (
-                      <TouchableOpacity style={styles.cancelButton} onPress={handleCancelRidePress}>
-                        <Ionicons name="close-circle-outline" size={20} color="#EF4444" />
-                        <Text style={styles.cancelButtonText}>Cancelar</Text>
+                    {(activeRide.status === 'pending' || activeRide.status === 'accepted' || activeRide.status === 'arrived') && (
+                      <TouchableOpacity style={styles.rideBtnCancel} onPress={handleCancelRidePress}>
+                        <Text style={styles.rideBtnCancelText}>Cancelar</Text>
                       </TouchableOpacity>
                     )}
 
-                    {/* Change to Pago Móvil — only when in_progress and payment is cash (Req. 3.1) */}
-                    {activeRide.status === 'in_progress' &&
-                      (!activeRide.paymentMode || activeRide.paymentMode === 'cash') && (
-                        <TouchableOpacity
-                          style={styles.changePaymentButton}
-                          onPress={() => setShowChangePaymentModal(true)}
-                          disabled={isChangingPayment}
-                          accessibilityLabel="Cambiar a Pago Móvil"
-                        >
-                          <Ionicons name="phone-portrait-outline" size={18} color="#fff" />
-                          <Text style={styles.changePaymentButtonText}>Cambiar a Pago Móvil</Text>
-                        </TouchableOpacity>
-                      )}
+                    {activeRide.status === 'in_progress' && (!activeRide.paymentMode || activeRide.paymentMode === 'cash') && (
+                      <TouchableOpacity style={styles.rideBtnChange} onPress={() => setShowChangePaymentModal(true)}>
+                        <Ionicons name="phone-portrait-outline" size={14} color="#fff" />
+                        <Text style={styles.rideBtnChangeText}>Pago Móvil</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               )}
@@ -4556,17 +4490,14 @@ export default function PassengerHomeScreen() {
             activeOpacity={1}
             onPress={() => setShowContactModal(false)}
           >
-            <TouchableOpacity
-              style={styles.contactModalContent}
-              activeOpacity={1}
-              onPress={() => {}}
-            >
-              <View style={styles.contactDriverHeader}>
-                <View style={styles.contactDriverAvatar}>
-                  <Ionicons name="person" size={32} color="#fff" />
-                </View>
-                <Text style={styles.contactDriverName}>
-                  {activeRide?.driver?.name || 'Conductor'}
+              <TouchableOpacity
+                style={styles.contactModalContent}
+                activeOpacity={1}
+                onPress={() => {}}
+              >
+                {/* Header sin foto */}
+                <Text style={styles.contactHeaderName}>
+                  Contactar a {activeRide?.driver?.name || 'el conductor'}
                 </Text>
                 <View style={styles.contactPhoneRow}>
                   <Ionicons name="call-outline" size={14} color="#6b7280" />
@@ -4574,51 +4505,42 @@ export default function PassengerHomeScreen() {
                     {activeRide?.driver?.phone || 'No disponible'}
                   </Text>
                 </View>
-              </View>
-              {activeRide?.driver?.vehicleModel && (
-                <View style={styles.contactVehicleRow}>
-                  <Ionicons name="car-outline" size={16} color="#6b7280" />
-                  <Text style={styles.contactVehicleText}>
-                    {activeRide.driver.vehicleModel}
-                    {activeRide.driver.vehicleColor ? ` · ${activeRide.driver.vehicleColor}` : ''}
+
+                <View style={styles.contactDivider} />
+                <Text style={styles.contactOptionsTitle}>Selecciona el método de contacto</Text>
+
+                <TouchableOpacity style={styles.contactOptionRow} onPress={handlePhoneCall}>
+                  <Ionicons name="call" size={20} color="#22c55e" style={{ marginRight: 12 }} />
+                  <View style={styles.contactOptionInfo}>
+                    <Text style={styles.contactOptionLabel}>Llamada telefónica</Text>
+                    <Text style={styles.contactOptionDesc}>Llamar directamente</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#d1d5db" />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.contactOptionRow} onPress={handleWhatsAppCall}>
+                  <Ionicons name="logo-whatsapp" size={20} color="#25D366" style={{ marginRight: 12 }} />
+                  <View style={styles.contactOptionInfo}>
+                    <Text style={styles.contactOptionLabel}>WhatsApp</Text>
+                    <Text style={styles.contactOptionDesc}>Abrir conversación</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#d1d5db" />
+                </TouchableOpacity>
+
+                <View style={styles.contactNote}>
+                  <Ionicons name="information-circle-outline" size={14} color="#22c55e" />
+                  <Text style={styles.contactNoteText}>
+                    Solo si es necesario para coordinar el viaje.
                   </Text>
                 </View>
-              )}
-              <View style={styles.contactDivider} />
-              <Text style={styles.contactOptionsTitle}>Selecciona el método de contacto</Text>
-              <TouchableOpacity style={styles.contactOptionRow} onPress={handlePhoneCall}>
-                <View style={[styles.contactOptionIcon, { backgroundColor: '#dcfce7' }]}>
-                  <Ionicons name="call" size={22} color="#22c55e" />
-                </View>
-                <View style={styles.contactOptionInfo}>
-                  <Text style={styles.contactOptionLabel}>Llamada telefónica</Text>
-                  <Text style={styles.contactOptionDesc}>Llamar directamente al conductor</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
+
+                <TouchableOpacity
+                  style={styles.contactCancelBtn}
+                  onPress={() => setShowContactModal(false)}
+                >
+                  <Text style={styles.contactCancelBtnText}>Cancelar</Text>
+                </TouchableOpacity>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.contactOptionRow} onPress={handleWhatsAppCall}>
-                <View style={[styles.contactOptionIcon, { backgroundColor: '#dcfce7' }]}>
-                  <Ionicons name="logo-whatsapp" size={22} color="#25D366" />
-                </View>
-                <View style={styles.contactOptionInfo}>
-                  <Text style={styles.contactOptionLabel}>WhatsApp</Text>
-                  <Text style={styles.contactOptionDesc}>Abrir conversación en WhatsApp</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
-              </TouchableOpacity>
-              <View style={styles.contactNote}>
-                <Ionicons name="information-circle-outline" size={16} color="#22c55e" />
-                <Text style={styles.contactNoteText}>
-                  Contacta al conductor solo si es necesario para coordinar el viaje.
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.contactCancelBtn}
-                onPress={() => setShowContactModal(false)}
-              >
-                <Text style={styles.contactCancelBtnText}>Cancelar</Text>
-              </TouchableOpacity>
-            </TouchableOpacity>
           </TouchableOpacity>
         </Modal>
       </View>
@@ -5419,6 +5341,204 @@ const styles = StyleSheet.create({
   },
   driverMarkerText: {
     fontSize: 20,
+  },
+  // Ride details panel — Compact & Professional
+  ridePanel: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  rideDriverRatingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fffbeb',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 3,
+  },
+  rideDriverRating: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#92400e',
+  },
+  rideStatusRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 10,
+  },
+  rideTripInfo: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+    gap: 6,
+  },
+  rideTripRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rideTripLabel: {
+    fontSize: 12,
+    color: '#9ca3af',
+    width: 55,
+  },
+  rideTripValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  rideTripValueSm: {
+    fontSize: 12,
+    color: '#4b5563',
+    flex: 1,
+  },
+  rideTripDual: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginLeft: 4,
+  },
+  rideTripDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#22c55e',
+  },
+  rideDriverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  rideDriverAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#e5e7eb',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    overflow: 'hidden',
+  },
+  rideDriverAvatarImg: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  rideDriverAvatarLetter: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#6b7280',
+  },
+  rideDriverInfo: {
+    flex: 1,
+  },
+  rideDriverName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  rideDriverMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    gap: 8,
+  },
+  rideDriverVehicle: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  rideStatusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: '#dcfce7',
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+  },
+  rideStatusAccepted: { backgroundColor: '#dbeafe' },
+  rideStatusArrived: { backgroundColor: '#fed7aa' },
+  rideStatusInProgress: { backgroundColor: '#d1fae5' },
+  rideStatusText: { fontSize: 11, fontWeight: '600', color: '#16a34a' },
+  rideStatusTextAccepted: { color: '#2563eb' },
+  rideStatusTextArrived: { color: '#ea580c' },
+  rideStatusTextInProgress: { color: '#059669' },
+  rideEtaStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    gap: 6,
+  },
+  rideEtaText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  rideEtaLabel: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginLeft: 'auto',
+  },
+  rideActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  rideBtnCall: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#22c55e',
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  rideBtnCallText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  rideBtnDisabled: {
+    backgroundColor: '#e5e7eb',
+  },
+  rideBtnTextDisabled: {
+    color: '#9ca3af',
+  },
+  rideBtnCancel: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  rideBtnCancelText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  rideBtnChange: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#6366f1',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    gap: 4,
+  },
+  rideBtnChangeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   driverInfoFullContainer: {
     flex: 1,
@@ -6316,130 +6436,94 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  // Contact Modal Styles
+  // Contact Modal Styles — Compact
   contactModalContent: {
     backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 20,
+    padding: 20,
     width: '90%',
     maxWidth: 380,
   },
-  contactDriverHeader: {
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  contactDriverAvatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#22c55e',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  contactDriverName: {
-    fontSize: 20,
+  contactHeaderName: {
+    fontSize: 17,
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
+    color: '#1f2937',
+    textAlign: 'center',
+    marginBottom: 6,
   },
   contactPhoneRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
-  contactPhoneText: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  contactVehicleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    alignSelf: 'center',
-    marginBottom: 16,
+    marginBottom: 4,
   },
-  contactVehicleText: {
+  contactPhoneText: {
     fontSize: 13,
-    color: '#4b5563',
-    fontWeight: '500',
+    color: '#6b7280',
   },
   contactDivider: {
     height: 1,
     backgroundColor: '#f0f0f0',
-    marginBottom: 16,
+    marginVertical: 14,
   },
   contactOptionsTitle: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '600',
     color: '#9ca3af',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   contactOptionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f9fafb',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#f0f0f0',
-  },
-  contactOptionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
   },
   contactOptionInfo: {
     flex: 1,
   },
   contactOptionLabel: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
     color: '#111827',
-    marginBottom: 2,
   },
   contactOptionDesc: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#9ca3af',
+    marginTop: 1,
   },
   contactNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     backgroundColor: '#f0fdf4',
-    borderRadius: 10,
-    padding: 12,
-    gap: 8,
-    marginTop: 2,
+    borderRadius: 8,
+    padding: 10,
+    gap: 6,
   },
   contactNoteText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 11,
     color: '#065f46',
-    lineHeight: 18,
+    lineHeight: 16,
   },
   contactCancelBtn: {
-    marginTop: 16,
+    marginTop: 12,
     backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingVertical: 13,
+    borderRadius: 10,
+    paddingVertical: 11,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
   contactCancelBtnText: {
     color: '#6b7280',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
   },
   centerLocationButton: {
