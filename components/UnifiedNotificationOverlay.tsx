@@ -431,22 +431,24 @@ const StatusBanner: React.FC<{
         },
       ]}
     >
-      <TouchableOpacity
-        style={styles.statusContent}
-        activeOpacity={0.9}
-        onPress={() => {
-          if (status.action) {
-            status.action.onPress();
-            onDismiss();
-          }
-        }}
-      >
-        <View style={[styles.statusIconCircle, { backgroundColor: config.accentColor + '20' }]}>
-          <Ionicons name={config.icon} size={22} color={config.accentColor} />
+      <View style={styles.statusContent}>
+        <View style={styles.statusHeaderRow}>
+          <View style={[styles.statusIconCircle, { backgroundColor: config.accentColor + '20' }]}>
+            <Ionicons name={config.icon} size={22} color={config.accentColor} />
+          </View>
+          <View style={styles.statusTitleContainer}>
+            {status.title ? <Text style={styles.statusTitle} numberOfLines={1}>{status.title}</Text> : null}
+          </View>
+          <TouchableOpacity
+            onPress={animateOut}
+            style={styles.statusClose}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="close" size={18} color="#9ca3af" />
+          </TouchableOpacity>
         </View>
-        <View style={styles.statusTextContainer}>
-          {status.title ? <Text style={styles.statusTitle}>{status.title}</Text> : null}
-          <Text style={styles.statusMessage} numberOfLines={2}>
+        <View style={styles.statusBodyRow}>
+          <Text style={styles.statusMessage}>
             {status.message}
           </Text>
         </View>
@@ -462,14 +464,7 @@ const StatusBanner: React.FC<{
             <Text style={styles.statusActionText}>{status.action.label}</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity
-          onPress={animateOut}
-          style={styles.statusClose}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="close" size={18} color="#9ca3af" />
-        </TouchableOpacity>
-      </TouchableOpacity>
+      </View>
     </Animated.View>
   );
 };
@@ -705,27 +700,33 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   statusContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 14,
   },
+  statusHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   statusIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
-  statusTextContainer: {
+  statusTitleContainer: {
     flex: 1,
+  },
+  statusBodyRow: {
+    marginTop: 4,
+    marginBottom: 4,
+    marginLeft: 50, // align with title (icon width 40 + marginRight 10)
   },
   statusTitle: {
     fontSize: 13,
     fontWeight: '700',
     color: '#1f2937',
-    marginBottom: 2,
   },
   statusMessage: {
     fontSize: 14,
@@ -733,10 +734,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   statusActionBtn: {
+    alignSelf: 'flex-end',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 10,
-    marginLeft: 8,
+    marginTop: 4,
   },
   statusActionText: {
     color: '#fff',
@@ -744,8 +746,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   statusClose: {
-    marginLeft: 4,
     padding: 4,
+    marginLeft: 4,
   },
 
   // ── Ride Request Card ─────────────────────────────────────────────────────

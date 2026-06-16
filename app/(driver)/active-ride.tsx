@@ -22,6 +22,7 @@ import { getSocket, onPaymentConfirmed } from '@/services/socket';
 import { useSound } from '@/hooks/useSound';
 import { Colors as colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { formatCurrency, Currency } from '@/utils/currency';
 import { DriverTaxiIcon, PassengerIcon, DropoffIcon } from '@/src/components/map/markers';
 import {
   bearingAlongRoute,
@@ -30,7 +31,6 @@ import {
   computeNearestRouteIndex,
   haversineDistance,
 } from '@/src/utils/mapNav';
-import { formatCurrency, Currency } from '@/utils/currency';
 import { formatAddressForCard } from '@/utils/addressFormatter';
 import { useRideTracking } from '@/hooks/useRideTracking';
 import { useTTS } from '@/hooks/useTTS';
@@ -450,8 +450,10 @@ export default function ActiveRideScreen() {
       const subscription = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
-          timeInterval: 3000, // Update every 3 seconds for smoother tracking
-          distanceInterval: 5, // Or every 5 meters
+          timeInterval: 3000,
+          distanceInterval: 5,
+          pausesUpdatesAutomatically: false,
+          activityType: Location.ActivityType.AutomotiveNavigation,
         },
         newLocation => {
           const newCoords = {
@@ -1192,7 +1194,7 @@ export default function ActiveRideScreen() {
             setUserInteractedWithMap(true);
           }}
         >
-          {/* Driver's current location — icon stays upright like Google Maps markers (3D billboard mode) */}
+          {/* Driver's current location */}
           {location && (
             <Marker
               coordinate={location}
@@ -2207,29 +2209,24 @@ export default function ActiveRideScreen() {
 
             {ride.status === 'arrived' && (
               <>
-                {/* Payment waiting message */}
-                {!isPaymentConfirmed && (
-                  <View
-                    style={{
-                      backgroundColor: '#FFF4E6',
-                      padding: 16,
-                      borderRadius: 12,
-                      marginBottom: 16,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 12,
-                    }}
-                  >
+                {/* Payment message: different for cash vs mobile */}
+                {passengerPaymentMode !== 'pago_movil' ? (
+                  <View style={{ backgroundColor: '#f0fdf4', padding: 14, borderRadius: 12, marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Ionicons name="cash-outline" size={20} color="#16a34a" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#16a34a', marginBottom: 2 }}>
+                        Cobrar en efectivo
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#4b5563' }}>
+                        {formatCurrency(Number(ride.estimatedFare), ride.currency)} — Si el pasajero no paga, cancela el viaje.
+                      </Text>
+                    </View>
+                  </View>
+                ) : !isPaymentConfirmed ? (
+                  <View style={{ backgroundColor: '#FFF4E6', padding: 16, borderRadius: 12, marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                     <ActivityIndicator size="small" color="#FF8C00" />
                     <View style={{ flex: 1 }}>
-                      <Text
-                        style={{
-                          fontSize: 15,
-                          fontWeight: '600',
-                          color: '#FF8C00',
-                          marginBottom: 4,
-                        }}
-                      >
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF8C00', marginBottom: 4 }}>
                         Esperando confirmación de pago
                       </Text>
                       <Text style={{ fontSize: 13, color: '#666' }}>
@@ -2237,52 +2234,53 @@ export default function ActiveRideScreen() {
                       </Text>
                     </View>
                   </View>
-                )}
+                ) : null}
 
-                {/* Start Ride button */}
+                {/* Buttons row */}
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TouchableOpacity
                     onPress={() => updateRideStatus('in_progress')}
-                    disabled={!isPaymentConfirmed}
+                    disabled={passengerPaymentMode === 'pago_movil' && !isPaymentConfirmed}
                     style={{
                       flex: 2,
-                      backgroundColor: isPaymentConfirmed ? colors.primary : '#D1D5DB',
+                      backgroundColor: (passengerPaymentMode !== 'pago_movil' || isPaymentConfirmed) ? colors.primary : '#D1D5DB',
                       paddingVertical: 12,
                       borderRadius: 10,
                       alignItems: 'center',
-                      opacity: isPaymentConfirmed ? 1 : 0.6,
+                      opacity: (passengerPaymentMode !== 'pago_movil' || isPaymentConfirmed) ? 1 : 0.6,
                       flexDirection: 'row',
                       justifyContent: 'center',
                       gap: 6,
                     }}
                   >
-                    <Ionicons
-                      name={isPaymentConfirmed ? 'play-circle' : 'time-outline'}
-                      size={18}
-                      color="#fff"
-                    />
+                    <Ionicons name={(passengerPaymentMode !== 'pago_movil' || isPaymentConfirmed) ? 'play-circle' : 'time-outline'} size={18} color="#fff" />
                     <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>
-                      {isPaymentConfirmed ? 'Iniciar' : 'Esperando Pago'}
+                      {(passengerPaymentMode !== 'pago_movil' || isPaymentConfirmed) ? 'Iniciar' : 'Esperando Pago'}
                     </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={handleOpenExternalNav}
-                    style={{
-                      flex: 1,
-                      backgroundColor: '#F3F4F6',
-                      paddingVertical: 12,
-                      borderRadius: 10,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      flexDirection: 'row',
-                      gap: 6,
-                    }}
-                  >
-                    <Ionicons name="navigate-outline" size={16} color={colors.darkGray} />
-                    <Text style={{ color: colors.darkGray, fontSize: 13, fontWeight: '600' }}>
-                      Waze
-                    </Text>
-                  </TouchableOpacity>
+
+                  {/* Cancel button — only for cash payments */}
+                  {passengerPaymentMode !== 'pago_movil' && (
+                    <TouchableOpacity
+                      onPress={async () => {
+                        try {
+                          await api.post(`/api/rides/${rideId}/cancel`, { reason: 'Pasajero no pagó en efectivo' });
+                          router.back();
+                        } catch (e) { /* ignore */ }
+                      }}
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#fff',
+                        paddingVertical: 12,
+                        borderRadius: 10,
+                        alignItems: 'center',
+                        borderWidth: 1,
+                        borderColor: '#fecaca',
+                      }}
+                    >
+                      <Text style={{ color: '#ef4444', fontSize: 14, fontWeight: '600' }}>Cancelar</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </>
             )}

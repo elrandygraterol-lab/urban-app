@@ -327,9 +327,15 @@ export default function PassengerHomeScreen() {
                 restoreAttemptedRef.current = true;
                 return ride;
               });
-              // Restaurar direcciones
+              // Restaurar direcciones y coordenadas
               if (ride.pickupAddress) setPickupAddress(ride.pickupAddress);
               if (ride.destinationAddress) setDestinationAddress(ride.destinationAddress);
+              if (ride.pickupLatitude && ride.pickupLongitude) {
+                setPickupLocation({ latitude: Number(ride.pickupLatitude), longitude: Number(ride.pickupLongitude) });
+              }
+              if (ride.destinationLatitude && ride.destinationLongitude) {
+                setDestinationLocation({ latitude: Number(ride.destinationLatitude), longitude: Number(ride.destinationLongitude) });
+              }
               setIsSearchingDriver(ride.status === 'pending');
             }
           }
@@ -590,7 +596,7 @@ export default function PassengerHomeScreen() {
         try {
           const lastKnown = await Location.getLastKnownPositionAsync({
             maxAge: 3 * 60 * 1000, // prefer positions up to 3 min old
-            requiredAccuracy: 150, // within 150 meters
+            requiredAccuracy: 20, // within 20 meters for precise initial position
           });
           if (lastKnown) {
             logInfo('PassengerHomeScreen', 'Last known position available', {
@@ -611,7 +617,7 @@ export default function PassengerHomeScreen() {
         // Step 2: Fresh GPS position (updates map even if last known was applied)
         try {
           const fresh = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
+            accuracy: Location.Accuracy.BestForNavigation,
           });
           logInfo('PassengerHomeScreen', 'Fresh GPS position obtained', {
             lat: fresh.coords.latitude,
@@ -696,7 +702,7 @@ export default function PassengerHomeScreen() {
                 label: 'Reintentar',
                 onPress: () => {
                   setIsLoadingLocation(true);
-                  Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+                  Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation })
                     .then(loc =>
                       applyLocation({
                         latitude: loc.coords.latitude,
@@ -733,7 +739,7 @@ export default function PassengerHomeScreen() {
       if (nextState === 'active' && !currentLocation) {
         logInfo('PassengerHomeScreen', 'App active, retrying location...');
         setIsLoadingLocation(true);
-        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation })
           .then(async loc => {
             const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
             setCurrentLocation(coords);
@@ -849,7 +855,7 @@ export default function PassengerHomeScreen() {
       const vehicleText = vehicleInfo
         ? `${vehicleInfo.model || 'Información no disponible'} - ${vehicleInfo.licensePlate || 'N/A'}`
         : 'Información del vehículo no disponible';
-      const ratingText = data.driver?.rating ? `⭐ ${data.driver.rating.toFixed(1)}` : '';
+      const ratingText = data.driver?.rating ? `★ ${data.driver.rating.toFixed(1)}` : '';
 
       // Show single comprehensive driver info alert
       showStatus(
@@ -858,7 +864,7 @@ export default function PassengerHomeScreen() {
           `🚙 Vehículo: ${vehicleText}\n` +
           `${ratingText ? `${ratingText}\n` : ''}` +
           `\nRealiza el pago para confirmar el viaje.`,
-        '🚗 ¡Tu Conductor Viene en Camino!',
+        'Conductor Viene en Camino',
         undefined,
         undefined
       );
@@ -879,7 +885,7 @@ export default function PassengerHomeScreen() {
         showStatus(
           'info',
           'Tu conductor está esperándote en el punto de recogida. Por favor dirígete al vehículo.',
-          '📍 ¡Tu Conductor ha Llegado!',
+          'Tu Conductor ha Llegado',
           undefined,
           {
             label: 'Ver Ubicación',
@@ -1002,7 +1008,7 @@ export default function PassengerHomeScreen() {
           'info',
           `Tu conductor llegará en aproximadamente ${Math.ceil(estimatedMinutes)} minuto${estimatedMinutes > 1 ? 's' : ''}.\n\n` +
             `Prepárate para abordar el vehículo.`,
-          '🚗 ¡Tu Conductor Está Cerca!'
+          '¡Tu Conductor Está Cerca!'
         );
       }
     };
@@ -1025,7 +1031,7 @@ export default function PassengerHomeScreen() {
         'info',
         `${data.driverName} te está esperando en el punto de recogida.\n\n` +
           `Por favor dirígete al vehículo. Si no lo ves, puedes llamarlo desde el panel.`,
-        '📍 ¡Tu Conductor Está Aquí!',
+          '¡Tu Conductor Está Aquí!',
         undefined,
         {
           label: 'Ver en Mapa',
@@ -1073,7 +1079,7 @@ export default function PassengerHomeScreen() {
           data.cancellationReason ||
             'Lo sentimos, no encontramos conductores disponibles en este momento.\n\n' +
               'Por favor intenta nuevamente en unos minutos.',
-          '😔 No Hay Conductores Disponibles'
+          'No Hay Conductores Disponibles'
         );
 
         // Reset ride state
@@ -1086,13 +1092,15 @@ export default function PassengerHomeScreen() {
           `El conductor ha cancelado tu viaje.\n\n` +
             `Motivo: ${data.cancellationReason || 'No especificado'}\n\n` +
             `Estamos buscando otro conductor disponible para ti.`,
-          '⚠️ Conductor Canceló el Viaje'
+          'Conductor Canceló el Viaje'
         );
+
+        setDriverLocation(null);
       } else if (data.cancelledBy === 'passenger') {
         // Show cancellation fee if applicable
         const feeMessage =
           data.cancellationFee > 0
-            ? `\n\n💰 Tarifa de cancelación aplicada: ${formatCurrency(data.cancellationFee, fareCurrency)}`
+            ? `\n\nTarifa de cancelación aplicada: ${formatCurrency(data.cancellationFee, fareCurrency)}`
             : '';
 
         showToast(`Tu viaje ha sido cancelado exitosamente.${feeMessage}`, 'info');
@@ -1123,7 +1131,7 @@ export default function PassengerHomeScreen() {
       showStatus(
         'success',
         `Tu viaje ha finalizado exitosamente.\n\nTarifa Final: ${formatCurrency(data.finalFare, fareCurrency)}\n\nPor favor califica tu experiencia.`,
-        '🎉 Viaje Completado',
+        'Viaje Completado',
         undefined,
         {
           label: 'Calificar',
@@ -1252,9 +1260,9 @@ export default function PassengerHomeScreen() {
         // Start watching location
         locationSubscription = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.High,
-            timeInterval: 3000, // Update every 3 seconds (same as driver)
-            distanceInterval: 5, // Or when moved 5 meters (same as driver)
+            accuracy: Location.Accuracy.BestForNavigation,
+            timeInterval: 2000,
+            distanceInterval: 3,
           },
           location => {
             const { latitude, longitude } = location.coords;
@@ -1292,6 +1300,38 @@ export default function PassengerHomeScreen() {
       }
     };
   }, [activeRide?.id, activeRide?.isShared, activeRide?.status]);
+
+  // Continuous passenger location tracking — keeps the map icon precise at all times
+  useEffect(() => {
+    let locationSubscription: Location.LocationSubscription | null = null;
+
+    const startWatching = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+
+        locationSubscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.BestForNavigation,
+            timeInterval: 2000,
+            distanceInterval: 1,
+          },
+          location => {
+            const { latitude, longitude } = location.coords;
+            if (typeof latitude === 'number' && typeof longitude === 'number') {
+              setCurrentLocation({ latitude, longitude });
+            }
+          }
+        );
+      } catch (_) {}
+    };
+
+    startWatching();
+
+    return () => {
+      if (locationSubscription) locationSubscription.remove();
+    };
+  }, []);
 
   // ========== MEJORAS: Inicializar cuando el viaje comienza (in_progress) ==========
   useEffect(() => {
@@ -2431,13 +2471,14 @@ export default function PassengerHomeScreen() {
       setIsRequestingRide(false);
       setIsSearchingDriver(true);
 
-      // Show native alert for searching driver
+      // Show notification banner for searching driver
       showStatus(
         'info',
-        'Estamos notificando a conductores cercanos',
+        'Estamos notificando a conductores cercanos. Te avisaremos cuando un conductor acepte tu viaje.',
         'Buscando conductor...',
         undefined,
-        { label: 'Cancelar Búsqueda', onPress: handleCancelSearching }
+        undefined,
+        8000
       );
 
       console.log('✅ Ride requested:', rideId);
@@ -2854,7 +2895,7 @@ export default function PassengerHomeScreen() {
     }
   };
 
-  const showDriverMarker = !!(activeRide?.driver && driverLocation);
+  const showDriverMarker = !!(activeRide?.driver && driverLocation && activeRide.status !== 'completed' && activeRide.status !== 'cancelled');
 
   if (isLoadingLocation) {
     return (
@@ -2890,8 +2931,8 @@ export default function PassengerHomeScreen() {
             ref={mapRef}
             style={styles.map}
             initialRegion={{
-              latitude: currentLocation.latitude,
-              longitude: currentLocation.longitude,
+              latitude: Number(currentLocation.latitude),
+              longitude: Number(currentLocation.longitude),
               latitudeDelta: 0.01,
               longitudeDelta: 0.01,
             }}
@@ -2910,11 +2951,11 @@ export default function PassengerHomeScreen() {
             onPanDrag={() => setUserInteractedWithMap(true)}
             onRegionChangeComplete={() => setUserInteractedWithMap(true)}
           >
-            {showDriverMarker && driverLocation && (
+            {showDriverMarker && driverLocation && typeof driverLocation.latitude === 'number' && (
               <Marker
                 coordinate={{
-                  latitude: driverLocation.latitude,
-                  longitude: driverLocation.longitude,
+                  latitude: Number(driverLocation.latitude),
+                  longitude: Number(driverLocation.longitude),
                 }}
                 title="Conductor"
                 anchor={{ x: 0.5, y: 0.5 }}
@@ -2925,10 +2966,13 @@ export default function PassengerHomeScreen() {
               </Marker>
             )}
 
-            {/* Ubicacion actual del pasajero */}
-            {currentLocation && (
+            {/* Ubicacion actual del pasajero — oculta durante el viaje */}
+            {currentLocation && typeof currentLocation.latitude === 'number' && activeRide?.status !== 'in_progress' && (
               <Marker
-                coordinate={currentLocation}
+                coordinate={{
+                  latitude: Number(currentLocation.latitude),
+                  longitude: Number(currentLocation.longitude),
+                }}
                 title="Tu ubicacion"
                 identifier="passenger_location"
                 anchor={{ x: 0.5, y: 0.5 }}
@@ -2938,9 +2982,12 @@ export default function PassengerHomeScreen() {
             )}
 
             {/* Destino */}
-            {destinationLocation && (
+            {destinationLocation && typeof destinationLocation.latitude === 'number' && (
               <Marker
-                coordinate={destinationLocation}
+                coordinate={{
+                  latitude: Number(destinationLocation.latitude),
+                  longitude: Number(destinationLocation.longitude),
+                }}
                 title="Destino"
                 identifier="destination"
                 anchor={{ x: 0.5, y: 0.5 }}
@@ -2950,9 +2997,12 @@ export default function PassengerHomeScreen() {
             )}
 
             {/* Second Pickup Marker */}
-            {showSecondPickup && secondPickupLocation && (
+            {showSecondPickup && secondPickupLocation && typeof secondPickupLocation.latitude === 'number' && (
               <Marker
-                coordinate={secondPickupLocation}
+                coordinate={{
+                  latitude: Number(secondPickupLocation.latitude),
+                  longitude: Number(secondPickupLocation.longitude),
+                }}
                 title="Segundo punto de recogida"
                 identifier="pickup2"
                 anchor={{ x: 0.5, y: 0.5 }}
@@ -2962,9 +3012,12 @@ export default function PassengerHomeScreen() {
             )}
 
             {/* Second Destination Marker */}
-            {showSecondDestination && secondDestinationLocation && (
+            {showSecondDestination && secondDestinationLocation && typeof secondDestinationLocation.latitude === 'number' && (
               <Marker
-                coordinate={secondDestinationLocation}
+                coordinate={{
+                  latitude: Number(secondDestinationLocation.latitude),
+                  longitude: Number(secondDestinationLocation.longitude),
+                }}
                 title="Segundo destino"
                 identifier="destination2"
                 anchor={{ x: 0.5, y: 0.5 }}
@@ -3199,23 +3252,16 @@ export default function PassengerHomeScreen() {
 
                   {/* Action buttons */}
                   <View style={styles.rideActionsRow}>
-                    <TouchableOpacity style={[styles.rideBtnCall, activeRide.status === 'in_progress' && styles.rideBtnDisabled]} onPress={handleContactDriver} disabled={activeRide.status === 'in_progress'}>
-                      <Ionicons name="call-outline" size={16} color={activeRide.status === 'in_progress' ? '#9ca3af' : '#fff'} />
-                      <Text style={[styles.rideBtnCallText, activeRide.status === 'in_progress' && styles.rideBtnTextDisabled]}>
-                        {activeRide.status === 'in_progress' ? 'En viaje' : 'Llamar'}
-                      </Text>
-                    </TouchableOpacity>
+                    {activeRide.status !== 'in_progress' && (
+                      <TouchableOpacity style={styles.rideBtnCall} onPress={handleContactDriver}>
+                        <Ionicons name="call-outline" size={16} color="#fff" />
+                        <Text style={styles.rideBtnCallText}>Llamar</Text>
+                      </TouchableOpacity>
+                    )}
 
                     {(activeRide.status === 'pending' || activeRide.status === 'accepted' || activeRide.status === 'arrived') && (
                       <TouchableOpacity style={styles.rideBtnCancel} onPress={handleCancelRidePress}>
                         <Text style={styles.rideBtnCancelText}>Cancelar</Text>
-                      </TouchableOpacity>
-                    )}
-
-                    {activeRide.status === 'in_progress' && (!activeRide.paymentMode || activeRide.paymentMode === 'cash') && (
-                      <TouchableOpacity style={styles.rideBtnChange} onPress={() => setShowChangePaymentModal(true)}>
-                        <Ionicons name="phone-portrait-outline" size={14} color="#fff" />
-                        <Text style={styles.rideBtnChangeText}>Pago Móvil</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -4324,7 +4370,7 @@ export default function PassengerHomeScreen() {
                   {/* Payment Confirmation */}
                   <View style={styles.paymentConfirmationContainer}>
                     <View style={styles.successIconContainer}>
-                      <Text style={styles.successIcon}>✅</Text>
+                    <Ionicons name="checkmark-circle" size={48} color="#22c55e" />
                     </View>
 
                     <Text style={styles.confirmationTitle}>¡Pago Confirmado!</Text>
@@ -4364,102 +4410,59 @@ export default function PassengerHomeScreen() {
         <Modal
           visible={showRatingModal}
           transparent={true}
-          animationType="slide"
+          animationType="fade"
           onRequestClose={handleSkipRating}
         >
           <View style={styles.modalOverlay}>
             <View style={styles.ratingModalContent}>
-              {/* Rating Header */}
-              <View style={styles.ratingHeader}>
-                <Text style={styles.ratingTitle}>¿Cómo fue tu viaje?</Text>
-                <Text style={styles.ratingSubtitle}>
-                  Valora tu experiencia con {activeRide?.driver?.name || 'el conductor'}
-                </Text>
-              </View>
+              {/* Header */}
+              <Text style={styles.ratingTitle}>Califica tu viaje</Text>
+              <Text style={styles.ratingSubtitle} numberOfLines={1}>
+                {activeRide?.driver?.name || 'el conductor'}
+              </Text>
 
-              {/* Driver Info */}
-              {activeRide?.driver && (
-                <View style={styles.ratingDriverInfo}>
-                  <View style={styles.ratingDriverAvatar}>
-                    <Text style={styles.ratingDriverAvatarText}>
-                      {activeRide.driver.name.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                  <View>
-                    <Text style={styles.ratingDriverName}>{activeRide.driver.name}</Text>
-                    <Text style={styles.ratingDriverVehicle}>
-                      {activeRide.driver.vehicleInfo?.model || 'N/A'} -{' '}
-                      {activeRide.driver.vehicleInfo?.licensePlate || 'N/A'}
-                    </Text>
-                  </View>
-                </View>
+              {/* Stars */}
+              <View style={styles.ratingStarsRow}>
+                {[1, 2, 3, 4, 5].map(star => (
+                  <TouchableOpacity key={star} onPress={() => setDriverRating(star)}>
+                    <Ionicons
+                      name={star <= driverRating ? 'star' : 'star-outline'}
+                      size={36}
+                      color={star <= driverRating ? '#f59e0b' : '#d1d5db'}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {driverRating > 0 && (
+                <Text style={styles.ratingText}>
+                  {driverRating === 1 && 'Muy malo'}
+                  {driverRating === 2 && 'Malo'}
+                  {driverRating === 3 && 'Regular'}
+                  {driverRating === 4 && 'Bueno'}
+                  {driverRating === 5 && 'Excelente'}
+                </Text>
               )}
 
-              {/* Star Rating Component */}
-              <View style={styles.starRatingContainer}>
-                <Text style={styles.starRatingLabel}>Tu valoración</Text>
-                <View style={styles.starsRow}>
-                  {[1, 2, 3, 4, 5].map(star => (
-                    <TouchableOpacity
-                      key={star}
-                      onPress={() => setDriverRating(star)}
-                      style={styles.starButton}
-                    >
-                      <Text style={styles.starIcon}>{star <= driverRating ? '⭐' : '☆'}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                {driverRating > 0 && (
-                  <Text style={styles.ratingText}>
-                    {driverRating === 1 && 'Muy malo'}
-                    {driverRating === 2 && 'Malo'}
-                    {driverRating === 3 && 'Regular'}
-                    {driverRating === 4 && 'Bueno'}
-                    {driverRating === 5 && 'Excelente'}
-                  </Text>
-                )}
-              </View>
+              {/* Comment */}
+              <TextInput
+                style={styles.ratingComment}
+                placeholder="Comentario (opcional)"
+                placeholderTextColor="#9ca3af"
+                value={driverComment}
+                onChangeText={setDriverComment}
+                multiline
+                numberOfLines={3}
+                maxLength={200}
+                textAlignVertical="top"
+              />
 
-              {/* Comment Input */}
-              <View style={styles.commentContainer}>
-                <Text style={styles.commentLabel}>Comentario (opcional)</Text>
-                <TextInput
-                  style={styles.commentInput}
-                  placeholder="Cuéntanos más sobre tu experiencia..."
-                  placeholderTextColor="#A9A9A9"
-                  value={driverComment}
-                  onChangeText={setDriverComment}
-                  multiline
-                  numberOfLines={4}
-                  maxLength={500}
-                  textAlignVertical="top"
-                />
-                <Text style={styles.commentCounter}>{driverComment.length}/500</Text>
-              </View>
-
-              {/* Rating Modal Buttons */}
-              <View style={styles.ratingModalButtons}>
-                <TouchableOpacity
-                  style={styles.skipRatingButton}
-                  onPress={handleSkipRating}
-                  disabled={isSubmittingRating}
-                >
-                  <Text style={styles.skipRatingButtonText}>Omitir</Text>
+              {/* Buttons */}
+              <View style={styles.ratingButtons}>
+                <TouchableOpacity style={styles.ratingBtnSkip} onPress={handleSkipRating} disabled={isSubmittingRating}>
+                  <Text style={styles.ratingBtnSkipText}>Omitir</Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.submitRatingButton,
-                    (driverRating === 0 || isSubmittingRating) && styles.submitRatingButtonDisabled,
-                  ]}
-                  onPress={handleSubmitRating}
-                  disabled={driverRating === 0 || isSubmittingRating}
-                >
-                  {isSubmittingRating ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.submitRatingButtonText}>Enviar Valoración</Text>
-                  )}
+                <TouchableOpacity style={[styles.ratingBtnSubmit, (driverRating === 0 || isSubmittingRating) && { opacity: 0.5 }]} onPress={handleSubmitRating} disabled={driverRating === 0 || isSubmittingRating}>
+                  {isSubmittingRating ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.ratingBtnSubmitText}>Enviar</Text>}
                 </TouchableOpacity>
               </View>
             </View>
@@ -6311,7 +6314,83 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   // Rating Modal Styles
+  // Rating Modal Styles — Compact & Professional
   ratingModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 360,
+    alignItems: 'center',
+  },
+  ratingTitle: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#1f2937',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  ratingSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  ratingStarsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 6,
+  },
+  ratingText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#f59e0b',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  ratingComment: {
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 13,
+    color: '#374151',
+    minHeight: 70,
+    marginBottom: 16,
+    width: '100%',
+  },
+  ratingButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  ratingBtnSkip: {
+    flex: 1,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  ratingBtnSkipText: {
+    color: '#6b7280',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  ratingBtnSubmit: {
+    flex: 2,
+    backgroundColor: '#22c55e',
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  ratingBtnSubmitText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  ratingModalContent_DEPRECATED: {
     backgroundColor: '#fff',
     borderRadius: 24,
     padding: 24,
@@ -6331,17 +6410,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
   },
-  ratingTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#22c55e',
-    marginBottom: 8,
-  },
-  ratingSubtitle: {
-    fontSize: 16,
-    color: '#505050',
-    textAlign: 'center',
-  },
+
   ratingDriverInfo: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -6398,11 +6467,7 @@ const styles = StyleSheet.create({
   starIcon: {
     fontSize: 40,
   },
-  ratingText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#22c55e',
-  },
+
   commentContainer: {
     marginBottom: 24,
   },

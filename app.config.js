@@ -16,7 +16,8 @@ module.exports = ({ config }) => {
         NSLocationWhenInUseUsageDescription:
           'UrbanTaxi necesita acceso a tu ubicación para mostrarte en el mapa y solicitar viajes.',
         NSLocationAlwaysAndWhenInUseUsageDescription:
-          'UrbanTaxi necesita acceso a tu ubicación para mostrarte en el mapa y solicitar viajes.',
+          'UrbanTaxi necesita acceso a tu ubicación para mostrarte en el mapa y solicitar viajes, incluso en segundo plano para compartir tu ubicación con el pasajero.',
+        UIBackgroundModes: ['location', 'fetch'],
       },
       config: {
         googleMapsApiKey: 'AIzaSyDu-vsndSIMluuvLfmGf_sAhQiNDliznrU',
@@ -34,9 +35,12 @@ module.exports = ({ config }) => {
       permissions: [
         'ACCESS_COARSE_LOCATION',
         'ACCESS_FINE_LOCATION',
+        'ACCESS_BACKGROUND_LOCATION',
         'FOREGROUND_SERVICE',
+        'FOREGROUND_SERVICE_LOCATION',
         'android.permission.ACCESS_COARSE_LOCATION',
         'android.permission.ACCESS_FINE_LOCATION',
+        'android.permission.ACCESS_BACKGROUND_LOCATION',
       ],
       config: {
         googleMaps: {
@@ -73,9 +77,10 @@ module.exports = ({ config }) => {
         'expo-location',
         {
           locationAlwaysAndWhenInUsePermission:
-            'UrbanTaxi necesita acceso a tu ubicación para mostrarte en el mapa y solicitar viajes.',
+            'UrbanTaxi necesita acceso a tu ubicación para mostrarte en el mapa y solicitar viajes, incluso en segundo plano.',
           locationWhenInUsePermission:
             'UrbanTaxi necesita acceso a tu ubicación para mostrarte en el mapa y solicitar viajes.',
+          isAndroidBackgroundLocationEnabled: true,
         },
       ],
       [

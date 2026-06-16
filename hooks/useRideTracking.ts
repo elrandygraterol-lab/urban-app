@@ -20,10 +20,17 @@ export function useRideTracking(rideId: string | null, rideStatus: string) {
     let cancelled = false;
 
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
+      // Solicitar permiso de ubicación en segundo plano (necesario para tracking con Waze)
+      const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+      if (fgStatus !== 'granted') {
         setPermissionDenied(true);
         return;
+      }
+
+      // Solicitar permiso de background para tracking continuo
+      const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+      if (bgStatus === 'granted') {
+        console.log('[RIDE_TRACKING] Background location permission granted');
       }
 
       if (cancelled) return;
@@ -32,9 +39,15 @@ export function useRideTracking(rideId: string | null, rideStatus: string) {
 
       subscriptionRef.current = await Location.watchPositionAsync(
         {
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: 10_000,
-          distanceInterval: 20,
+          accuracy: Location.Accuracy.High,
+          timeInterval: 5000,
+          distanceInterval: 10,
+          // Permitir actualizaciones en segundo plano
+          foregroundService: {
+            notificationTitle: 'UrbanTaxi',
+            notificationBody: 'Compartiendo tu ubicación con el pasajero',
+            notificationColor: '#22c55e',
+          },
         },
         (location) => {
           rideAPI
@@ -44,9 +57,7 @@ export function useRideTracking(rideId: string | null, rideStatus: string) {
               location.coords.longitude,
               location.coords.accuracy ?? undefined
             )
-            .catch(() => {
-              // Silently ignore network errors — don't interrupt the ride
-            });
+            .catch(() => {});
         }
       );
 

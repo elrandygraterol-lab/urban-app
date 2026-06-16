@@ -465,20 +465,27 @@ export default function MobilePaymentModal({
 
   const handleSubmitPayment = async () => {
     if (paymentMethod === 'cash') {
+      const numAmount = Number(amount) || 0;
+      let dualMessage: string;
+      if (currency === 'USD') {
+        const bsEquivalent = exchangeRate && exchangeRate > 0 ? (numAmount * exchangeRate).toFixed(2) : null;
+        dualMessage = `$ ${numAmount.toFixed(2)}${bsEquivalent ? `  →  Bs. ${bsEquivalent}` : ''}`;
+      } else {
+        const usdEquivalent = exchangeRate && exchangeRate > 0 ? (numAmount / exchangeRate).toFixed(2) : null;
+        dualMessage = `Bs. ${numAmount.toFixed(2)}${usdEquivalent ? `  →  $ ${usdEquivalent}` : ''}`;
+      }
       showStatus(
         'info',
-        `Pagarás ${formatCurrency(amount, currency)} en efectivo al conductor.`,
+        `Pagarás ${dualMessage} en efectivo al conductor.`,
         'Pago en Efectivo',
         undefined,
-        {
-          label: 'Confirmar',
-          onPress: () => {
-            resetForm();
-            onPaymentComplete({ method: 'cash' });
-          },
-        },
-        12000
+        undefined,
+        4000
       );
+      setTimeout(() => {
+        resetForm();
+        onPaymentComplete({ method: 'cash' });
+      }, 500);
       return;
     }
 
@@ -535,26 +542,26 @@ export default function MobilePaymentModal({
 
       showStatus(
         'success',
-        `Pago Móvil de ${formatCurrency(amount, currency)} verificado.\n\nReferencia: ${referencia}`,
+        `Pago Móvil de ${formatCurrency(amount, currency)} verificado`,
         'Pago Verificado',
         undefined,
-        {
-          label: 'OK',
-          onPress: () => {
-            resetForm();
-            onPaymentComplete({
-              method: 'mobile_payment',
-              referencia,
-              fecha,
-              banco: selectedBankData?.code || selectedBank,
-              telefonoP,
-              identificacion,
-              pagador,
-            });
-          },
-        },
-        10000
+        undefined,
+        3000
       );
+
+      // Cerrar modal y notificar al padre inmediatamente
+      setTimeout(() => {
+        resetForm();
+        onPaymentComplete({
+          method: 'mobile_payment',
+          referencia,
+          fecha,
+          banco: selectedBankData?.code || selectedBank,
+          telefonoP,
+          identificacion,
+          pagador,
+        });
+      }, 500);
     } catch (error: any) {
       let msg = 'Error procesando el pago. Intenta nuevamente.';
       let retry = true;
