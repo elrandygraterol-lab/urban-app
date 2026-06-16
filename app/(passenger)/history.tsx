@@ -13,15 +13,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-// import { useCopilot, walkthroughable, CopilotStep } from 'react-native-copilot';
 import { rideAPI } from '../../services/api';
 import { Ride } from '../../src/types';
 import { Colors, Spacing } from '../../constants/theme';
 import { formatCurrency, Currency } from '../../utils/currency';
 import { useSmartTutorial } from '@/hooks/useSmartTutorial';
 import { setActiveTutorialScreen } from '@/utils/tutorialState';
-
-// const WalkthroughView = walkthroughable(View);
 
 interface RideHistoryItem extends Ride {
   driver?: {
@@ -31,11 +28,16 @@ interface RideHistoryItem extends Ride {
     rating: number;
   };
   currency?: Currency;
+  rating?: {
+    rating: number;
+    comment?: string;
+  } | null;
 }
+
+const PAGE_SIZE = 15;
 
 export default function PassengerHistoryScreen() {
   const insets = useSafeAreaInsets();
-  // const { start: startTour } = useCopilot();
   const { isActive: needsTutorial } = useSmartTutorial('passenger_history');
 
   const [rides, setRides] = useState<RideHistoryItem[]>([]);
@@ -43,6 +45,12 @@ export default function PassengerHistoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedRide, setSelectedRide] = useState<RideHistoryItem | null>(null);
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Filtros de fecha
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -53,67 +61,55 @@ export default function PassengerHistoryScreen() {
   useEffect(() => {
     if (needsTutorial) {
       setActiveTutorialScreen('passenger_history');
-      // setTimeout(() => { startTour(); }, 800);
     }
   }, [needsTutorial]);
 
   const loadRideHistory = useCallback(
-    async (filters?: { startDate?: string; endDate?: string }) => {
+    async (filters?: { startDate?: string; endDate?: string }, page: number = 1) => {
       try {
-        console.log('🔄 [HISTORY] Cargando historial de viajes...');
-        console.log('🔍 [HISTORY] Filtros aplicados:', filters);
+        if (page === 1) setLoading(true);
+        else setLoadingMore(true);
 
-        setLoading(true);
-        const response = await rideAPI.getRideHistory(filters);
+        const params: any = {
+          page: String(page),
+          limit: String(PAGE_SIZE),
+        };
+        if (filters?.startDate) params.startDate = filters.startDate;
+        if (filters?.endDate) params.endDate = filters.endDate;
 
-        console.log('📦 [HISTORY] Respuesta completa del API:', JSON.stringify(response, null, 2));
-        console.log('📊 [HISTORY] response.data:', response.data);
-        console.log('📊 [HISTORY] response.data.rides:', response.data?.rides);
-        console.log('📊 [HISTORY] Tipo de response.data:', typeof response.data);
-        console.log('📊 [HISTORY] Es array response.data?:', Array.isArray(response.data));
-        console.log(
-          '📊 [HISTORY] Es array response.data.rides?:',
-          Array.isArray(response.data?.rides)
-        );
+        const response = await rideAPI.getRideHistory(params);
 
-        // Validación defensiva: asegurar que siempre tengamos un array
         let ridesData: RideHistoryItem[] = [];
-
         const rawRides = response.data?.data?.rides ?? response.data?.rides;
         if (rawRides && Array.isArray(rawRides)) {
           ridesData = rawRides;
-          console.log('✅ [HISTORY] Usando rides (array con', ridesData.length, 'elementos)');
         } else if (Array.isArray(response.data)) {
           ridesData = response.data;
-          console.log(
-            '✅ [HISTORY] Usando response.data directamente (array con',
-            ridesData.length,
-            'elementos)'
-          );
+        }
+
+        const pagination = response.data?.data?.pagination ?? response.data?.pagination;
+        if (pagination) {
+          setTotalPages(pagination.totalPages ?? 1);
+          setTotalCount(pagination.totalCount ?? ridesData.length);
+        }
+
+        if (page === 1) {
+          setRides(ridesData);
         } else {
-          console.warn('⚠️ [HISTORY] Respuesta inesperada del API, usando array vacío');
-          console.warn('⚠️ [HISTORY] Estructura recibida:', response.data);
-          ridesData = [];
+          setRides(prev => {
+            const existingIds = new Set(prev.map(r => r.id));
+            const newRides = ridesData.filter(r => !existingIds.has(r.id));
+            return [...prev, ...newRides];
+          });
         }
-
-        console.log('✅ [HISTORY] Historial cargado exitosamente:', ridesData.length, 'viajes');
-        console.log('📋 [HISTORY] Viajes:', JSON.stringify(ridesData, null, 2));
-
-        setRides(ridesData);
+        setCurrentPage(page);
       } catch (error) {
-        console.error('❌ [HISTORY] Error cargando historial:', error);
-        console.error('❌ [HISTORY] Detalles del error:', JSON.stringify(error, null, 2));
-
-        if (error instanceof Error) {
-          console.error('❌ [HISTORY] Mensaje de error:', error.message);
-          console.error('❌ [HISTORY] Stack trace:', error.stack);
-        }
-
-        // En caso de error, asegurar que rides sea un array vacío
-        setRides([]);
+        console.error('Error loading history:', error);
+        if (page === 1) setRides([]);
       } finally {
         setLoading(false);
-        console.log('🏁 [HISTORY] Carga finalizada');
+        setRefreshing(false);
+        setLoadingMore(false);
       }
     },
     []
@@ -121,12 +117,8 @@ export default function PassengerHistoryScreen() {
 
   const getFilters = useCallback(() => {
     const filters: { startDate?: string; endDate?: string } = {};
-    if (startDate) {
-      filters.startDate = startDate.toISOString();
-    }
-    if (endDate) {
-      filters.endDate = endDate.toISOString();
-    }
+    if (startDate) filters.startDate = startDate.toISOString();
+    if (endDate) filters.endDate = endDate.toISOString();
     return filters;
   }, [startDate, endDate]);
 
@@ -135,29 +127,28 @@ export default function PassengerHistoryScreen() {
   }, [loadRideHistory]);
 
   const onRefresh = useCallback(async () => {
-    console.log('🔄 [HISTORY] Refrescando historial...');
     setRefreshing(true);
-    const filters = getFilters();
-    await loadRideHistory(filters);
-    setRefreshing(false);
-    console.log('✅ [HISTORY] Refresco completado');
+    await loadRideHistory(getFilters(), 1);
   }, [getFilters, loadRideHistory]);
 
   const applyFilters = useCallback(() => {
-    console.log('🔍 [HISTORY] Aplicando filtros...');
     const filters = getFilters();
-    console.log('📅 [HISTORY] Filtros:', filters);
-    loadRideHistory(filters);
+    loadRideHistory(filters, 1);
     setShowFilters(false);
   }, [getFilters, loadRideHistory]);
 
   const clearFilters = useCallback(() => {
-    console.log('🧹 [HISTORY] Limpiando filtros...');
     setStartDate(null);
     setEndDate(null);
-    loadRideHistory();
+    loadRideHistory(undefined, 1);
     setShowFilters(false);
   }, [loadRideHistory]);
+
+  const loadNextPage = useCallback(() => {
+    if (currentPage < totalPages && !loadingMore) {
+      loadRideHistory(getFilters(), currentPage + 1);
+    }
+  }, [currentPage, totalPages, loadingMore, getFilters, loadRideHistory]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -180,6 +171,21 @@ export default function PassengerHistoryScreen() {
 
   const getVehicleTypeLabel = (type: string) => {
     return type === 'taxi' ? 'Taxi' : 'Moto-Taxi';
+  };
+
+  const renderRatingStars = (rating: number) => {
+    return (
+      <View style={styles.ratingStars}>
+        {[1, 2, 3, 4, 5].map(star => (
+          <Ionicons
+            key={star}
+            name={star <= rating ? 'star' : 'star-outline'}
+            size={11}
+            color={star <= rating ? '#f59e0b' : '#d1d5db'}
+          />
+        ))}
+      </View>
+    );
   };
 
   const renderRideCard = (ride: RideHistoryItem) => (
@@ -211,7 +217,6 @@ export default function PassengerHistoryScreen() {
         </View>
       </View>
 
-      {/* Delegated ride label */}
       {ride.isDelegated && ride.beneficiaryName && (
         <View style={styles.delegatedBadge}>
           <Ionicons name="gift-outline" size={14} color={Colors.orange} />
@@ -235,21 +240,38 @@ export default function PassengerHistoryScreen() {
         </View>
       </View>
 
-      {ride.driver && (
-        <View style={styles.driverInfo}>
-          <Ionicons name="person-circle-outline" size={18} color="#9ca3af" />
-          <Text style={styles.driverName}>{ride.driver.name}</Text>
-          <View style={styles.driverRating}>
-            <Ionicons name="star" size={12} color="#f59e0b" />
-            <Text style={styles.driverRatingText}>{(ride.driver.rating ?? 0).toFixed(1)}</Text>
+      <View style={styles.cardFooter}>
+        {ride.driver && (
+          <View style={styles.driverInfo}>
+            <Ionicons name="person-circle-outline" size={16} color="#9ca3af" />
+            <Text style={styles.driverName}>{ride.driver.name}</Text>
           </View>
+        )}
+        <View style={styles.cardFooterRight}>
+          {ride.rating ? (
+            <View style={styles.myRating}>
+              {renderRatingStars(ride.rating.rating)}
+            </View>
+          ) : ride.driver ? (
+            <View style={styles.driverRating}>
+              <Ionicons name="star" size={11} color="#f59e0b" />
+              <Text style={styles.driverRatingText}>{(ride.driver.rating ?? 0).toFixed(1)}</Text>
+            </View>
+          ) : null}
+          {ride.status === 'cancelled' && (
+            <View style={styles.cancelledBadge}>
+              <Text style={styles.cancelledBadgeText}>Cancelado</Text>
+            </View>
+          )}
         </View>
-      )}
+      </View>
     </TouchableOpacity>
   );
 
   const renderRideDetailsModal = () => {
     if (!selectedRide) return null;
+
+    const isCancelled = selectedRide.status === 'cancelled';
 
     return (
       <Modal
@@ -259,117 +281,149 @@ export default function PassengerHistoryScreen() {
         onRequestClose={() => setSelectedRide(null)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, 20) }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Detalles del Viaje</Text>
-              <TouchableOpacity onPress={() => setSelectedRide(null)}>
-                <Ionicons name="close" size={24} color={Colors.darkGray} />
+              <View style={styles.modalHeaderLeft}>
+                <View style={[styles.statusDot, { backgroundColor: isCancelled ? '#ef4444' : Colors.primary }]} />
+                <Text style={styles.modalTitle}>
+                  {isCancelled ? 'Viaje Cancelado' : 'Detalles del Viaje'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedRide(null)} style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={22} color="#6b7280" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Delegated ride info */}
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.detailScroll}>
+
               {selectedRide.isDelegated && selectedRide.beneficiaryName && (
-                <View style={styles.detailSection}>
-                  <View style={styles.delegatedInfoBox}>
-                    <View style={styles.delegatedInfoHeader}>
-                       <Ionicons name="gift" size={18} color={Colors.orange} />
-                      <Text style={styles.delegatedInfoTitle}>Viaje Delegado</Text>
-                    </View>
-                    <Text style={styles.delegatedInfoText}>
-                      Este viaje fue solicitado para {selectedRide.beneficiaryName}
-                    </Text>
-                    {selectedRide.beneficiaryPhone && (
-                      <Text style={styles.delegatedInfoPhone}>
-                        Teléfono: {selectedRide.beneficiaryPhone}
-                      </Text>
-                    )}
+                <View style={styles.detailCard}>
+                  <View style={styles.detailCardHeader}>
+                    <Ionicons name="gift" size={16} color={Colors.orange} />
+                    <Text style={styles.detailCardTitle}>Viaje Delegado</Text>
                   </View>
+                  <Text style={styles.detailCardText}>
+                    Solicitado para {selectedRide.beneficiaryName}
+                  </Text>
+                  {selectedRide.beneficiaryPhone && (
+                    <Text style={styles.detailCardSub}>Tel: {selectedRide.beneficiaryPhone}</Text>
+                  )}
                 </View>
               )}
 
-              {/* Fecha y hora */}
-              <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Fecha y Hora</Text>
-                <Text style={styles.detailValue}>
-                  {formatDate(selectedRide.completedAt || selectedRide.requestedAt)} a las{' '}
-                  {formatTime(selectedRide.completedAt || selectedRide.requestedAt)}
-                </Text>
-              </View>
-
-              {/* Origen */}
-              <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Origen</Text>
-                <View style={styles.detailLocationRow}>
-                  <View style={styles.locationDot} />
-                  <Text style={styles.detailValue}>{selectedRide.pickup.address}</Text>
+              <View style={styles.detailCard}>
+                <View style={styles.detailRow}>
+                  <Ionicons name="calendar-outline" size={15} color="#6b7280" />
+                  <Text style={styles.detailRowLabel}>Fecha</Text>
+                  <Text style={styles.detailRowValue}>
+                    {formatDate(selectedRide.completedAt || selectedRide.requestedAt)} {formatTime(selectedRide.completedAt || selectedRide.requestedAt)}
+                  </Text>
                 </View>
               </View>
 
-              {/* Destino */}
-              <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Destino</Text>
-                <View style={styles.detailLocationRow}>
-                  <Ionicons name="location" size={16} color={Colors.orange} />
-                  <Text style={styles.detailValue}>{selectedRide.destination.address}</Text>
+              <View style={styles.detailCard}>
+                <View style={styles.detailRow}>
+                  <View style={styles.detailDotPickup} />
+                  <Text style={styles.detailRowLabel}>Origen</Text>
                 </View>
+                <Text style={styles.detailAddress}>{selectedRide.pickup.address}</Text>
+                <View style={styles.detailDivider} />
+                <View style={styles.detailRow}>
+                  <Ionicons name="location" size={15} color={Colors.orange} />
+                  <Text style={styles.detailRowLabel}>Destino</Text>
+                </View>
+                <Text style={styles.detailAddress}>{selectedRide.destination.address}</Text>
               </View>
 
-              {/* Tarifa */}
-              <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Tarifa</Text>
-                <Text style={styles.detailValueLarge}>
+              <View style={styles.detailCard}>
+                <View style={styles.detailRow}>
+                  <Ionicons name="cash-outline" size={15} color={Colors.primary} />
+                  <Text style={styles.detailRowLabel}>Tarifa</Text>
+                </View>
+                <Text style={styles.detailFare}>
                   {formatCurrencyAmount(
                     selectedRide.finalFare || selectedRide.estimatedFare || 0,
                     selectedRide.currency
                   )}
                 </Text>
+                <View style={styles.detailStats}>
+                  {selectedRide.actualDistance != null && (
+                    <View style={styles.detailStat}>
+                      <Ionicons name="map-outline" size={13} color="#9ca3af" />
+                      <Text style={styles.detailStatText}>{(selectedRide.actualDistance ?? 0).toFixed(1)} km</Text>
+                    </View>
+                  )}
+                  {selectedRide.actualDuration != null && (
+                    <View style={styles.detailStat}>
+                      <Ionicons name="time-outline" size={13} color="#9ca3af" />
+                      <Text style={styles.detailStatText}>{selectedRide.actualDuration} min</Text>
+                    </View>
+                  )}
+                </View>
               </View>
 
-              {/* Conductor */}
               {selectedRide.driver && (
-                <>
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailLabel}>Conductor</Text>
-                    <Text style={styles.detailValue}>{selectedRide.driver.name}</Text>
+                <View style={styles.detailCard}>
+                  <View style={styles.detailRow}>
+                    <Ionicons name="person-outline" size={15} color="#6b7280" />
+                    <Text style={styles.detailRowLabel}>Conductor</Text>
                   </View>
-
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailLabel}>Vehículo</Text>
-                    <Text style={styles.detailValue}>{selectedRide.driver.vehicleModel}</Text>
+                  <Text style={styles.detailDriverName}>{selectedRide.driver.name}</Text>
+                  <View style={styles.detailDriverInfo}>
+                    <Text style={styles.detailDriverDetail}>{selectedRide.driver.vehicleModel}</Text>
+                    <Text style={styles.detailDriverDot}>  ·  </Text>
+                    <Text style={styles.detailDriverDetail}>{selectedRide.driver.licensePlate}</Text>
                   </View>
-
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailLabel}>Placa</Text>
-                    <Text style={styles.detailValue}>{selectedRide.driver.licensePlate}</Text>
+                  <View style={styles.detailDriverRating}>
+                    <Ionicons name="star" size={14} color="#f59e0b" />
+                    <Text style={styles.detailDriverRatingText}>
+                      {(selectedRide.driver.rating ?? 0).toFixed(1)} promedio
+                    </Text>
                   </View>
-
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailLabel}>Calificación del Conductor</Text>
-                    <View style={styles.detailRating}>
-                      <Ionicons name="star" size={18} color={Colors.orange} />
-                      <Text style={styles.detailRatingText}>
-                        {(selectedRide.driver.rating ?? 0).toFixed(1)}
-                      </Text>
-                    </View>
-                  </View>
-                </>
-              )}
-
-              {/* Distancia y duración */}
-              {selectedRide.actualDistance && (
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailLabel}>Distancia</Text>
-                  <Text style={styles.detailValue}>
-                    {(selectedRide.actualDistance ?? 0).toFixed(2)} km
-                  </Text>
                 </View>
               )}
 
-              {selectedRide.actualDuration && (
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailLabel}>Duración</Text>
-                  <Text style={styles.detailValue}>{selectedRide.actualDuration} minutos</Text>
+              {selectedRide.rating && (
+                <View style={styles.detailCard}>
+                  <View style={styles.detailRow}>
+                    <Ionicons name="star" size={15} color="#f59e0b" />
+                    <Text style={styles.detailRowLabel}>Tu Calificación</Text>
+                  </View>
+                  <View style={styles.detailMyRating}>
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <Ionicons
+                        key={star}
+                        name={star <= selectedRide.rating!.rating ? 'star' : 'star-outline'}
+                        size={22}
+                        color={star <= selectedRide.rating!.rating ? '#f59e0b' : '#d1d5db'}
+                      />
+                    ))}
+                  </View>
+                  {selectedRide.rating.comment ? (
+                    <Text style={styles.detailRatingComment}>"{selectedRide.rating.comment}"</Text>
+                  ) : null}
+                </View>
+              )}
+
+              {isCancelled && selectedRide.cancellation && (
+                <View style={styles.detailCard}>
+                  <View style={styles.detailRow}>
+                    <Ionicons name="close-circle-outline" size={15} color="#ef4444" />
+                    <Text style={styles.detailRowLabel}>Cancelación</Text>
+                  </View>
+                  <Text style={styles.detailCancelled}>
+                    {selectedRide.cancellation.cancelledBy === 'passenger' ? 'Cancelado por ti' :
+                     selectedRide.cancellation.cancelledBy === 'driver' ? 'Cancelado por el conductor' :
+                     'Cancelado por el sistema'}
+                  </Text>
+                  {selectedRide.cancellation.reason && (
+                    <Text style={styles.detailCancelledReason}>{selectedRide.cancellation.reason}</Text>
+                  )}
+                  {selectedRide.cancellation.fee > 0 && (
+                    <Text style={styles.detailCancelledFee}>
+                      Tarifa de cancelación: {formatCurrencyAmount(selectedRide.cancellation.fee, selectedRide.currency)}
+                    </Text>
+                  )}
                 </View>
               )}
             </ScrollView>
@@ -413,9 +467,7 @@ export default function PassengerHistoryScreen() {
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 onChange={(event, selectedDate) => {
                   setShowStartDatePicker(Platform.OS === 'ios');
-                  if (selectedDate) {
-                    setStartDate(selectedDate);
-                  }
+                  if (selectedDate) setStartDate(selectedDate);
                 }}
               />
             )}
@@ -436,9 +488,7 @@ export default function PassengerHistoryScreen() {
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 onChange={(event, selectedDate) => {
                   setShowEndDatePicker(Platform.OS === 'ios');
-                  if (selectedDate) {
-                    setEndDate(selectedDate);
-                  }
+                  if (selectedDate) setEndDate(selectedDate);
                 }}
               />
             )}
@@ -464,7 +514,6 @@ export default function PassengerHistoryScreen() {
   );
 
   if (loading) {
-    console.log('⏳ [HISTORY] Mostrando pantalla de carga...');
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
@@ -473,19 +522,17 @@ export default function PassengerHistoryScreen() {
     );
   }
 
-  // Validación adicional: asegurar que rides sea un array
   const safeRides = Array.isArray(rides) ? rides : [];
-  console.log('🔒 [HISTORY] Renderizando con', safeRides.length, 'viajes');
+  const hasMore = currentPage < totalPages;
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 12 }]}>
         <View style={styles.headerTop}>
           <View>
             <Text style={styles.title}>Historial de Viajes</Text>
             <Text style={styles.subtitle}>
-              {safeRides.length}{' '}
-              {safeRides.length === 1 ? 'viaje completado' : 'viajes completados'}
+              {totalCount} {totalCount === 1 ? 'viaje' : 'viajes'}
             </Text>
           </View>
           <TouchableOpacity style={styles.filterIconButton} onPress={() => setShowFilters(true)}>
@@ -520,18 +567,14 @@ export default function PassengerHistoryScreen() {
         <ScrollView
           contentContainerStyle={styles.emptyStateContainer}
           refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={Colors.primary}
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
           }
         >
           <Ionicons name="car-outline" size={80} color={Colors.lightGray} />
           <Text style={styles.emptyStateText}>No hay viajes en tu historial</Text>
           <Text style={styles.emptyStateSubtext}>
             {startDate || endDate
-              ? 'No se encontraron viajes en el rango de fechas seleccionado'
+              ? 'No se encontraron viajes en el rango seleccionado'
               : 'Tus viajes completados aparecerán aquí'}
           </Text>
         </ScrollView>
@@ -540,14 +583,37 @@ export default function PassengerHistoryScreen() {
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={Colors.primary}
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
           }
         >
-          <View style={styles.ridesList}>{safeRides.map(renderRideCard)}</View>
+          <View style={styles.ridesList}>{safeRides.map((ride, idx) => (
+            <React.Fragment key={ride.id || idx}>
+              {renderRideCard(ride)}
+            </React.Fragment>
+          ))}</View>
+
+          {hasMore && (
+            <TouchableOpacity
+              style={styles.loadMoreBtn}
+              onPress={loadNextPage}
+              disabled={loadingMore}
+              activeOpacity={0.7}
+            >
+              {loadingMore ? (
+                <ActivityIndicator size="small" color={Colors.primary} />
+              ) : (
+                <View style={styles.loadMoreContent}>
+                  <Ionicons name="chevron-down" size={16} color={Colors.primary} />
+                  <Text style={styles.loadMoreText}>Cargar más viajes</Text>
+                  <Text style={styles.loadMoreSubtext}>
+                    Página {currentPage} de {totalPages}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+
+          <View style={{ height: Math.max(insets.bottom, 20) }} />
         </ScrollView>
       )}
 
@@ -567,6 +633,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f0f9ff',
+    paddingTop: 56,
   },
   loadingText: {
     marginTop: 12,
@@ -576,7 +643,6 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingTop: 56,
     backgroundColor: Colors.white,
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
@@ -626,11 +692,12 @@ const styles = StyleSheet.create({
   },
   ridesList: {
     padding: 12,
+    paddingBottom: 0,
   },
   rideCard: {
     backgroundColor: Colors.white,
     borderRadius: 12,
-    padding: 12,
+    padding: 14,
     marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -726,31 +793,61 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     flex: 1,
   },
-  driverInfo: {
+  cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
   },
+  cardFooterRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  driverInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   driverName: {
     fontSize: 13,
     color: '#6b7280',
-    marginLeft: 6,
-    flex: 1,
+    marginLeft: 5,
+  },
+  ratingStars: {
+    flexDirection: 'row',
+    gap: 1,
+  },
+  myRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   driverRating: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fef3c7',
     paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   driverRatingText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#92400e',
-    marginLeft: 3,
+    marginLeft: 2,
+    fontWeight: '600',
+  },
+  cancelledBadge: {
+    backgroundColor: '#fef2f2',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  cancelledBadgeText: {
+    fontSize: 11,
+    color: '#dc2626',
     fontWeight: '600',
   },
   emptyStateContainer: {
@@ -772,6 +869,25 @@ const styles = StyleSheet.create({
     marginTop: 6,
     textAlign: 'center',
   },
+  loadMoreBtn: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    marginHorizontal: 12,
+    marginTop: 4,
+  },
+  loadMoreContent: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  loadMoreText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  loadMoreSubtext: {
+    fontSize: 11,
+    color: '#9ca3af',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -782,55 +898,190 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 16,
-    maxHeight: '80%',
+    paddingTop: 20,
+    maxHeight: '88%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 10,
+    marginBottom: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
+  },
+  modalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: '#1f2937',
   },
-  detailSection: {
-    marginBottom: 14,
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  detailLabel: {
-    fontSize: 11,
+  detailScroll: {
+    maxHeight: '100%',
+  },
+  detailCard: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
+  },
+  detailCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 6,
+  },
+  detailCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.orange,
+  },
+  detailCardText: {
+    fontSize: 14,
+    color: '#374151',
+    marginBottom: 2,
+  },
+  detailCardSub: {
+    fontSize: 12,
     color: '#9ca3af',
-    marginBottom: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    gap: 6,
+  },
+  detailRowLabel: {
+    fontSize: 12,
     fontWeight: '600',
+    color: '#6b7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
-  detailValue: {
-    fontSize: 15,
+  detailRowValue: {
+    fontSize: 14,
     color: '#1f2937',
+    marginLeft: 'auto',
   },
-  detailValueLarge: {
-    fontSize: 24,
+  detailAddress: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+    marginBottom: 2,
+    marginLeft: 21,
+  },
+  detailDivider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
+    marginVertical: 10,
+    marginLeft: 21,
+  },
+  detailDotPickup: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.primary,
+  },
+  detailFare: {
+    fontSize: 26,
     fontWeight: '700',
     color: Colors.primary,
+    marginLeft: 21,
+    marginBottom: 8,
   },
-  detailLocationRow: {
+  detailStats: {
+    flexDirection: 'row',
+    gap: 16,
+    marginLeft: 21,
+  },
+  detailStat: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
   },
-  detailRating: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  detailStatText: {
+    fontSize: 13,
+    color: '#6b7280',
   },
-  detailRatingText: {
-    fontSize: 18,
+  detailDriverName: {
+    fontSize: 16,
     fontWeight: '600',
     color: '#1f2937',
-    marginLeft: 6,
+    marginLeft: 21,
+    marginBottom: 4,
+  },
+  detailDriverInfo: {
+    flexDirection: 'row',
+    marginLeft: 21,
+    marginBottom: 6,
+  },
+  detailDriverDetail: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  detailDriverDot: {
+    fontSize: 13,
+    color: '#d1d5db',
+  },
+  detailDriverRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 21,
+    gap: 4,
+  },
+  detailDriverRatingText: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  detailMyRating: {
+    flexDirection: 'row',
+    gap: 4,
+    marginLeft: 21,
+    marginBottom: 6,
+  },
+  detailRatingComment: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontStyle: 'italic',
+    marginLeft: 21,
+  },
+  detailCancelled: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#dc2626',
+    marginLeft: 21,
+    marginBottom: 4,
+  },
+  detailCancelledReason: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginLeft: 21,
+    marginBottom: 2,
+  },
+  detailCancelledFee: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#dc2626',
+    marginLeft: 21,
   },
   filterSection: {
     marginBottom: 14,
@@ -890,33 +1141,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#6b7280',
-  },
-  delegatedInfoBox: {
-    backgroundColor: '#fff7ed',
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#fed7aa',
-  },
-  delegatedInfoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  delegatedInfoTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.orange,
-    marginLeft: 6,
-  },
-  delegatedInfoText: {
-    fontSize: 13,
-    color: '#92400e',
-    marginBottom: 2,
-  },
-  delegatedInfoPhone: {
-    fontSize: 12,
-    color: '#92400e',
-    fontWeight: '500',
   },
 });

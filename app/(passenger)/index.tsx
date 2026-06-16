@@ -1127,20 +1127,24 @@ export default function PassengerHomeScreen() {
       // Play notification sound
       playNotificationSound();
 
-      // Show completion alert and then rating modal
+      // Set ride status to completed (finalize immediately)
+      setActiveRide((prev: any) => prev ? { ...prev, status: 'completed' } : null);
+
+      // Show text-only notification — no buttons
       showStatus(
         'success',
-        `Tu viaje ha finalizado exitosamente.\n\nTarifa Final: ${formatCurrency(data.finalFare, fareCurrency)}\n\nPor favor califica tu experiencia.`,
+        `Tu viaje ha finalizado exitosamente.\n\nTarifa Final: ${formatCurrency(data.finalFare, fareCurrency)}`,
         'Viaje Completado',
         undefined,
-        {
-          label: 'Calificar',
-          onPress: () => {
-            console.log('[PASSENGER] Opening rating modal');
-            setShowRatingModal(true);
-          },
-        }
+        undefined,
+        4000
       );
+
+      // After notification dismisses, show rating modal automatically
+      setTimeout(() => {
+        console.log('[PASSENGER] Opening rating modal after ride completion');
+        setShowRatingModal(true);
+      }, 4200);
     };
 
     // Register event listeners
