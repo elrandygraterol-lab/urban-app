@@ -10,7 +10,7 @@ import axios from 'axios';
 const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'; // definido en eas.json por perfil
 
 // Extraer host y path de la URL para Socket.IO
-// Ej: SOCKET_URL=https://rifaslsv.com/urbantaxis → baseUrl=https://rifaslsv.com, path=/urbantaxis/socket.io
+// Ej: SOCKET_URL=https://administracionurbantaxis.com/urbantaxis → baseUrl=https://administracionurbantaxis.com, path=/urbantaxis/socket.io
 let SOCKET_BASE_URL = SOCKET_URL;
 let SOCKET_PATH = '/socket.io';
 
@@ -397,10 +397,10 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
       },
       transports: socketTransports,
       reconnection: true,
-      reconnectionAttempts: Infinity,  // Keep trying forever
+      reconnectionAttempts: 10,         // Limit retries to save battery
       reconnectionDelay: 2000,
-      reconnectionDelayMax: 30000,     // Max 30s between retries
-      timeout: 60000,
+      reconnectionDelayMax: 15000,     // Max 15s between retries
+      timeout: 20000,                  // 20s timeout (reduced from 60s)
       upgrade: false,
       forceNew: true,
       rememberUpgrade: false,

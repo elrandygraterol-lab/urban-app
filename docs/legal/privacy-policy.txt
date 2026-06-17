@@ -1,0 +1,154 @@
+POLÍTICA DE PRIVACIDAD DE URBANTAXI
+======================================
+Última actualización: 17 de junio de 2026
+
+
+1. INTRODUCCIÓN
+
+UrbanTaxi ("nosotros", "nuestro" o "la aplicación") es una plataforma de movilidad
+urbana que conecta pasajeros con conductores para servicios de transporte. Esta
+Política de Privacidad describe cómo recopilamos, usamos, almacenamos y protegemos
+tu información personal cuando utilizas nuestra aplicación móvil y servicios
+relacionados.
+
+Al registrarte y utilizar UrbanTaxi, aceptas las prácticas descritas en esta
+política. Si no estás de acuerdo, por favor no utilices la aplicación.
+
+
+2. INFORMACIÓN QUE RECOPILAMOS
+
+2.1 Información de cuenta: Nombre completo, correo electrónico, número de teléfono
+y contraseña encriptada al registrarte.
+
+2.2 Datos de ubicación: Recopilamos tu ubicación GPS en tiempo real para:
+   - Mostrar tu posición en el mapa
+   - Conectar pasajeros con conductores cercanos
+   - Calcular tarifas basadas en zonas
+   - Compartir tu ubicación con el conductor durante el viaje (pasajero)
+   - Registrar la ruta del viaje para facturación y seguridad
+
+2.3 Datos de vehículo (conductores): Tipo de vehículo, modelo, placa, licencia de
+conducir y certificado médico.
+
+2.4 Información de pago: Datos de pago móvil y transferencia bancaria para que los
+conductores reciban sus ganancias.
+
+2.5 Datos del dispositivo: Modelo del dispositivo, sistema operativo, identificadores
+únicos y datos de diagnóstico para mejorar el servicio.
+
+
+3. CÓMO USAMOS TU INFORMACIÓN
+
+Utilizamos tu información para:
+   - Procesar y gestionar solicitudes de viaje
+   - Conectar pasajeros con conductores disponibles
+   - Calcular tarifas y procesar pagos
+   - Mostrar el mapa con rutas y ubicaciones en tiempo real
+   - Enviar notificaciones sobre el estado del viaje
+   - Verificar la identidad y documentos de los conductores
+   - Mejorar la seguridad de todos los usuarios
+   - Cumplir con obligaciones legales
+   - Enviar comunicaciones de servicio y soporte
+
+
+4. COMPARTICIÓN DE DATOS
+
+4.1 Entre usuarios: Durante un viaje activo, compartimos:
+   - Pasajero → Conductor: nombre, foto de perfil y ubicación de recogida
+   - Conductor → Pasajero: nombre, foto, calificación, datos del vehículo
+     y ubicación en tiempo real
+
+4.2 Con terceros: No vendemos tu información personal. Solo compartimos datos
+cuando es necesario para:
+   - Procesadores de pago (datos de transacción)
+   - Servicios de mapas y navegación (coordenadas GPS)
+   - Autoridades legales (cuando la ley lo requiera)
+
+
+5. ALMACENAMIENTO Y SEGURIDAD
+
+Tus datos se almacenan en servidores seguros con encriptación. Implementamos
+medidas técnicas y organizativas para proteger tu información contra acceso no
+autorizado, alteración, divulgación o destrucción.
+
+Las contraseñas se almacenan encriptadas (hash). Los datos de pago sensible se
+transmiten mediante conexiones seguras (HTTPS/TLS).
+
+
+6. RETENCIÓN DE DATOS
+
+Conservamos tu información personal mientras tu cuenta esté activa y durante un
+período adicional razonable para:
+   - Cumplir con obligaciones legales y fiscales
+   - Resolver disputas
+   - Hacer cumplir nuestros términos
+
+Los datos de ubicación de viajes completados se anonimizan después de 90 días.
+
+
+7. TUS DERECHOS
+
+Como usuario de UrbanTaxi, tienes derecho a:
+   - Acceder a tus datos personales que almacenamos
+   - Rectificar información inexacta o incompleta
+   - Eliminar tu cuenta y datos asociados (opción disponible en tu perfil)
+   - Exportar tus datos en un formato portable
+   - Oponerte al procesamiento de tus datos
+
+Para ejercer estos derechos, contáctanos a través de los canales indicados en
+la sección de Contacto.
+
+
+8. ELIMINACIÓN DE CUENTA
+
+Puedes eliminar tu cuenta y todos tus datos asociados en cualquier momento desde
+la sección "Cuenta" en tu perfil de usuario. El proceso requiere una doble
+confirmación para evitar eliminaciones accidentales.
+
+Al eliminar tu cuenta:
+   - Se eliminarán permanentemente tus datos personales
+   - Los registros de viajes se anonimizarán
+   - Los datos de transacciones se conservarán por obligaciones fiscales
+
+
+9. PERMISOS DEL DISPOSITIVO
+
+La aplicación solicita los siguientes permisos:
+
+Ubicación (en uso y en segundo plano): Necesario para mostrar tu posición en
+el mapa, conectar con conductores cercanos y compartir tu ubicación durante el
+viaje. Los conductores necesitan ubicación en segundo plano para seguir
+compartiendo su posición cuando la app está minimizada.
+
+Notificaciones Push: Para informarte sobre el estado de tus viajes, solicitudes
+de conductor y mensajes importantes.
+
+Cámara y Galería: Opcional, solo para agregar foto de perfil y cargar documentos
+de verificación (conductores).
+
+
+10. MENORES DE EDAD
+
+UrbanTaxi no está dirigido a menores de 18 años. No recopilamos intencionadamente
+información de menores. Si descubres que un menor ha proporcionado datos
+personales, contáctanos para eliminarlos.
+
+
+11. CAMBIOS A ESTA POLÍTICA
+
+Podemos actualizar esta Política de Privacidad periódicamente. Te notificaremos
+sobre cambios significativos a través de la aplicación o por correo electrónico.
+El uso continuado de la aplicación después de los cambios constituye tu aceptación
+de la política actualizada.
+
+
+12. CONTACTO
+
+Si tienes preguntas sobre esta Política de Privacidad o deseas ejercer tus
+derechos de protección de datos, contáctanos:
+
+   Email: privacidad@urbantaxi.app
+   Sitio Web: https://urbantaxi.app/privacidad
+   Dirección: Venezuela
+
+© 2026 UrbanTaxi. Todos los derechos reservados.

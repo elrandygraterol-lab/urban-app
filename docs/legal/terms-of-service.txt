@@ -1,0 +1,163 @@
+TÉRMINOS DE SERVICIO DE URBANTAXI
+===================================
+Última actualización: 17 de junio de 2026
+
+
+1. ACEPTACIÓN DE LOS TÉRMINOS
+
+Al descargar, instalar o utilizar la aplicación UrbanTaxi ("la Aplicación"),
+aceptas estar sujeto a estos Términos de Servicio ("Términos"). Si no estás de
+acuerdo con estos Términos, no debes utilizar la Aplicación.
+
+UrbanTaxi es una plataforma tecnológica que conecta a pasajeros que solicitan
+servicios de transporte con conductores independientes que ofrecen dichos
+servicios. UrbanTaxi NO es una empresa de transporte y no emplea conductores.
+
+
+2. ELEGIBILIDAD
+
+Para utilizar la Aplicación como pasajero debes ser mayor de 18 años. Para
+registrarte como conductor debes:
+   - Ser mayor de 18 años
+   - Poseer licencia de conducir vigente
+   - Tener un vehículo en condiciones adecuadas
+   - Proporcionar documentación verídica (licencia, certificado médico,
+     datos del vehículo)
+   - Aprobar el proceso de verificación de la plataforma
+
+
+3. CUENTA DE USUARIO
+
+Eres responsable de mantener la confidencialidad de tu cuenta y contraseña.
+Debes proporcionar información precisa, actualizada y completa durante el
+registro. No debes compartir tu cuenta con terceros ni usar la cuenta de
+otra persona.
+
+
+4. SERVICIOS DE LA PLATAFORMA
+
+4.1 Para Pasajeros: La Aplicación te permite solicitar servicios de transporte
+ingresando tu punto de recogida y destino, ver la tarifa estimada antes de
+confirmar, seguir en tiempo real la ubicación de tu conductor una vez que
+acepta el viaje, y calificar al conductor al finalizar.
+
+4.2 Para Conductores: La Aplicación te permite recibir solicitudes de viaje,
+navegar hacia puntos de recogida y destino, gestionar tu disponibilidad, y
+recibir pagos por tus servicios.
+
+4.3 Tarifas: Las tarifas se calculan mediante un motor de tarifas por zonas
+que considera el tipo de tarifa configurado para cada ruta:
+   - Tarifa por Zona: Precio fijo para viajes dentro de una zona o entre
+     zonas específicas.
+   - Tarifa por Kilómetro: Tarifa base + costo por kilómetro recorrido
+     según la distancia estimada de la ruta.
+   - Tarifa por Hora: Tarifa base + costo por hora según la duración
+     estimada del viaje.
+
+El sistema selecciona automáticamente la tarifa aplicable según las zonas de
+recogida y destino. Pueden aplicarse recargos por horario nocturno o
+condiciones especiales configuradas por la plataforma. La tarifa estimada
+se muestra antes de confirmar el viaje.
+
+
+5. PAGOS
+
+5.1 Pasajeros: Puedes pagar en efectivo directamente al conductor o mediante
+Pago Móvil. El pago debe realizarse según lo acordado antes de iniciar el viaje.
+
+5.2 Conductores: Recibirás tus ganancias a través de Pago Móvil o transferencia
+bancaria según los datos que proporciones en tu perfil. Las ganancias están
+sujetas a la comisión de la plataforma.
+
+
+6. CONDUCTA DEL USUARIO
+
+Todos los usuarios se comprometen a:
+   - Tratar a los demás con respeto y cortesía
+   - No discriminar por raza, género, religión u orientación
+   - No dañar la propiedad ajena
+   - No usar la plataforma para actividades ilegales
+   - No manipular el sistema de tarifas o calificaciones
+   - Reportar cualquier incidente o comportamiento inapropiado
+
+UrbanTaxi se reserva el derecho de suspender o cancelar cuentas que violen
+estas normas de conducta.
+
+
+7. CANCELACIONES
+
+7.1 Período de Gracia: Las cancelaciones realizadas dentro de los primeros
+2 minutos después de solicitar el viaje son gratuitas y no generan ningún cargo.
+
+7.2 Cancelación por el Pasajero:
+   - Si el viaje está en estado "pendiente" (sin conductor asignado):
+     cancelación gratuita en cualquier momento.
+   - Si el viaje está en estado "aceptado" (conductor asignado) después del
+     período de gracia: se aplica un cargo por cancelación equivalente a un
+     porcentaje de la tarifa estimada o una tarifa estándar (Bs. 5,00), lo
+     que resulte aplicable según la configuración vigente.
+   - Si el conductor ya "llegó" al punto de recogida: se aplica una penalidad
+     del 50% de la tarifa estimada. El pasajero recibe un reembolso del 50%
+     en un plazo de 24 horas.
+
+7.3 Cancelación por el Conductor: El conductor puede cancelar un viaje en
+estado "aceptado" sin costo. Si el conductor cancela, el sistema genera
+automáticamente una nueva solicitud para el pasajero.
+
+7.4 Viajes en Progreso: No se permiten cancelaciones una vez que el viaje ha
+iniciado (estado "en progreso").
+
+7.5 Cancelación por Tiempo de Espera: Si ningún conductor acepta el viaje en
+un plazo de 60 segundos, el sistema cancela automáticamente la solicitud sin
+costo para el pasajero.
+
+
+8. LIMITACIÓN DE RESPONSABILIDAD
+
+UrbanTaxi actúa como plataforma de conexión entre pasajeros y conductores
+independientes. No somos responsables de:
+   - La conducta de pasajeros o conductores
+   - La calidad del servicio de transporte
+   - Daños, pérdidas o lesiones durante el viaje
+   - Problemas técnicos fuera de nuestro control
+   - Retrasos o cancelaciones inevitables
+
+Nuestra responsabilidad se limita al monto pagado por el servicio de plataforma
+(comisión), en la medida permitida por la ley.
+
+
+9. PROPIEDAD INTELECTUAL
+
+La Aplicación, su diseño, código fuente, marca, logotipo y contenido son
+propiedad de UrbanTaxi. No puedes copiar, modificar, distribuir o crear obras
+derivadas sin autorización expresa.
+
+
+10. TERMINACIÓN
+
+Puedes dejar de usar la Aplicación en cualquier momento. UrbanTaxi puede
+suspender o cerrar tu cuenta si violas estos Términos, con o sin previo aviso.
+La eliminación de cuenta eliminará tus datos personales según nuestra Política
+de Privacidad.
+
+
+11. MODIFICACIONES
+
+Podemos modificar estos Términos en cualquier momento. Los cambios significativos
+se notificarán a través de la Aplicación. El uso continuado después de las
+modificaciones constituye tu aceptación de los nuevos términos.
+
+
+12. LEY APLICABLE
+
+Estos Términos se rigen por las leyes de la República Bolivariana de Venezuela.
+Cualquier disputa se resolverá en los tribunales competentes de Caracas, Venezuela.
+
+
+13. CONTACTO
+
+Para consultas sobre estos Términos:
+   Email: soporte@urbantaxi.app
+   Sitio Web: https://urbantaxi.app
+
+© 2026 UrbanTaxi. Todos los derechos reservados.

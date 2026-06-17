@@ -66,6 +66,7 @@ export default function DriverHomeScreen() {
   const reconnectHandlerRef = useRef<(() => void) | null>(null);
   const disconnectLogHandlerRef = useRef<((reason: string) => void) | null>(null);
   const localListenersRegisteredRef = useRef(false);
+  const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
 
   useSocketReconnect();
 
@@ -234,7 +235,8 @@ export default function DriverHomeScreen() {
       }
 
       // Iniciar actualizaciones de ubicación
-      startLocationUpdates();
+      const sub = await startLocationUpdates();
+      if (sub) locationSubscriptionRef.current = sub;
     } catch (error: any) {
       console.warn('[DRIVER] Location error (handled with fallback):', error?.message || error);
 
@@ -684,6 +686,12 @@ export default function DriverHomeScreen() {
         }
       }
       // Don't disconnect socket here - keep it alive for the session
+
+      // Clean up location watcher
+      if (locationSubscriptionRef.current) {
+        locationSubscriptionRef.current.remove();
+        locationSubscriptionRef.current = null;
+      }
     };
   }, [user?.id, user?.role, token]);
 

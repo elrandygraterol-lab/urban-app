@@ -840,6 +840,36 @@ export default function DriverProfileScreen() {
 
           <View style={styles.rowDivider} />
 
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => router.push('/(auth)/terms-of-service' as any)}
+          >
+            <View style={styles.settingRowLeft}>
+              <View style={styles.settingDot}>
+                <Ionicons name="document-text-outline" size={20} color={Colors.primary} />
+              </View>
+              <Text style={styles.settingRowTitle}>Términos de Servicio</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => router.push('/(auth)/privacy-policy' as any)}
+          >
+            <View style={styles.settingRowLeft}>
+              <View style={styles.settingDot}>
+                <Ionicons name="shield-checkmark-outline" size={20} color={Colors.primary} />
+              </View>
+              <Text style={styles.settingRowTitle}>Política de Privacidad</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
           <TouchableOpacity style={styles.settingRow} onPress={handleLogout}>
             <View style={styles.settingRowLeft}>
               <View style={styles.settingDot}>

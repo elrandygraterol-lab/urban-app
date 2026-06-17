@@ -34,7 +34,7 @@
       },
       "env": {
         "NODE_ENV": "staging",
-        "EXPO_PUBLIC_API_URL": "https://rifaslsv.com/urbantaxis"
+        "EXPO_PUBLIC_API_URL": "https://administracionurbantaxis.com/urbantaxis"
       }
     },
     "production": {
@@ -46,7 +46,7 @@
       },
       "env": {
         "NODE_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "https://rifaslsv.com/urbantaxis"
+        "EXPO_PUBLIC_API_URL": "https://administracionurbantaxis.com/urbantaxis"
       }
     }
   },

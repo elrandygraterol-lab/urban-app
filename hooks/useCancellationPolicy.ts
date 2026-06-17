@@ -138,13 +138,12 @@ export function useCancellationPolicy(
 
     fetchPolicy();
 
-    // Actualizar cada 10 segundos para mantener el tiempo actualizado
-    // Only if enabled
+    // Actualizar cada 30 segundos para mantener el tiempo actualizado
     const interval = setInterval(() => {
       if (enabled && isMounted) {
         fetchPolicy();
       }
-    }, 10000);
+    }, 30000);
 
     return () => {
       isMounted = false;

@@ -53,6 +53,8 @@ export default function RegisterScreen() {
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const [licensePlateError, setLicensePlateError] = useState('');
   const [vehicleModelError, setVehicleModelError] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [termsError, setTermsError] = useState('');
 
   // Driver-specific fields
   const [vehicleType, setVehicleType] = useState<VehicleType>('taxi');
@@ -317,6 +319,12 @@ export default function RegisterScreen() {
         showToast('Por favor adjunta tu certificado médico', 'error');
         return;
       }
+    }
+
+    if (!acceptedTerms) {
+      setTermsError('Debes aceptar los Términos de Servicio y Política de Privacidad');
+      showToast('Debes aceptar los Términos y Política de Privacidad', 'error');
+      return;
     }
 
     try {
@@ -666,6 +674,35 @@ export default function RegisterScreen() {
             </>
           )}
 
+          {/* Privacy & Terms */}
+          <View style={styles.termsContainer}>
+            <TouchableOpacity
+              style={styles.termsCheckRow}
+              onPress={() => {
+                setAcceptedTerms(!acceptedTerms);
+                setTermsError('');
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.termsCheckbox, acceptedTerms && styles.termsCheckboxActive]}>
+                {acceptedTerms && <Ionicons name="checkmark" size={14} color="#fff" />}
+              </View>
+              <Text style={styles.termsText}>
+                Acepto los{' '}
+              </Text>
+            </TouchableOpacity>
+            <View style={styles.termsLinksRow}>
+              <TouchableOpacity onPress={() => router.push('/(auth)/terms-of-service' as any)}>
+                <Text style={styles.termsLink}>Términos de Servicio</Text>
+              </TouchableOpacity>
+              <Text style={styles.termsText}>{' '}y{' '}</Text>
+              <TouchableOpacity onPress={() => router.push('/(auth)/privacy-policy' as any)}>
+                <Text style={styles.termsLink}>Política de Privacidad</Text>
+              </TouchableOpacity>
+            </View>
+            {termsError ? <Text style={styles.termsError}>{termsError}</Text> : null}
+          </View>
+
           {/* Submit */}
           <TouchableOpacity
             style={styles.primaryBtn}
@@ -921,6 +958,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
+  },
+  /* Terms & Privacy */
+  termsContainer: {
+    marginTop: 20,
+    marginBottom: 4,
+  },
+  termsCheckRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  termsCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#d1d5db',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  termsCheckboxActive: {
+    backgroundColor: '#22c55e',
+    borderColor: '#22c55e',
+  },
+  termsLinksRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginLeft: 30,
+    marginTop: 2,
+  },
+  termsText: {
+    fontSize: 13,
+    color: '#6b7280',
+    lineHeight: 20,
+  },
+  termsLink: {
+    fontSize: 13,
+    color: '#22c55e',
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  termsError: {
+    fontSize: 12,
+    color: '#ef4444',
+    marginTop: 6,
+    marginLeft: 30,
   },
   /* Primary btn */
   primaryBtn: {

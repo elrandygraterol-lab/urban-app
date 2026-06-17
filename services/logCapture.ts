@@ -149,7 +149,7 @@ console.error = function (...args: unknown[]) {
 
 // --- Remote log delivery ---
 
-const REMOTE_FLUSH_INTERVAL = 2000; // flush every 2s
+const REMOTE_FLUSH_INTERVAL = 10000; // flush every 10s (was 2s — reduced for battery)
 const BATCH_MAX_SIZE = 50;
 
 const remoteQueue: LogEntry[] = [];

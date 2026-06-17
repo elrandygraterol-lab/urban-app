@@ -18,6 +18,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDriverStore } from '@/store/driverStore';
 import Constants from 'expo-constants';
 import api from '@/services/api';
+import { rideAPI } from '@/services/api';
 import { getRoute } from '@/services/mapsService';
 import { getSocket, onPaymentConfirmed } from '@/services/socket';
 import { useSound } from '@/hooks/useSound';
@@ -244,23 +245,8 @@ export default function ActiveRideScreen() {
       return;
     }
 
-    // Digital payments (pago_móvil / dual): poll until backend confirms
-    const interval = setInterval(async () => {
-      try {
-        const response = await api.get(`/api/rides/${rideId}`);
-        const rideData = response.data?.data?.ride || response.data?.data || response.data;
-        if (rideData?.payment?.status === 'completed') {
-          console.log('[ACTIVE_RIDE] 💳 Payment detected via polling');
-          setIsPaymentConfirmed(true);
-          clearInterval(interval);
-        }
-      } catch {
-        /* retry on next interval */
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [ride?.status, isPaymentConfirmed, rideId, passengerPaymentMode]);
+    // Payment status updates are handled via socket event (ride:payment_completed).
+    // Removed HTTP polling to save battery — socket push is more efficient.
 
   // Stop TTS when ride is completed or arrived
   useEffect(() => {
@@ -967,6 +953,31 @@ export default function ActiveRideScreen() {
       // Don't show technical error to user, just log it
     }
   };
+
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  const handleCancelRide = async () => {
+    if (!ride || isCancelling) return;
+
+    // Block cancellation if passenger already paid
+    if (isPaymentConfirmed) {
+      showToast('No puedes cancelar: el pasajero ya realizó el pago', 'warning');
+      return;
+    }
+
+    setIsCancelling(true);
+    try {
+      await rideAPI.cancelRide(rideId, {
+        reason: 'Conductor canceló el viaje',
+      });
+      // Backend emits ride:cancelled → handleRideCancelled handles notification + redirect
+    } catch (error: any) {
+      const msg = error?.response?.data?.error?.message || 'No se pudo cancelar el viaje';
+      showToast(msg, 'error');
+    } finally {
+      setIsCancelling(false);
+    }
+  }; 
 
   const openCallModal = () => {
     if (!ride) return;
@@ -2224,6 +2235,25 @@ export default function ActiveRideScreen() {
                 >
                   <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>He Llegado</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleCancelRide}
+                  disabled={isCancelling}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#fff',
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: '#fecaca',
+                  }}
+                >
+                  {isCancelling ? (
+                    <ActivityIndicator size="small" color="#ef4444" />
+                  ) : (
+                    <Text style={{ color: '#ef4444', fontSize: 14, fontWeight: '600' }}>Cancelar</Text>
+                  )}
+                </TouchableOpacity>
                 {(ride.status === 'accepted' ||
                   ride.status === 'in_progress' ||
                   (ride.status === 'arrived' && isPaymentConfirmed)) && (
@@ -2301,15 +2331,11 @@ export default function ActiveRideScreen() {
                     </Text>
                   </TouchableOpacity>
 
-                  {/* Cancel button — only for cash payments */}
-                  {passengerPaymentMode !== 'pago_movil' && (
+                  {/* Cancel button — only if passenger has NOT paid yet */}
+                  {!isPaymentConfirmed && (
                     <TouchableOpacity
-                      onPress={async () => {
-                        try {
-                          await api.post(`/api/rides/${rideId}/cancel`, { reason: 'Pasajero no pagó en efectivo' });
-                          router.back();
-                        } catch (e) { /* ignore */ }
-                      }}
+                      onPress={handleCancelRide}
+                      disabled={isCancelling}
                       style={{
                         flex: 1,
                         backgroundColor: '#fff',
@@ -2320,7 +2346,11 @@ export default function ActiveRideScreen() {
                         borderColor: '#fecaca',
                       }}
                     >
-                      <Text style={{ color: '#ef4444', fontSize: 14, fontWeight: '600' }}>Cancelar</Text>
+                      {isCancelling ? (
+                        <ActivityIndicator size="small" color="#ef4444" />
+                      ) : (
+                        <Text style={{ color: '#ef4444', fontSize: 14, fontWeight: '600' }}>Cancelar</Text>
+                      )}
                     </TouchableOpacity>
                   )}
                 </View>

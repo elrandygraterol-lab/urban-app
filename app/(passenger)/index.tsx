@@ -1377,9 +1377,9 @@ export default function PassengerHomeScreen() {
 
         locationSubscription = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.BestForNavigation,
-            timeInterval: 2000,
-            distanceInterval: 1,
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: 5000,
+            distanceInterval: 10,
           },
           location => {
             const { latitude, longitude } = location.coords;

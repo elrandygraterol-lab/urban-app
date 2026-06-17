@@ -439,6 +439,36 @@ export default function PassengerProfileScreen() {
           <Text style={styles.sectionTitle}>{t.account}</Text>
 
           <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.rowItem}
+              onPress={() => router.push('/(auth)/terms-of-service' as any)}
+            >
+              <View style={styles.rowLeft}>
+                <View style={styles.iconBox}>
+                  <Ionicons name="document-text-outline" size={20} color={Colors.primary} />
+                </View>
+                <Text style={styles.rowLabel}>Términos de Servicio</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
+            </TouchableOpacity>
+
+            <View style={styles.actionDivider} />
+
+            <TouchableOpacity
+              style={styles.rowItem}
+              onPress={() => router.push('/(auth)/privacy-policy' as any)}
+            >
+              <View style={styles.rowLeft}>
+                <View style={styles.iconBox}>
+                  <Ionicons name="shield-checkmark-outline" size={20} color={Colors.primary} />
+                </View>
+                <Text style={styles.rowLabel}>Política de Privacidad</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
+            </TouchableOpacity>
+
+            <View style={styles.actionDivider} />
+
             <TouchableOpacity style={styles.rowItem} onPress={handleLogout}>
               <View style={styles.rowLeft}>
                 <View style={styles.iconBox}>
