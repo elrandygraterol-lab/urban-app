@@ -24,6 +24,7 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   DriverTaxiIcon,
   PassengerIcon,
+  PickupIcon,
   DropoffIcon,
   SecondPickupIcon,
   SecondDropoffIcon,
@@ -49,6 +50,7 @@ import {
   onSharedRideInvitationRejected,
   onSharedRideInvitationExpired,
   onPassengerLocationUpdate,
+  removeRideListeners,
   removeAllListeners,
 } from '@/services/socket';
 import { logInfo, logError, logWarning } from '@/utils/errorLogger';
@@ -257,6 +259,7 @@ export default function PassengerHomeScreen() {
 
   // Active ride tracking states
   const [activeRide, setActiveRide] = useState<ActiveRide | null>(null);
+  const [listenerVersion, setListenerVersion] = useState(0); // Forces listener re-registration on foreground restore
   const [driverLocation, setDriverLocation] = useState<LocationCoords | null>(null);
   const [driverHeading, setDriverHeading] = useState<number>(0); // Driver's heading/direction
   const [isSocketConnected, setIsSocketConnected] = useState(false);
@@ -339,6 +342,13 @@ export default function PassengerHomeScreen() {
               if (ride.destinationLatitude && ride.destinationLongitude) {
                 setDestinationLocation({ latitude: Number(ride.destinationLatitude), longitude: Number(ride.destinationLongitude) });
               }
+              // Restaurar ubicación del conductor si está disponible
+              if (ride.driver?.currentLocation) {
+                setDriverLocation({
+                  latitude: Number(ride.driver.currentLocation.latitude),
+                  longitude: Number(ride.driver.currentLocation.longitude),
+                });
+              }
               setIsSearchingDriver(ride.status === 'pending');
             }
           }
@@ -352,7 +362,10 @@ export default function PassengerHomeScreen() {
 
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
-        restoreActiveRide();
+        restoreActiveRide().then(() => {
+          // Force socket listener re-registration even for the same ride
+          setListenerVersion(v => v + 1);
+        });
       }
     });
 
@@ -939,12 +952,22 @@ export default function PassengerHomeScreen() {
       prevDriverLocationRef.current = newDriverLocation;
 
       // ========== MEJORA 1: Actualización Dinámica de Ruta ==========
-      // Recalcular ruta si el conductor se desvía significativamente y el viaje está en progreso
+      // Durante 'accepted': mostrar ruta del conductor → punto de recogida
+      if (
+        isDynamicRouteEnabled &&
+        activeRide?.status === 'accepted' &&
+        pickupLocation &&
+        Date.now() - lastRouteUpdate > 15000
+      ) {
+        updateDynamicRoute(newDriverLocation, pickupLocation);
+      }
+
+      // Durante 'in_progress': mostrar ruta del conductor → destino
       if (
         isDynamicRouteEnabled &&
         activeRide?.status === 'in_progress' &&
         destinationLocation &&
-        Date.now() - lastRouteUpdate > 30000 // Actualizar cada 30 segundos como máximo
+        Date.now() - lastRouteUpdate > 30000
       ) {
         updateDynamicRoute(newDriverLocation, destinationLocation);
       }
@@ -1168,11 +1191,23 @@ export default function PassengerHomeScreen() {
       if (activeRide) {
         leaveRide(activeRide.id);
       }
-      // Remove all socket listeners to prevent duplicates
-      removeAllListeners();
+      // Remove ride-specific listeners, keep shared ride invitation listeners alive
+      removeRideListeners();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRide?.id]); // Only re-run when ride ID changes (new ride created)
+  }, [activeRide?.id, listenerVersion]); // Re-run when ride changes OR app returns to foreground
+
+  // Redraw route after foreground restore when driver location + destination are available
+  useEffect(() => {
+    if (!activeRide || !driverLocation || !isDynamicRouteEnabled) return;
+    if (listenerVersion === 0) return; // Skip initial mount — only redraw after a real restore
+
+    if (activeRide.status === 'accepted' && pickupLocation) {
+      updateDynamicRoute(driverLocation, pickupLocation);
+    } else if (activeRide.status === 'in_progress' && destinationLocation) {
+      updateDynamicRoute(driverLocation, destinationLocation);
+    }
+  }, [listenerVersion]); // eslint-disable-line
 
   // Shared ride invitation listeners (Req. 7.3, 7.4)
   // These run independently of active rides
@@ -1528,12 +1563,17 @@ export default function PassengerHomeScreen() {
         console.log('[DYNAMIC_ROUTE] Updating route from driver to destination');
 
         const routeData = await getRoute(driverLoc, destination);
-        const newRouteCoords: RouteCoordinates[] = routeData.polyline.map(
-          (coord: [number, number]) => ({
-            latitude: coord[1],
-            longitude: coord[0],
-          })
-        );
+        if (!routeData.coordinates || routeData.coordinates.length === 0) {
+          console.warn('[DYNAMIC_ROUTE] No coordinates in route data, falling back');
+          setRouteCoordinates([driverLoc, destination]);
+          setIsApproximateRoute(true);
+          setLastRouteUpdate(Date.now());
+          return;
+        }
+        const newRouteCoords: RouteCoordinates[] = [
+          ...routeData.coordinates,
+          destination,
+        ];
 
         setRouteCoordinates(newRouteCoords);
         setLastRouteUpdate(Date.now());
@@ -2972,6 +3012,21 @@ export default function PassengerHomeScreen() {
                 rotation={driverHeading || 0}
               >
                 <DriverTaxiIcon />
+              </Marker>
+            )}
+
+            {/* Punto de recogida */}
+            {pickupLocation && typeof pickupLocation.latitude === 'number' && activeRide && activeRide.status !== 'completed' && activeRide.status !== 'cancelled' && (
+              <Marker
+                coordinate={{
+                  latitude: Number(pickupLocation.latitude),
+                  longitude: Number(pickupLocation.longitude),
+                }}
+                title="Punto de recogida"
+                identifier="pickup"
+                anchor={{ x: 0.5, y: 0.5 }}
+              >
+                <PickupIcon size={36} />
               </Marker>
             )}
 

@@ -24,6 +24,7 @@ import {
   AppState,
   StyleSheet,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors as colors } from '@/constants/theme';
 import {
   walletService,
@@ -229,6 +230,7 @@ function DriverEarningsScreenContent() {
   ] as const;
 
   return (
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
     <FlatList
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
@@ -434,6 +436,7 @@ function DriverEarningsScreenContent() {
         ) : null
       }
     />
+    </SafeAreaView>
   );
 }
 
@@ -583,6 +586,10 @@ function TransactionItem({
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
@@ -627,7 +634,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 12,
     paddingBottom: 8,
   },
   headerTitle: {

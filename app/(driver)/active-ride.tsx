@@ -25,6 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { formatCurrency, Currency } from '@/utils/currency';
 import { DriverTaxiIcon, PassengerIcon, DropoffIcon } from '@/src/components/map/markers';
 import {
+  computeBearing,
   bearingAlongRoute,
   animateNavigationCamera,
   computeNearestStepIndex,
@@ -126,6 +127,8 @@ export default function ActiveRideScreen() {
   const routePolylineRef = useRef<RouteCoordinate[]>([]); // Stored polyline for deviation checks
   const rideRef = useRef<Ride | null>(null); // Always-current ride for GPS callback
   const locationRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  const prevDriverPosRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  const [driverHeading, setDriverHeading] = useState<number>(0);
 
   // Keep rideRef and locationRef in sync
   useEffect(() => {
@@ -342,19 +345,19 @@ export default function ActiveRideScreen() {
 
   useEffect(() => {
     if (!location || routeCoordinates.length < 2) {
-      setRouteBearing(heading || 0);
+      setRouteBearing(0); // Default to north — device heading is unreliable
       return;
     }
     const brng = bearingAlongRoute(routeCoordinates, location);
     setRouteBearing(brng);
-  }, [location, routeCoordinates, heading]);
+  }, [location, routeCoordinates]);
 
   // Update nearest step and route index when location changes
   useEffect(() => {
     if (!location) return;
 
     if (routeSteps.length > 0) {
-      const stepIdx = computeNearestStepIndex(routeSteps, location);
+      const stepIdx = computeNearestStepIndex(routeSteps, location, Math.max(0, announcedStepIndexRef.current));
       setNearestStepIndex(stepIdx);
 
       // TTS announcement: speak when within 200m of the maneuver point
@@ -388,6 +391,8 @@ export default function ActiveRideScreen() {
 
       const rideData = response.data?.data || response.data;
       setRide(rideData);
+      // Update ref immediately so initializeLocation() can use it without waiting for re-render
+      rideRef.current = rideData;
 
       // Guard: if first fetch after mount returns completed, the data is stale
       if (isFirstFetchRef.current && rideData?.status === 'completed') {
@@ -469,6 +474,16 @@ export default function ActiveRideScreen() {
 
           setLocation(newCoords);
           locationRef.current = newCoords; // Update immediately, don't wait for React render
+
+          // Compute driver heading from actual movement (not device compass)
+          if (prevDriverPosRef.current) {
+            const prev = prevDriverPosRef.current;
+            if (prev.latitude !== newCoords.latitude || prev.longitude !== newCoords.longitude) {
+              const brng = computeBearing(prev, newCoords);
+              setDriverHeading(brng);
+            }
+          }
+          prevDriverPosRef.current = newCoords;
 
           // Update heading if available
           if (newLocation.coords.heading !== null && newLocation.coords.heading !== undefined) {
@@ -837,6 +852,13 @@ export default function ActiveRideScreen() {
       console.log('[ACTIVE_RIDE] ✅ SOCKET RECONNECTED');
       console.log('[ACTIVE_RIDE]    Socket ID:', socket.id);
       console.log('[ACTIVE_RIDE] ========================================');
+
+      // Re-join the ride room to receive real-time updates
+      const currentRideId = rideRef.current?.id;
+      if (currentRideId) {
+        socket.emit('join_ride', { rideId: currentRideId });
+        console.log('[ACTIVE_RIDE] Re-joined ride room:', currentRideId);
+      }
 
       // Re-register payment listener and refresh ride state after reconnect
       onPaymentConfirmed(handlePaymentConfirmed);
@@ -1225,7 +1247,7 @@ export default function ActiveRideScreen() {
               description="Conductor"
               anchor={{ x: 0.5, y: 0.5 }}
               flat={false}
-              rotation={routeBearing || heading || 0}
+              rotation={0}
               tracksViewChanges={true}
             >
               <DriverTaxiIcon />

@@ -9,7 +9,7 @@ export const computeBearing = (
   const φ2 = toRad(to.latitude);
   const Δλ = toRad(to.longitude - from.longitude);
   const y = Math.sin(Δλ) * Math.cos(φ2);
-  const x = Math.cos(φ1) * Math.cos(φ2) * Math.cos(Δλ) + Math.sin(φ1) * Math.sin(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
   const θ = Math.atan2(y, x);
   const brng = (toDeg(θ) + 360) % 360;
   return brng;
@@ -21,9 +21,10 @@ export const computeNearestRouteIndex = (
 ) => {
   let idx = 0;
   let minD = Number.POSITIVE_INFINITY;
+  const cosLat = Math.cos(toRad(point.latitude));
   for (let i = 0; i < coords.length; i++) {
     const dLat = coords[i].latitude - point.latitude;
-    const dLng = coords[i].longitude - point.longitude;
+    const dLng = (coords[i].longitude - point.longitude) * cosLat;
     const d = dLat * dLat + dLng * dLng;
     if (d < minD) {
       minD = d;
@@ -45,9 +46,35 @@ export const bearingAlongRoute = (
     nearest = Math.max(0, coords.length - 2);
   }
 
-  const nextIdx = Math.min(nearest + 1, coords.length - 1);
-  const from = coords[nearest];
-  const to = coords[nextIdx];
+  // Determine correct segment: driver may be between nearest-1→nearest or nearest→nearest+1
+  // Use dot-product projection to decide which side of nearest point the driver is on
+  let fromIdx = nearest;
+  let toIdx = Math.min(nearest + 1, coords.length - 1);
+
+  if (nearest > 0) {
+    const prev = coords[nearest - 1];
+    const curr = coords[nearest];
+    const cosLat = Math.cos(toRad(point.latitude));
+    // Vector from prev→curr (route segment)
+    const segDx = (curr.longitude - prev.longitude) * cosLat;
+    const segDy = curr.latitude - prev.latitude;
+    // Vector from prev→driver
+    const drvDx = (point.longitude - prev.longitude) * cosLat;
+    const drvDy = point.latitude - prev.latitude;
+    const segLenSq = segDx * segDx + segDy * segDy;
+    if (segLenSq > 0) {
+      // Project driver position onto the segment
+      const t = (drvDx * segDx + drvDy * segDy) / segLenSq;
+      if (t > 0 && t < 1) {
+        // Driver is between prev and curr — use prev→curr as the bearing segment
+        fromIdx = nearest - 1;
+        toIdx = nearest;
+      }
+    }
+  }
+
+  const from = coords[fromIdx];
+  const to = coords[toIdx];
   return computeBearing(from, to);
 };
 
@@ -93,19 +120,23 @@ export const haversineDistance = (
 };
 
 /**
- * Índice del Step más cercano a la posición actual del conductor.
+ * Índice del siguiente Step que el conductor debe tomar.
+ * Busca solo hacia adelante desde `startFromIndex` para no señalar pasos ya pasados.
  * Requiere que los steps tengan campo `location`.
- * Si no tienen location, retorna 0.
+ * Si no tienen location, retorna `startFromIndex`.
  */
 export const computeNearestStepIndex = (
   steps: { location?: { latitude: number; longitude: number } }[],
-  point: { latitude: number; longitude: number }
+  point: { latitude: number; longitude: number },
+  startFromIndex: number = 0
 ): number => {
   if (steps.length === 0) return 0;
-  let idx = 0;
+  // Clamp start index
+  const start = Math.max(0, Math.min(startFromIndex, steps.length - 1));
+  let idx = start;
   let minD = Number.POSITIVE_INFINITY;
   let found = false;
-  for (let i = 0; i < steps.length; i++) {
+  for (let i = start; i < steps.length; i++) {
     const loc = steps[i].location;
     if (!loc) continue;
     const d = haversineDistance(loc, point);
@@ -115,5 +146,6 @@ export const computeNearestStepIndex = (
       found = true;
     }
   }
-  return found ? idx : 0;
+  // If no forward step found, fall back to last valid step index
+  return found ? idx : start;
 };

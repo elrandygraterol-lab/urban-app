@@ -452,6 +452,7 @@ export default function DelegatedRideTrackingScreen() {
             title={rideData.driver.name}
             description={`${rideData.driver.vehicleInfo?.model || 'Vehículo'} - ${rideData.driver.vehicleInfo?.licensePlate || 'N/A'}`}
             anchor={{ x: 0.5, y: 0.5 }}
+            rotation={0}
           >
             <DriverTaxiIcon />
           </Marker>

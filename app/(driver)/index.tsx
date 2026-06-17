@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Modal,
   ScrollView,
+  AppState,
 } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -103,6 +104,31 @@ export default function DriverHomeScreen() {
       };
     }, [router])
   );
+
+  // Also check when app returns to foreground (not just tab focus)
+  useEffect(() => {
+    const checkActiveRide = async () => {
+      try {
+        const res = await rideAPI.getActiveRides();
+        const rides = res.data?.data;
+        const activeRides = Array.isArray(rides) ? rides : [];
+        if (activeRides.length > 0) {
+          const rideId = activeRides[0].id;
+          if (rideId) {
+            router.push(`/(driver)/active-ride?rideId=${rideId}` as any);
+          }
+        }
+      } catch {}
+    };
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        checkActiveRide();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [router]);
 
   // Function to toggle driver availability - now uses custom toast notifications
   const handleToggleAvailability = async () => {
@@ -691,9 +717,7 @@ export default function DriverHomeScreen() {
           }}
           title="Mi ubicación"
           anchor={{ x: 0.5, y: 0.5 }}
-          flat={false}
           rotation={0}
-          tracksViewChanges={true}
         >
           <DriverTaxiIcon />
         </Marker>

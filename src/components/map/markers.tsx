@@ -28,7 +28,6 @@ export const DriverTaxiIcon: React.FC = () => {
           borderRadius: 22,
           borderWidth: 3,
           borderColor: MARKER_BORDER,
-          transform: [{ rotate: '0deg' }], // Taxi icon points up by default (no rotation needed)
         },
       ]}
     >

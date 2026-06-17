@@ -601,6 +601,13 @@ export const reconnectSocket = async (): Promise<Socket | null> => {
   console.log('[SOCKET]    Current socket exists:', !!socket);
   console.log('[SOCKET]    Current socket connected:', socket?.connected);
 
+  // If socket is still connected, don't tear it down — this preserves
+  // all ride-specific listeners registered by active screens (driver active-ride, etc.)
+  if (socket && socket.connected && socket.id) {
+    console.log('[SOCKET] ✅ Socket already connected (id: ' + socket.id + '), skipping reconnect');
+    return socket;
+  }
+
   // Disconnect existing socket — this clears shouldAutoReconnect
   console.log('[SOCKET]    Step 1: Disconnecting existing socket...');
   disconnectSocket();
@@ -1128,6 +1135,21 @@ export const onDelegatedRideTrackingUpdate = (
 /**
  * Remove all event listeners
  */
+export const removeRideListeners = (): void => {
+  if (!socket) {
+    return;
+  }
+
+  socket.off('ride:accepted');
+  socket.off('ride:status_changed');
+  socket.off('driver:location_update');
+  socket.off('ride:eta_update');
+  socket.off('ride:driver_arrived');
+  socket.off('ride:cancelled');
+  socket.off('ride:completed');
+  socket.off('passenger:location_update');
+};
+
 export const removeAllListeners = (): void => {
   if (!socket) {
     return;
