@@ -252,49 +252,57 @@ function DriverEarningsScreenContent() {
             <Text style={styles.headerTitle}>Ganancias</Text>
           </View>
 
-          {/* Balance Card */}
+          {/* Balance Card — Credit Card Style */}
           <LinearGradient
-            colors={[colors.primary, colors.primaryDark]}
+            colors={['#10b981', '#059669', '#047857']}
             style={styles.balanceCard}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
-            <Text style={styles.balanceLabel}>Balance Actual</Text>
-            <View style={styles.dualAmountRow}>
-              <View style={styles.dualAmountItem}>
-                <Text
-                  style={styles.dualAmountValue}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.5}
-                >
-                  {formatCurrency(wallet?.balance ?? 0, currency)}
-                </Text>
-                <Text style={styles.dualAmountCurrency}>{currency === 'USD' ? 'USD' : 'VES'}</Text>
+            {/* Card top row: chip + brand */}
+            <View style={styles.cardTopRow}>
+              <View style={styles.cardChip}>
+                <Ionicons name="hardware-chip-outline" size={28} color="#d4af37" />
               </View>
-              {bcvRate > 0 && (
-                <View style={styles.dualAmountItem}>
-                  <View style={styles.dualAmountDivider} />
-                  <Text
-                    style={styles.dualAmountValueSecondary}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.5}
-                  >
-                    {formatCurrency(balanceOtherCurrency, otherCurrency)}
-                  </Text>
-                  <Text style={styles.dualAmountCurrencySecondary}>
-                    {otherCurrency === 'USD' ? 'USD' : 'VES'}
-                  </Text>
-                </View>
-              )}
+              <View style={styles.cardBrand}>
+                <View style={[styles.brandCircle, { backgroundColor: '#eb1c24', zIndex: 2 }]} />
+                <View style={[styles.brandCircle, { backgroundColor: '#f79f1a', marginLeft: -10 }]} />
+              </View>
             </View>
-            {isEmpty && <Text style={styles.noEarningsText}>Sin ganancias aún</Text>}
-            <Text style={styles.currencyLabel}>
-              Tasa BCV: {bcvRate > 0 ? `Bs. ${bcvRate.toFixed(2)}` : 'No disponible'}
-            </Text>
-            <View style={styles.balanceIconOverlay}>
-              <Ionicons name="wallet-outline" size={80} color="rgba(255,255,255,0.1)" />
+
+            {/* Balance — displayed like card number */}
+            <View style={styles.cardBalanceRow}>
+              <Text style={styles.cardBalanceValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+                {formatCurrency(wallet?.balance ?? 0, currency)}
+              </Text>
+              <Text style={styles.cardBalanceCurrency}>{currency}</Text>
+            </View>
+
+            {/* Secondary currency */}
+            {bcvRate > 0 && (
+              <Text style={styles.cardSecondaryBalance}>
+                {formatCurrency(balanceOtherCurrency, otherCurrency)} {otherCurrency}
+              </Text>
+            )}
+
+            {/* Card bottom row: label + bcv rate */}
+            <View style={styles.cardBottomRow}>
+              <View>
+                <Text style={styles.cardLabel}>BALANCE ACTUAL</Text>
+                {isEmpty && <Text style={styles.cardNoEarnings}>Sin ganancias aún</Text>}
+              </View>
+              <View style={styles.cardBcvBadge}>
+                <Text style={styles.cardBcvLabel}>BCV</Text>
+                <Text style={styles.cardBcvValue}>
+                  {bcvRate > 0 ? `Bs. ${bcvRate.toFixed(2)}` : '—'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Subtle background pattern */}
+            <View style={styles.cardPattern}>
+              <View style={styles.cardPatternCircle1} />
+              <View style={styles.cardPatternCircle2} />
             </View>
           </LinearGradient>
 
@@ -631,96 +639,120 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 12,
     marginBottom: 24,
-    backgroundColor: colors.primary,
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
+    borderRadius: 20,
+    padding: 22,
+    paddingBottom: 18,
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
+    overflow: 'hidden',
+    justifyContent: 'space-between',
   },
-  balanceLabel: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.85)',
-    marginBottom: 8,
-    fontWeight: '500',
+  cardPattern: {
+    ...StyleSheet.absoluteFillObject,
+    pointerEvents: 'none',
   },
-  balanceAmount: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  balanceAmountSecondary: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 4,
-  },
-  dualAmountRow: {
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  dualAmountItem: {
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  dualAmountDivider: {
-    width: 40,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    marginVertical: 4,
-    alignSelf: 'center',
-  },
-  dualAmountValue: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  dualAmountValueSecondary: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: 'rgba(255, 255, 255, 0.85)',
-    letterSpacing: 0.5,
-  },
-  dualAmountCurrency: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.6)',
-    marginTop: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  dualAmountCurrencySecondary: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.5)',
-    marginTop: 1,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  noEarningsText: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.75)',
-    marginTop: 6,
-    fontStyle: 'italic',
-  },
-  currencyLabel: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginTop: 8,
-  },
-  balanceIconOverlay: {
+  cardPatternCircle1: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: -40,
+    right: -20,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  cardPatternCircle2: {
+    position: 'absolute',
+    bottom: -50,
+    left: -30,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cardChip: {
+    width: 42,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  cardBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  brandCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    opacity: 0.85,
+  },
+  cardBalanceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginTop: 4,
+  },
+  cardBalanceValue: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 1.5,
+    fontVariant: ['tabular-nums'],
+  },
+  cardBalanceCurrency: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginLeft: 8,
+    letterSpacing: 2,
+  },
+  cardSecondaryBalance: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.45)',
+    marginTop: 2,
+    letterSpacing: 0.5,
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: 4,
+  },
+  cardLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.5)',
+    letterSpacing: 3,
+  },
+  cardNoEarnings: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.3)',
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  cardBcvBadge: {
+    alignItems: 'flex-end',
+  },
+  cardBcvLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.4)',
+    letterSpacing: 2,
+  },
+  cardBcvValue: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.55)',
+    marginTop: 1,
   },
   summaryGrid: {
     flexDirection: 'row',

@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   TextInput,
   Switch,
-  Alert,
   ActivityIndicator,
   Image,
 } from 'react-native';
@@ -54,7 +53,7 @@ export default function DriverProfileScreen() {
     useDriverStore();
   const { language, setLanguage } = useLanguage();
   const t = translations[language].profile;
-  const { showToast, showStatus } = useUnifiedNotifications();
+  const { showToast, showStatus, showActionSheet } = useUnifiedNotifications();
 
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -320,9 +319,10 @@ export default function DriverProfileScreen() {
         return;
       }
 
-      Alert.alert('Foto de perfil', 'Elige una opción', [
+      showActionSheet('Foto de perfil', [
         {
-          text: 'Tomar foto',
+          label: 'Tomar foto',
+          icon: 'camera',
           onPress: async () => {
             const result = await ImagePicker.launchCameraAsync({
               mediaTypes: ['images'],
@@ -337,7 +337,8 @@ export default function DriverProfileScreen() {
           },
         },
         {
-          text: 'Elegir de galería',
+          label: 'Elegir de galería',
+          icon: 'images',
           onPress: async () => {
             const result = await ImagePicker.launchImageLibraryAsync({
               mediaTypes: ['images'],
@@ -351,11 +352,7 @@ export default function DriverProfileScreen() {
             }
           },
         },
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-      ]);
+      ], 'Elige una opción');
     } catch (error) {
       console.error('Error picking profile photo:', error);
       showToast('No se pudo seleccionar la foto', 'error');
@@ -389,163 +386,85 @@ export default function DriverProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* Driver Availability Section - FIRST */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Disponibilidad</Text>
-
-          <View style={styles.card}>
-            {/* Servidor — estado de conexión, toca para reconectar */}
-            <TouchableOpacity
-              style={styles.settingItem}
-              activeOpacity={isSocketConnected ? 1 : 0.6}
-              onPress={async () => {
-                if (!isSocketConnected && !isReconnectingSocket) {
-                  setIsReconnectingSocket(true);
-                  setSocketLastError(null);
-                  try {
-                    await reconnectSocket();
-                  } catch (error) {
-                    console.error('[PROFILE] Manual reconnection failed:', error);
-                  } finally {
-                    setIsReconnectingSocket(false);
-                  }
-                }
-              }}
-            >
-              <View style={styles.settingLeft}>
-                <View
-                  style={[styles.iconContainer, isSocketConnected && styles.iconContainerActive]}
-                >
-                  <Ionicons
-                    name={
-                      isSocketConnected ? 'wifi' : isReconnectingSocket ? 'sync' : 'wifi-outline'
-                    }
-                    size={22}
-                    color={isSocketConnected ? Colors.primary : Colors.mediumGray}
-                  />
-                </View>
-                <View style={styles.availabilityTextContainer}>
-                  <Text style={styles.settingLabel}>
-                    {isReconnectingSocket ? 'Reconectando...' : 'Servidor'}
-                  </Text>
-                  <Text style={styles.availabilitySubtext}>
-                    {isReconnectingSocket
-                      ? 'Conectando...'
-                      : isSocketConnected
-                        ? socketTransport
-                          ? `Conectado (${socketTransport})`
-                          : 'Conectado'
-                        : socketLastError
-                          ? `Error: ${socketLastError.substring(0, 40)}`
-                          : 'Toca para reconectar'}
-                  </Text>
-                  {!isSocketConnected && socketRetryCount > 0 && (
-                    <Text style={styles.availabilitySubtext}>{socketRetryCount} intentos</Text>
-                  )}
-                </View>
-              </View>
-              {isReconnectingSocket ? (
-                <ActivityIndicator size="small" color={Colors.primary} />
-              ) : (
-                <View
-                  style={[
-                    styles.statusIndicator,
-                    isSocketConnected ? styles.statusConnected : styles.statusDisconnected,
-                  ]}
-                />
-              )}
-            </TouchableOpacity>
-
-            <View style={styles.divider} />
-
-            {/* Driver Availability Toggle */}
-            <View style={styles.availabilityItem}>
-              <View style={styles.settingLeft}>
-                <View style={[styles.iconContainer, isAvailable && styles.iconContainerActive]}>
-                  <Ionicons
-                    name={isAvailable ? 'checkmark-circle' : 'close-circle'}
-                    size={22}
-                    color={isAvailable ? Colors.primary : Colors.mediumGray}
-                  />
-                </View>
-                <View style={styles.availabilityTextContainer}>
-                  <Text style={styles.availabilityLabel}>
-                    {isAvailable ? 'En Línea' : 'Fuera de Línea'}
-                  </Text>
-                  <Text style={styles.availabilitySubtext}>
-                    {isAvailable ? 'Recibiendo solicitudes' : 'No recibiendo solicitudes'}
-                  </Text>
-                </View>
-              </View>
-              <Switch
-                value={isAvailable}
-                onValueChange={handleToggleAvailability}
-                disabled={isUpdatingAvailability}
-                trackColor={{ false: Colors.lightGray, true: Colors.light }}
-                thumbColor={isAvailable ? Colors.primary : Colors.white}
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Profile Header Card ── */}
+        <View style={styles.profileCard}>
+          <TouchableOpacity onPress={handleChangePhoto} style={styles.profileAvatarWrapper}>
+            {resolveFileUrl(user?.profilePhotoUrl) ? (
+              <Image
+                source={{ uri: resolveFileUrl(user?.profilePhotoUrl) }}
+                style={styles.profileAvatar}
+                resizeMode="cover"
               />
+            ) : (
+              <View style={styles.profileAvatarPlaceholder}>
+                <Ionicons name="person" size={36} color={Colors.primary} />
+              </View>
+            )}
+            <View style={styles.profileAvatarBadge}>
+              <Ionicons name="camera" size={12} color={Colors.white} />
             </View>
-          </View>
-        </View>
-
-        {/* Personal Information Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t.personalInfo}</Text>
-            {!isEditing && (
-              <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editButton}>
-                <Ionicons name="pencil" size={20} color={Colors.primary} />
-                <Text style={styles.editButtonText}>{t.edit}</Text>
-              </TouchableOpacity>
+          </TouchableOpacity>
+          <View style={styles.profileInfo}>
+            <Text style={styles.profileName}>{user?.name || ''}</Text>
+            <Text style={styles.profileRole}>Conductor</Text>
+            {user?.rating !== undefined && (
+              <View style={styles.profileRating}>
+                <Ionicons name="star" size={14} color="#f59e0b" />
+                <Text style={styles.profileRatingText}>
+                  {Number(user.rating).toFixed(1)}
+                </Text>
+              </View>
             )}
           </View>
+          <TouchableOpacity
+            style={styles.profileEditBtn}
+            onPress={() => setIsEditing(!isEditing)}
+          >
+            <Ionicons
+              name={isEditing ? 'close' : 'create-outline'}
+              size={20}
+              color={Colors.primary}
+            />
+          </TouchableOpacity>
+        </View>
 
-          <View style={styles.card}>
-            {/* Profile Photo */}
-            <View style={styles.avatarSection}>
-              <TouchableOpacity onPress={handleChangePhoto} style={styles.avatarContainer}>
-                {resolveFileUrl(user?.profilePhotoUrl) ? (
-                  <Image
-                    source={{ uri: resolveFileUrl(user?.profilePhotoUrl) }}
-                    style={styles.avatarImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={styles.avatarPlaceholder}>
-                    <Ionicons name="person" size={40} color={Colors.primary} />
-                  </View>
-                )}
-                <View style={styles.avatarBadge}>
-                  <Ionicons name="camera" size={14} color={Colors.white} />
-                </View>
-              </TouchableOpacity>
-              <Text style={styles.avatarName}>{user?.name || ''}</Text>
-              <Text style={styles.avatarRole}>
-                {user?.role === 'driver' ? 'Conductor' : user?.role || ''}
-              </Text>
-              <TouchableOpacity onPress={handleChangePhoto} style={styles.changePhotoButton}>
-                <Ionicons name="camera-outline" size={16} color={Colors.primary} />
-                <Text style={styles.changePhotoText}>Cambiar foto</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.avatarDivider} />
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t.name}</Text>
+        {/* ── Edit Mode ── */}
+        {isEditing && (
+          <View style={styles.editCard}>
+            <View style={styles.inputRow}>
+              <View style={styles.inputIcon}>
+                <Ionicons name="person-outline" size={18} color={Colors.primary} />
+              </View>
               <TextInput
-                style={[styles.input, !isEditing && styles.inputDisabled]}
+                style={styles.input}
                 value={name}
                 onChangeText={setName}
-                editable={isEditing}
                 placeholder={t.name}
                 placeholderTextColor={Colors.placeholder}
               />
             </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t.email}</Text>
+            <View style={styles.inputRow}>
+              <View style={styles.inputIcon}>
+                <Ionicons name="call-outline" size={18} color={Colors.primary} />
+              </View>
+              <TextInput
+                style={styles.input}
+                value={phone}
+                onChangeText={setPhone}
+                placeholder={t.phone}
+                placeholderTextColor={Colors.placeholder}
+                keyboardType="phone-pad"
+              />
+            </View>
+            <View style={styles.inputRow}>
+              <View style={styles.inputIcon}>
+                <Ionicons name="mail-outline" size={18} color={Colors.placeholder} />
+              </View>
               <TextInput
                 style={[styles.input, styles.inputDisabled]}
                 value={email}
@@ -554,398 +473,394 @@ export default function DriverProfileScreen() {
                 placeholderTextColor={Colors.placeholder}
               />
             </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t.phone}</Text>
-              <TextInput
-                style={[styles.input, !isEditing && styles.inputDisabled]}
-                value={phone}
-                onChangeText={setPhone}
-                editable={isEditing}
-                placeholder={t.phone}
-                placeholderTextColor={Colors.placeholder}
-                keyboardType="phone-pad"
-              />
+            <View style={styles.editActions}>
+              <TouchableOpacity
+                style={styles.editCancelBtn}
+                onPress={() => {
+                  setIsEditing(false);
+                  setName(user?.name || '');
+                  setPhone(user?.phone || '');
+                }}
+              >
+                <Text style={styles.editCancelText}>{t.cancel}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.editSaveBtn}
+                onPress={handleSaveProfile}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator color={Colors.white} size="small" />
+                ) : (
+                  <Text style={styles.editSaveText}>{t.save}</Text>
+                )}
+              </TouchableOpacity>
             </View>
+          </View>
+        )}
 
-            {isEditing && (
-              <View style={styles.editActions}>
-                <TouchableOpacity
-                  style={[styles.button, styles.cancelButton]}
-                  onPress={() => {
-                    setIsEditing(false);
-                    setName(user?.name || '');
-                    setPhone(user?.phone || '');
-                  }}
-                >
-                  <Text style={styles.cancelButtonText}>{t.cancel}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.button, styles.saveButton]}
-                  onPress={handleSaveProfile}
-                  disabled={isSaving}
-                >
-                  {isSaving ? (
-                    <ActivityIndicator color={Colors.white} />
-                  ) : (
-                    <Text style={styles.saveButtonText}>{t.save}</Text>
-                  )}
-                </TouchableOpacity>
+        {/* ── Availability Section ── */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionLabel}>DISPONIBILIDAD</Text>
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingRowLeft}>
+              <View style={styles.settingDot}>
+                <View
+                  style={[
+                    styles.dot,
+                    isSocketConnected ? styles.dotGreen : styles.dotRed,
+                  ]}
+                />
               </View>
+              <View>
+                <Text style={styles.settingRowTitle}>
+                  {isReconnectingSocket ? 'Reconectando...' : 'Servidor'}
+                </Text>
+                <Text style={styles.settingRowSub}>
+                  {isReconnectingSocket
+                    ? 'Conectando...'
+                    : isSocketConnected
+                      ? socketTransport
+                        ? `Conectado (${socketTransport})`
+                        : 'Conectado'
+                      : 'Desconectado — Toca para reconectar'}
+                </Text>
+              </View>
+            </View>
+            {!isSocketConnected && (
+              <TouchableOpacity
+                style={styles.retryBtn}
+                onPress={async () => {
+                  if (!isReconnectingSocket) {
+                    setIsReconnectingSocket(true);
+                    try { await reconnectSocket(); } catch {}
+                    setIsReconnectingSocket(false);
+                  }
+                }}
+                disabled={isReconnectingSocket}
+              >
+                {isReconnectingSocket ? (
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                ) : (
+                  <Text style={styles.retryBtnText}>Reconectar</Text>
+                )}
+              </TouchableOpacity>
             )}
+          </View>
+
+          <View style={styles.rowDivider} />
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingRowLeft}>
+              <View style={styles.settingDot}>
+                <Ionicons
+                  name={isAvailable ? 'checkmark-circle' : 'close-circle'}
+                  size={22}
+                  color={isAvailable ? Colors.primary : Colors.mediumGray}
+                />
+              </View>
+              <View>
+                <Text style={styles.settingRowTitle}>
+                  {isAvailable ? 'En Línea' : 'Fuera de Línea'}
+                </Text>
+                <Text style={styles.settingRowSub}>
+                  {isAvailable ? 'Recibiendo solicitudes' : 'No recibiendo solicitudes'}
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={isAvailable}
+              onValueChange={handleToggleAvailability}
+              disabled={isUpdatingAvailability}
+              trackColor={{ false: '#e5e7eb', true: '#bbf7d0' }}
+              thumbColor={isAvailable ? Colors.primary : '#9ca3af'}
+            />
           </View>
         </View>
 
-        {/* Payment Methods Section */}
-        <View style={styles.section}>
+        {/* ── Payment Section ── */}
+        <View style={styles.sectionCard}>
           <TouchableOpacity
-            style={styles.sectionHeader}
+            style={styles.sectionRow}
             onPress={() => setIsPaymentSectionExpanded(!isPaymentSectionExpanded)}
             activeOpacity={0.7}
           >
-            <Text style={styles.sectionTitle}>Métodos de Pago</Text>
+            <Text style={styles.sectionLabel}>MÉTODOS DE PAGO</Text>
             <Ionicons
               name={isPaymentSectionExpanded ? 'chevron-up' : 'chevron-down'}
-              size={24}
-              color={Colors.primary}
+              size={20}
+              color="#9ca3af"
             />
           </TouchableOpacity>
 
           {isPaymentSectionExpanded && (
-            <View style={styles.card}>
-              {/* Pago Móvil Section */}
-              <View style={styles.paymentMethodSection}>
-                <View style={styles.paymentMethodHeader}>
-                  <View style={styles.settingLeft}>
-                    <View style={styles.iconContainer}>
-                      <Ionicons name="phone-portrait" size={22} color={Colors.primary} />
+            <View style={styles.paymentContent}>
+              {/* Pago Móvil */}
+              <View style={styles.paymentBlock}>
+                <View style={styles.paymentBlockHeader}>
+                  <View style={styles.settingRowLeft}>
+                    <View style={styles.settingDot}>
+                      <Ionicons name="phone-portrait-outline" size={20} color={Colors.primary} />
                     </View>
-                    <Text style={styles.paymentMethodTitle}>Pago Móvil</Text>
+                    <Text style={styles.paymentBlockTitle}>Pago Móvil</Text>
                   </View>
-                  {paymentInfo.pagoMovilPhone &&
-                    paymentInfo.pagoMovilBank &&
-                    paymentInfo.pagoMovilCedula && (
-                      <View style={styles.configuredBadge}>
-                        <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
-                        <Text style={styles.configuredText}>Configurado</Text>
-                      </View>
-                    )}
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Cédula *</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={paymentInfo.pagoMovilCedula}
-                    onChangeText={text => setPaymentInfo({ ...paymentInfo, pagoMovilCedula: text })}
-                    placeholder="V-12345678"
-                    placeholderTextColor={Colors.placeholder}
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Teléfono *</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={paymentInfo.pagoMovilPhone}
-                    onChangeText={text => setPaymentInfo({ ...paymentInfo, pagoMovilPhone: text })}
-                    placeholder="0414-1234567"
-                    placeholderTextColor={Colors.placeholder}
-                    keyboardType="phone-pad"
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Banco *</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={paymentInfo.pagoMovilBank}
-                    onChangeText={text => setPaymentInfo({ ...paymentInfo, pagoMovilBank: text })}
-                    placeholder="Ej: Banco de Venezuela"
-                    placeholderTextColor={Colors.placeholder}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.divider} />
-
-              {/* Transferencia Bancaria Section */}
-              <View style={styles.paymentMethodSection}>
-                <View style={styles.paymentMethodHeader}>
-                  <View style={styles.settingLeft}>
-                    <View style={styles.iconContainer}>
-                      <Ionicons name="business" size={22} color={Colors.primary} />
-                    </View>
-                    <Text style={styles.paymentMethodTitle}>Transferencia Bancaria</Text>
-                  </View>
-                  {paymentInfo.bankTransferAccount && paymentInfo.bankTransferBank && (
+                  {paymentInfo.pagoMovilPhone && paymentInfo.pagoMovilBank && paymentInfo.pagoMovilCedula && (
                     <View style={styles.configuredBadge}>
-                      <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
-                      <Text style={styles.configuredText}>Configurado</Text>
+                      <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
+                      <Text style={styles.configuredText}>Listo</Text>
                     </View>
                   )}
                 </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Banco</Text>
+                <View style={styles.paymentInputGroup}>
                   <TextInput
-                    style={styles.input}
-                    value={paymentInfo.bankTransferBank}
-                    onChangeText={text =>
-                      setPaymentInfo({ ...paymentInfo, bankTransferBank: text })
-                    }
-                    placeholder="Ej: Banco de Venezuela"
+                    style={styles.paymentInput}
+                    value={paymentInfo.pagoMovilCedula}
+                    onChangeText={text => setPaymentInfo({ ...paymentInfo, pagoMovilCedula: text })}
+                    placeholder="Cédula — V-12345678"
+                    placeholderTextColor={Colors.placeholder}
+                  />
+                  <TextInput
+                    style={styles.paymentInput}
+                    value={paymentInfo.pagoMovilPhone}
+                    onChangeText={text => setPaymentInfo({ ...paymentInfo, pagoMovilPhone: text })}
+                    placeholder="Teléfono — 0414-1234567"
+                    placeholderTextColor={Colors.placeholder}
+                    keyboardType="phone-pad"
+                  />
+                  <TextInput
+                    style={styles.paymentInput}
+                    value={paymentInfo.pagoMovilBank}
+                    onChangeText={text => setPaymentInfo({ ...paymentInfo, pagoMovilBank: text })}
+                    placeholder="Banco — Ej: Venezuela"
                     placeholderTextColor={Colors.placeholder}
                   />
                 </View>
+              </View>
 
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Número de Cuenta</Text>
+              <View style={styles.rowDivider} />
+
+              {/* Transferencia */}
+              <View style={styles.paymentBlock}>
+                <View style={styles.paymentBlockHeader}>
+                  <View style={styles.settingRowLeft}>
+                    <View style={styles.settingDot}>
+                      <Ionicons name="business-outline" size={20} color={Colors.primary} />
+                    </View>
+                    <Text style={styles.paymentBlockTitle}>Transferencia</Text>
+                  </View>
+                  {paymentInfo.bankTransferAccount && paymentInfo.bankTransferBank && (
+                    <View style={styles.configuredBadge}>
+                      <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
+                      <Text style={styles.configuredText}>Listo</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.paymentInputGroup}>
                   <TextInput
-                    style={styles.input}
+                    style={styles.paymentInput}
+                    value={paymentInfo.bankTransferBank}
+                    onChangeText={text => setPaymentInfo({ ...paymentInfo, bankTransferBank: text })}
+                    placeholder="Banco"
+                    placeholderTextColor={Colors.placeholder}
+                  />
+                  <TextInput
+                    style={styles.paymentInput}
                     value={paymentInfo.bankTransferAccount}
-                    onChangeText={text =>
-                      setPaymentInfo({ ...paymentInfo, bankTransferAccount: text })
-                    }
-                    placeholder="0102-1234-5678-9012"
+                    onChangeText={text => setPaymentInfo({ ...paymentInfo, bankTransferAccount: text })}
+                    placeholder="N° de Cuenta — 0102-1234-5678"
                     placeholderTextColor={Colors.placeholder}
                     keyboardType="number-pad"
                   />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Tipo de Cuenta</Text>
-                  <View style={styles.accountTypeButtons}>
+                  <View style={styles.accountTypeRow}>
                     <TouchableOpacity
                       style={[
-                        styles.accountTypeButton,
-                        paymentInfo.bankTransferAccountType === 'Corriente' &&
-                          styles.accountTypeButtonActive,
+                        styles.accountTypeBtn,
+                        paymentInfo.bankTransferAccountType === 'Corriente' && styles.accountTypeBtnActive,
                       ]}
-                      onPress={() =>
-                        setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Corriente' })
-                      }
+                      onPress={() => setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Corriente' })}
                     >
-                      <Text
-                        style={[
-                          styles.accountTypeButtonText,
-                          paymentInfo.bankTransferAccountType === 'Corriente' &&
-                            styles.accountTypeButtonTextActive,
-                        ]}
-                      >
-                        Corriente
-                      </Text>
+                      <Text style={[
+                        styles.accountTypeBtnText,
+                        paymentInfo.bankTransferAccountType === 'Corriente' && styles.accountTypeBtnTextActive,
+                      ]}>Corriente</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[
-                        styles.accountTypeButton,
-                        paymentInfo.bankTransferAccountType === 'Ahorro' &&
-                          styles.accountTypeButtonActive,
+                        styles.accountTypeBtn,
+                        paymentInfo.bankTransferAccountType === 'Ahorro' && styles.accountTypeBtnActive,
                       ]}
-                      onPress={() =>
-                        setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Ahorro' })
-                      }
+                      onPress={() => setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Ahorro' })}
                     >
-                      <Text
-                        style={[
-                          styles.accountTypeButtonText,
-                          paymentInfo.bankTransferAccountType === 'Ahorro' &&
-                            styles.accountTypeButtonTextActive,
-                        ]}
-                      >
-                        Ahorro
-                      </Text>
+                      <Text style={[
+                        styles.accountTypeBtnText,
+                        paymentInfo.bankTransferAccountType === 'Ahorro' && styles.accountTypeBtnTextActive,
+                      ]}>Ahorro</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
               </View>
 
-              <View style={styles.paymentInfoNote}>
-                <Ionicons name="information-circle" size={20} color="#6b7280" />
-                <Text style={styles.paymentInfoNoteText}>
-                  Debes configurar al menos un método de pago completo para recibir tus ganancias.
-                  {'\n\n'}• Pago Móvil: cédula, teléfono y banco{'\n'}• Transferencia: banco, cuenta
-                  y tipo
+              <View style={styles.paymentNote}>
+                <Ionicons name="information-circle-outline" size={16} color="#6b7280" />
+                <Text style={styles.paymentNoteText}>
+                  Configura al menos un método para recibir tus ganancias.
                 </Text>
               </View>
 
               <TouchableOpacity
-                style={[styles.button, styles.saveButton]}
+                style={styles.paymentSaveBtn}
                 onPress={handleSavePaymentInfo}
                 disabled={isSavingPayment}
               >
                 {isSavingPayment ? (
-                  <ActivityIndicator color={Colors.white} />
+                  <ActivityIndicator color={Colors.white} size="small" />
                 ) : (
-                  <Text style={styles.saveButtonText}>Guardar Métodos de Pago</Text>
+                  <Text style={styles.paymentSaveText}>Guardar Métodos de Pago</Text>
                 )}
               </TouchableOpacity>
             </View>
           )}
         </View>
 
-        {/* Settings Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t.settings}</Text>
+        {/* ── Settings Section ── */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionLabel}>CONFIGURACIÓN</Text>
 
-          <View style={styles.card}>
-            <View style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <View style={styles.iconContainer}>
-                  <Ionicons name="language" size={22} color={Colors.primary} />
-                </View>
-                <Text style={styles.settingLabel}>{t.language}</Text>
+          <View style={styles.settingRow}>
+            <View style={styles.settingRowLeft}>
+              <View style={styles.settingDot}>
+                <Ionicons name="language-outline" size={20} color={Colors.primary} />
               </View>
-              <View style={styles.languageButtons}>
-                <TouchableOpacity
-                  style={[styles.languageButton, language === 'es' && styles.languageButtonActive]}
-                  onPress={() => handleLanguageChange('es')}
-                >
-                  <Text
-                    style={[
-                      styles.languageButtonText,
-                      language === 'es' && styles.languageButtonTextActive,
-                    ]}
-                  >
-                    {t.spanish}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.languageButton, language === 'en' && styles.languageButtonActive]}
-                  onPress={() => handleLanguageChange('en')}
-                >
-                  <Text
-                    style={[
-                      styles.languageButtonText,
-                      language === 'en' && styles.languageButtonTextActive,
-                    ]}
-                  >
-                    {t.english}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              <Text style={styles.settingRowTitle}>{t.language}</Text>
+            </View>
+            <View style={styles.langRow}>
+              <TouchableOpacity
+                style={[styles.langBtn, language === 'es' && styles.langBtnActive]}
+                onPress={() => handleLanguageChange('es')}
+              >
+                <Text style={[styles.langBtnText, language === 'es' && styles.langBtnTextActive]}>
+                  ES
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.langBtn, language === 'en' && styles.langBtnActive]}
+                onPress={() => handleLanguageChange('en')}
+              >
+                <Text style={[styles.langBtnText, language === 'en' && styles.langBtnTextActive]}>
+                  EN
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
 
-        {/* Notifications Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t.notifications}</Text>
+        {/* ── Notifications Section ── */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionLabel}>NOTIFICACIONES</Text>
 
-          <View style={styles.card}>
-            <View style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <View style={styles.iconContainer}>
-                  <Ionicons name="notifications" size={22} color={Colors.primary} />
-                </View>
-                <Text style={styles.settingLabel}>Solicitudes de viaje</Text>
+          <View style={styles.settingRow}>
+            <View style={styles.settingRowLeft}>
+              <View style={styles.settingDot}>
+                <Ionicons name="notifications-outline" size={20} color={Colors.primary} />
               </View>
-              <Switch
-                value={notificationPrefs.rideRequests}
-                onValueChange={value => handleUpdateNotificationPref('rideRequests', value)}
-                trackColor={{ false: Colors.lightGray, true: Colors.light }}
-                thumbColor={notificationPrefs.rideRequests ? Colors.primary : Colors.white}
-              />
+              <Text style={styles.settingRowTitle}>Solicitudes de viaje</Text>
             </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <View style={styles.iconContainer}>
-                  <Ionicons name="car" size={22} color={Colors.primary} />
-                </View>
-                <Text style={styles.settingLabel}>Actualizaciones de viaje</Text>
+            <Switch
+              value={notificationPrefs.rideRequests}
+              onValueChange={value => handleUpdateNotificationPref('rideRequests', value)}
+              trackColor={{ false: '#e5e7eb', true: '#bbf7d0' }}
+              thumbColor={notificationPrefs.rideRequests ? Colors.primary : '#9ca3af'}
+            />
+          </View>
+          <View style={styles.rowDivider} />
+          <View style={styles.settingRow}>
+            <View style={styles.settingRowLeft}>
+              <View style={styles.settingDot}>
+                <Ionicons name="car-outline" size={20} color={Colors.primary} />
               </View>
-              <Switch
-                value={notificationPrefs.rideUpdates}
-                onValueChange={value => handleUpdateNotificationPref('rideUpdates', value)}
-                trackColor={{ false: Colors.lightGray, true: Colors.light }}
-                thumbColor={notificationPrefs.rideUpdates ? Colors.primary : Colors.white}
-              />
+              <Text style={styles.settingRowTitle}>Actualizaciones de viaje</Text>
             </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <View style={styles.iconContainer}>
-                  <Ionicons name="card" size={22} color={Colors.primary} />
-                </View>
-                <Text style={styles.settingLabel}>Pagos</Text>
+            <Switch
+              value={notificationPrefs.rideUpdates}
+              onValueChange={value => handleUpdateNotificationPref('rideUpdates', value)}
+              trackColor={{ false: '#e5e7eb', true: '#bbf7d0' }}
+              thumbColor={notificationPrefs.rideUpdates ? Colors.primary : '#9ca3af'}
+            />
+          </View>
+          <View style={styles.rowDivider} />
+          <View style={styles.settingRow}>
+            <View style={styles.settingRowLeft}>
+              <View style={styles.settingDot}>
+                <Ionicons name="card-outline" size={20} color={Colors.primary} />
               </View>
-              <Switch
-                value={notificationPrefs.payments}
-                onValueChange={value => handleUpdateNotificationPref('payments', value)}
-                trackColor={{ false: Colors.lightGray, true: Colors.light }}
-                thumbColor={notificationPrefs.payments ? Colors.primary : Colors.white}
-              />
+              <Text style={styles.settingRowTitle}>Pagos</Text>
             </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.settingItem}>
-              <View style={styles.settingLeft}>
-                <View style={styles.iconContainer}>
-                  <Ionicons name="megaphone" size={22} color={Colors.primary} />
-                </View>
-                <Text style={styles.settingLabel}>Promociones</Text>
+            <Switch
+              value={notificationPrefs.payments}
+              onValueChange={value => handleUpdateNotificationPref('payments', value)}
+              trackColor={{ false: '#e5e7eb', true: '#bbf7d0' }}
+              thumbColor={notificationPrefs.payments ? Colors.primary : '#9ca3af'}
+            />
+          </View>
+          <View style={styles.rowDivider} />
+          <View style={styles.settingRow}>
+            <View style={styles.settingRowLeft}>
+              <View style={styles.settingDot}>
+                <Ionicons name="megaphone-outline" size={20} color={Colors.primary} />
               </View>
-              <Switch
-                value={notificationPrefs.promotions}
-                onValueChange={value => handleUpdateNotificationPref('promotions', value)}
-                trackColor={{ false: Colors.lightGray, true: Colors.light }}
-                thumbColor={notificationPrefs.promotions ? Colors.primary : Colors.white}
-              />
+              <Text style={styles.settingRowTitle}>Promociones</Text>
             </View>
+            <Switch
+              value={notificationPrefs.promotions}
+              onValueChange={value => handleUpdateNotificationPref('promotions', value)}
+              trackColor={{ false: '#e5e7eb', true: '#bbf7d0' }}
+              thumbColor={notificationPrefs.promotions ? Colors.primary : '#9ca3af'}
+            />
           </View>
         </View>
 
-        {/* Account Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t.account}</Text>
+        {/* ── Account Section ── */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionLabel}>CUENTA</Text>
 
-          <View style={styles.card}>
-            <TouchableOpacity
-              style={styles.actionItem}
-              onPress={() => router.push('/(driver)/manage-ride' as any)}
-            >
-              <View style={styles.settingLeft}>
-                <View style={styles.iconContainer}>
-                  <Ionicons name="car-sport-outline" size={22} color={Colors.primary} />
-                </View>
-                <Text style={styles.actionLabel}>Gestionar Viaje</Text>
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => router.push('/(driver)/manage-ride' as any)}
+          >
+            <View style={styles.settingRowLeft}>
+              <View style={styles.settingDot}>
+                <Ionicons name="car-sport-outline" size={20} color={Colors.primary} />
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-            </TouchableOpacity>
+              <Text style={styles.settingRowTitle}>Gestionar Viaje</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
+          </TouchableOpacity>
 
-            <View style={styles.divider} />
+          <View style={styles.rowDivider} />
 
-            <TouchableOpacity style={styles.actionItem} onPress={handleLogout}>
-              <View style={styles.settingLeft}>
-                <View style={styles.iconContainer}>
-                  <Ionicons name="log-out-outline" size={22} color={Colors.primary} />
-                </View>
-                <Text style={styles.actionLabel}>{t.logout}</Text>
+          <TouchableOpacity style={styles.settingRow} onPress={handleLogout}>
+            <View style={styles.settingRowLeft}>
+              <View style={styles.settingDot}>
+                <Ionicons name="log-out-outline" size={20} color={Colors.primary} />
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-            </TouchableOpacity>
+              <Text style={styles.settingRowTitle}>{t.logout}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
+          </TouchableOpacity>
 
-            <View style={styles.divider} />
+          <View style={styles.rowDivider} />
 
-            <TouchableOpacity style={styles.actionItem} onPress={handleDeleteAccount}>
-              <View style={styles.settingLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: '#fef2f2' }]}>
-                  <Ionicons name="trash-outline" size={22} color={Colors.error} />
-                </View>
-                <Text style={[styles.actionLabel, styles.dangerText]}>{t.deleteAccount}</Text>
+          <TouchableOpacity style={styles.settingRow} onPress={handleDeleteAccount}>
+            <View style={styles.settingRowLeft}>
+              <View style={[styles.settingDot, styles.dotDanger]}>
+                <Ionicons name="trash-outline" size={20} color={Colors.error} />
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-            </TouchableOpacity>
-          </View>
+              <Text style={[styles.settingRowTitle, styles.textDanger]}>{t.deleteAccount}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
+          </TouchableOpacity>
         </View>
-
-        <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -954,241 +869,139 @@ export default function DriverProfileScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f0f9ff',
+    backgroundColor: '#f8fafc',
   },
   container: {
     flex: 1,
-    backgroundColor: '#f0f9ff',
+    backgroundColor: '#f8fafc',
   },
   contentContainer: {
-    padding: Spacing.md,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f0f9ff',
+    backgroundColor: '#f8fafc',
   },
-  avatarSection: {
+
+  // ── Profile Card ─────────────────────────────────────────────────────────
+  profileCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Spacing.md,
+    backgroundColor: Colors.white,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
-  avatarContainer: {
+  profileAvatarWrapper: {
     position: 'relative',
-    marginBottom: Spacing.sm,
+    marginRight: 14,
   },
-  avatarImage: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 3,
-    borderColor: Colors.primary,
+  profileAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
   },
-  avatarPlaceholder: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+  profileAvatarPlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: '#f0fdf4',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: Colors.primary,
+    borderWidth: 2,
+    borderColor: '#dcfce7',
   },
-  avatarBadge: {
+  profileAvatarBadge: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    bottom: 0,
+    right: -2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: Colors.white,
   },
-  avatarName: {
+  profileInfo: {
+    flex: 1,
+  },
+  profileName: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.darkGray,
+    color: '#111827',
     marginBottom: 2,
   },
-  avatarRole: {
-    fontSize: 14,
-    color: Colors.mediumGray,
-    marginBottom: Spacing.sm,
-  },
-  changePhotoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#f0fdf4',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-  },
-  changePhotoText: {
+  profileRole: {
     fontSize: 13,
-    fontWeight: '600',
-    color: Colors.primary,
+    color: '#6b7280',
+    fontWeight: '500',
   },
-  avatarDivider: {
-    height: 1,
-    backgroundColor: '#f3f4f6',
-    marginBottom: Spacing.md,
-  },
-  section: {
-    marginBottom: Spacing.xl,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1f2937',
-    marginBottom: Spacing.sm,
-  },
-  paymentMethodSection: {
-    marginBottom: Spacing.md,
-  },
-  paymentMethodHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  paymentMethodTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
-  },
-  configuredBadge: {
+  profileRating: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#f0fdf4',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.primary,
+    marginTop: 4,
   },
-  configuredText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  accountTypeButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  accountTypeButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    backgroundColor: Colors.white,
-    alignItems: 'center',
-  },
-  accountTypeButtonActive: {
-    borderColor: Colors.primary,
-    backgroundColor: '#f0fdf4',
-  },
-  accountTypeButtonText: {
-    color: '#9ca3af',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  accountTypeButtonTextActive: {
-    color: Colors.primary,
-  },
-  paymentInfoNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: '#f9fafb',
-    padding: Spacing.md,
-    borderRadius: 10,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  paymentInfoNoteText: {
-    flex: 1,
+  profileRatingText: {
     fontSize: 13,
-    color: '#6b7280',
-    lineHeight: 18,
-  },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#f0fdf4',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-  },
-  editButtonText: {
-    color: Colors.primary,
-    fontSize: 14,
     fontWeight: '600',
+    color: '#6b7280',
   },
-  card: {
+  profileEditBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#f0fdf4',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // ── Edit Card ────────────────────────────────────────────────────────────
+  editCard: {
     backgroundColor: Colors.white,
     borderRadius: 16,
-    padding: Spacing.lg,
+    padding: 16,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
     elevation: 3,
   },
-  availabilityItem: {
+  inputRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Spacing.sm,
+    marginBottom: 10,
   },
-  availabilityTextContainer: {
-    flex: 1,
-  },
-  availabilityLabel: {
-    fontSize: 16,
-    color: '#1f2937',
-    fontWeight: '600',
-  },
-  availabilitySubtext: {
-    fontSize: 13,
-    color: '#6b7280',
-    marginTop: 2,
-  },
-  inputGroup: {
-    marginBottom: Spacing.md,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#6b7280',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  inputIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#f0fdf4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
   input: {
-    height: 52,
-    borderWidth: 2,
+    flex: 1,
+    height: 46,
+    borderWidth: 1.5,
     borderColor: '#e5e7eb',
     borderRadius: 12,
-    paddingHorizontal: Spacing.md,
-    fontSize: 16,
-    color: Colors.darkGray,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    color: '#111827',
     backgroundColor: Colors.white,
   },
   inputDisabled: {
@@ -1198,123 +1011,267 @@ const styles = StyleSheet.create({
   },
   editActions: {
     flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
+    gap: 10,
+    marginTop: 6,
   },
-  button: {
+  editCancelBtn: {
     flex: 1,
-    height: 52,
+    height: 44,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  cancelButton: {
     backgroundColor: Colors.white,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#e5e7eb',
   },
-  cancelButtonText: {
+  editCancelText: {
     color: '#6b7280',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
-  saveButton: {
+  editSaveBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: Colors.primary,
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 4,
   },
-  saveButtonText: {
+  editSaveText: {
     color: Colors.white,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
-  settingItem: {
+
+  // ── Section Cards ────────────────────────────────────────────────────────
+  sectionCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#9ca3af',
+    letterSpacing: 1.2,
+    marginBottom: 14,
+  },
+  sectionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Spacing.md,
   },
-  settingLeft: {
+
+  // ── Setting Rows ─────────────────────────────────────────────────────────
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  settingRowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
+    gap: 12,
     flex: 1,
   },
-  iconContainer: {
-    width: 40,
-    height: 40,
+  settingDot: {
+    width: 36,
+    height: 36,
     borderRadius: 10,
     backgroundColor: '#f0fdf4',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  iconContainerActive: {
-    backgroundColor: '#dcfce7',
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
-  settingLabel: {
-    fontSize: 16,
-    color: '#1f2937',
-    fontWeight: '500',
-    flex: 1,
+  dotGreen: {
+    backgroundColor: '#22c55e',
   },
-  languageButtons: {
-    flexDirection: 'row',
-    gap: 8,
+  dotRed: {
+    backgroundColor: '#ef4444',
   },
-  languageButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    backgroundColor: Colors.white,
+  dotDanger: {
+    backgroundColor: '#fef2f2',
   },
-  languageButtonActive: {
-    borderColor: Colors.primary,
-    backgroundColor: '#f0fdf4',
-  },
-  languageButtonText: {
-    color: '#9ca3af',
-    fontSize: 14,
+  settingRowTitle: {
+    fontSize: 15,
     fontWeight: '600',
+    color: '#111827',
   },
-  languageButtonTextActive: {
+  settingRowSub: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 1,
+  },
+  retryBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  retryBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
     color: Colors.primary,
   },
-  divider: {
+  rowDivider: {
     height: 1,
     backgroundColor: '#f3f4f6',
-    marginVertical: Spacing.xs,
+    marginVertical: 8,
   },
-  actionItem: {
+  textDanger: {
+    color: Colors.error,
+  },
+
+  // ── Language ─────────────────────────────────────────────────────────────
+  langRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  langBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+  },
+  langBtnActive: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+  },
+  langBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#9ca3af',
+    letterSpacing: 0.5,
+  },
+  langBtnTextActive: {
+    color: Colors.primary,
+  },
+
+  // ── Payment Methods ──────────────────────────────────────────────────────
+  paymentContent: {
+    marginTop: 4,
+  },
+  paymentBlock: {
+    paddingTop: 4,
+  },
+  paymentBlockHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Spacing.md,
+    marginBottom: 10,
   },
-  actionLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#1f2937',
+  paymentBlockTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
   },
-  dangerText: {
-    color: Colors.error,
+  configuredBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
   },
-  statusIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+  configuredText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.primary,
   },
-  statusConnected: {
+  paymentInputGroup: {
+    gap: 8,
+  },
+  paymentInput: {
+    height: 44,
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    color: '#111827',
+    backgroundColor: Colors.white,
+  },
+  accountTypeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  accountTypeBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+  },
+  accountTypeBtnActive: {
+    borderColor: Colors.primary,
+    backgroundColor: '#f0fdf4',
+  },
+  accountTypeBtnText: {
+    color: '#9ca3af',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  accountTypeBtnTextActive: {
+    color: Colors.primary,
+  },
+  paymentNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#f9fafb',
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 12,
+  },
+  paymentNoteText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#6b7280',
+    lineHeight: 17,
+  },
+  paymentSaveBtn: {
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: Colors.primary,
+    marginTop: 12,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  statusDisconnected: {
-    backgroundColor: Colors.error,
+  paymentSaveText: {
+    color: Colors.white,
+    fontSize: 14,
+    fontWeight: '600',
   },
-  bottomSpacer: {
-    height: Spacing.xxl,
-  },
+
+  // ── Misc ─────────────────────────────────────────────────────────────────
+
 });

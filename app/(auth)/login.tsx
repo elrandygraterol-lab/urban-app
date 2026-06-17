@@ -321,13 +321,22 @@ export default function LoginScreen() {
 
               {/* Social Buttons */}
               <View style={styles.socialRow}>
-                <TouchableOpacity style={styles.socialBtn} disabled={isLoading}>
+                <TouchableOpacity
+                  style={styles.socialBtn}
+                  onPress={() => showStatus('info', 'El inicio de sesión con Google estará disponible próximamente.', 'En Desarrollo')}
+                >
                   <Ionicons name="logo-google" size={22} color="#4285f4" />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.socialBtn} disabled={isLoading}>
+                <TouchableOpacity
+                  style={styles.socialBtn}
+                  onPress={() => showStatus('info', 'El inicio de sesión con Apple estará disponible próximamente.', 'En Desarrollo')}
+                >
                   <Ionicons name="logo-apple" size={22} color="#000" />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.socialBtn} disabled={isLoading}>
+                <TouchableOpacity
+                  style={styles.socialBtn}
+                  onPress={() => showStatus('info', 'El inicio de sesión con Facebook estará disponible próximamente.', 'En Desarrollo')}
+                >
                   <Ionicons name="logo-facebook" size={22} color="#1877f2" />
                 </TouchableOpacity>
               </View>

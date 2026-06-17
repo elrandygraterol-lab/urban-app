@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   TextInput,
   Switch,
-  Alert,
   ActivityIndicator,
   StatusBar,
   Image,
@@ -42,7 +41,7 @@ export default function PassengerProfileScreen() {
   const { language, setLanguage } = useLanguage();
   const t = translations[language].profile;
   const { isActive: needsTutorial } = useSmartTutorial('passenger_profile');
-  const { showToast, showStatus } = useUnifiedNotifications();
+  const { showToast, showStatus, showActionSheet } = useUnifiedNotifications();
 
   useEffect(() => {
     if (needsTutorial) {
@@ -186,9 +185,10 @@ export default function PassengerProfileScreen() {
         return;
       }
 
-      Alert.alert('Foto de perfil', 'Elige una opción', [
+      showActionSheet('Foto de perfil', [
         {
-          text: 'Tomar foto',
+          label: 'Tomar foto',
+          icon: 'camera',
           onPress: async () => {
             const result = await ImagePicker.launchCameraAsync({
               mediaTypes: ['images'],
@@ -203,7 +203,8 @@ export default function PassengerProfileScreen() {
           },
         },
         {
-          text: 'Elegir de galería',
+          label: 'Elegir de galería',
+          icon: 'images',
           onPress: async () => {
             const result = await ImagePicker.launchImageLibraryAsync({
               mediaTypes: ['images'],
@@ -217,11 +218,7 @@ export default function PassengerProfileScreen() {
             }
           },
         },
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-      ]);
+      ], 'Elige una opción');
     } catch (error) {
       console.error('Error picking profile photo:', error);
       showToast('No se pudo seleccionar la foto', 'error');
@@ -259,7 +256,7 @@ export default function PassengerProfileScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.contentContainer, { paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: 16 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}

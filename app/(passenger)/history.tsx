@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { rideAPI } from '../../services/api';
 import { Ride } from '../../src/types';
 import { Colors, Spacing } from '../../constants/theme';
@@ -278,10 +278,11 @@ export default function PassengerHistoryScreen() {
         visible={!!selectedRide}
         transparent
         animationType="slide"
+        statusBarTranslucent
         onRequestClose={() => setSelectedRide(null)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+          <SafeAreaView edges={['bottom']} style={styles.modalSafeContent}>
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderLeft}>
                 <View style={[styles.statusDot, { backgroundColor: isCancelled ? '#ef4444' : Colors.primary }]} />
@@ -427,7 +428,7 @@ export default function PassengerHistoryScreen() {
                 </View>
               )}
             </ScrollView>
-          </View>
+          </SafeAreaView>
         </View>
       </Modal>
     );
@@ -438,10 +439,11 @@ export default function PassengerHistoryScreen() {
       visible={showFilters}
       transparent
       animationType="slide"
+      statusBarTranslucent
       onRequestClose={() => setShowFilters(false)}
     >
       <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <SafeAreaView edges={['bottom']} style={styles.modalSafeContent}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Filtrar por Fecha</Text>
             <TouchableOpacity onPress={() => setShowFilters(false)}>
@@ -508,7 +510,7 @@ export default function PassengerHistoryScreen() {
               <Text style={styles.filterButtonTextPrimary}>Aplicar</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </SafeAreaView>
       </View>
     </Modal>
   );
@@ -894,6 +896,14 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+    paddingTop: 20,
+    maxHeight: '88%',
+  },
+  modalSafeContent: {
     backgroundColor: Colors.white,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
