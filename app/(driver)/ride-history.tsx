@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   View,
   Text,
@@ -96,10 +97,12 @@ export default function DriverRideHistoryScreen() {
     [getFilterParams]
   );
 
-  useEffect(() => {
-    setLoading(true);
-    loadRides(1).finally(() => setLoading(false));
-  }, [loadRides]);
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      loadRides(1).finally(() => setLoading(false));
+    }, [loadRides])
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

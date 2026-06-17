@@ -601,14 +601,37 @@ export const reconnectSocket = async (): Promise<Socket | null> => {
   console.log('[SOCKET]    Current socket exists:', !!socket);
   console.log('[SOCKET]    Current socket connected:', socket?.connected);
 
-  // If socket is still connected, don't tear it down — this preserves
-  // all ride-specific listeners registered by active screens (driver active-ride, etc.)
-  if (socket && socket.connected && socket.id) {
-    console.log('[SOCKET] ✅ Socket already connected (id: ' + socket.id + '), skipping reconnect');
+  // If socket is connected, don't touch it — preserves all registered listeners
+  if (socket && socket.connected) {
+    console.log('[SOCKET] ✅ Socket healthy (id: ' + socket.id + '), no reconnect needed');
     return socket;
   }
 
-  // Disconnect existing socket — this clears shouldAutoReconnect
+  // Socket exists but disconnected — try Socket.IO native reconnect
+  if (socket && !socket.connected) {
+    console.log('[SOCKET] 🔄 Socket disconnected, attempting native reconnect...');
+    socket.connect();
+    // Wait for connection
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Reconnect timeout')), 10000);
+        socket!.once('connect', () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        socket!.once('connect_error', (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+      });
+      console.log('[SOCKET] ✅ Native reconnect successful');
+      return socket;
+    } catch (err: any) {
+      console.log('[SOCKET] ⚠️ Native reconnect failed:', err.message);
+    }
+  }
+
+  // Full reconnect: destroy old and create new
   console.log('[SOCKET]    Step 1: Disconnecting existing socket...');
   disconnectSocket();
 

@@ -50,7 +50,7 @@ export default function DriverHomeScreen() {
     transactions,
   } = useDriverStore();
   const { playNotificationSound } = useSound();
-  const { showToast, showError, showStatus } = useUnifiedNotifications();
+  const { showToast, showError, showStatus, showRideRequest } = useUnifiedNotifications();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
@@ -454,6 +454,20 @@ export default function DriverHomeScreen() {
 
       // Evento 'ride:payment_completed' ahora se maneja globalmente en useGlobalSocketListeners
 
+      // Defensive local ride:request_created listener — ensures driver always receives requests
+      socket.off('ride:request_created');
+      socket.on('ride:request_created', (data: any) => {
+        console.log('[DRIVER] 🚗 RIDE REQUEST RECEIVED (LOCAL):', data.id, data.passengerName);
+        playNotificationSound();
+        showRideRequest({
+          ...data,
+          passengerRating: 0,
+          estimatedDuration: Math.round((data.distance / 25) * 60),
+          vehicleType: data.vehicleType || 'taxi',
+        });
+      });
+      console.log('[DRIVER]    ✓ ride:request_created registered (local defensive)');
+
       // Add connection status listeners for debugging (store refs for targeted cleanup)
       connectHandlerRef.current = () => {
         console.log('[DRIVER] ========================================');
@@ -499,7 +513,7 @@ export default function DriverHomeScreen() {
 
       localListenersRegisteredRef.current = true;
     },
-    [handleRideCancelled, handleAvailabilityChanged, user?.id, user?.role]
+    [handleRideCancelled, handleAvailabilityChanged, showRideRequest, playNotificationSound, user?.id, user?.role]
   );
 
   const initializeSocket = useCallback(async () => {

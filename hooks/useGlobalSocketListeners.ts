@@ -102,19 +102,9 @@ export const useGlobalSocketListeners = ({
           '¡Pago Recibido!',
           { rideId: data.rideId, amount: data.amount, currency: data.currency }
         );
-      } else {
-        const amt = data.amount;
-        const dualMsg = data.currency === 'USD'
-          ? `${convertToBs(amt) !== '—' ? ` (≈ Bs. ${convertToBs(amt)})` : ''}`
-          : `${convertToUsd(amt) !== '—' ? ` (≈ $ ${convertToUsd(amt)})` : ''}`;
-        const currencySymbol = data.currency === 'USD' ? '$' : 'Bs.';
-        showStatus(
-          'payment_completed',
-          `Tu pago de ${currencySymbol} ${amt.toFixed(2)}${dualMsg} ha sido procesado`,
-          '✅ Pago Completado',
-          { rideId: data.rideId }
-        );
       }
+      // Passenger: payment confirmation is shown inline in the payment modal
+      // (with dual amounts) — no duplicate notification needed here.
     },
     [user?.role, playNotificationSound, showStatus, convertToUsd, convertToBs]
   );
@@ -176,52 +166,22 @@ export const useGlobalSocketListeners = ({
   // ── PASSENGER-SIDE HANDLERS ────────────────────────────────────────────────
 
   // Handler for ride:accepted event (PASSENGER — driver accepted the ride)
+  // Note: the passenger's local screen shows a more detailed notification with vehicle info.
+  // This global handler only plays sound to avoid duplicate notifications.
   const handleRideAccepted = useCallback(
     (data: {
       rideId: string;
       status: 'accepted';
-      driver: {
-        id: string;
-        name: string;
-        phone: string;
-        profilePhotoUrl?: string;
-        rating: number;
-        vehicleInfo: {
-          type: string;
-          model: string;
-          color: string;
-          licensePlate: string;
-        };
-        currentLocation?: { latitude: number; longitude: number };
-      };
+      driver: any;
       acceptedAt: string;
       timestamp: string;
     }) => {
       console.log('[GLOBAL_SOCKET] ✅ Ride accepted event received (passenger):', data);
       if (user?.role !== 'passenger') return;
-      // Sound handled by local screen handler to avoid duplicate
-
-      const driverName = data.driver?.name || 'Conductor';
-      const vehicleDesc = data.driver?.vehicleInfo
-        ? `${data.driver.vehicleInfo.model} (${data.driver.vehicleInfo.licensePlate})`
-        : '';
-      const rating = data.driver?.rating ? ` ★ ${data.driver.rating.toFixed(1)}` : '';
-
-      showStatus(
-        'ride_accepted',
-        `${driverName}${rating} ha aceptado tu viaje.\n${vehicleDesc}`,
-        '✅ ¡Conductor Asignado!',
-        { rideId: data.rideId, driver: data.driver },
-        {
-          label: 'Ver',
-          onPress: () => {
-            // Navigation handled by parent component if needed
-          },
-        },
-        8000
-      );
+      // Notification is shown by the passenger's local screen handler (index.tsx)
+      // to provide vehicle details and payment prompt — showing it here would duplicate.
     },
-    [user?.role, playNotificationSound, showStatus]
+    [user?.role]
   );
 
   // Handler for ride:status_changed event (PASSENGER — status updates)

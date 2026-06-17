@@ -14,6 +14,7 @@ import React, {
   ErrorInfo,
   ReactNode,
 } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   View,
   Text,
@@ -146,9 +147,11 @@ function DriverEarningsScreenContent() {
     }
   }, [loadingMore, hasMore, offset, dateFilter, getDateParams]);
 
-  useEffect(() => {
-    loadInitialData();
-  }, [loadInitialData]);
+  useFocusEffect(
+    useCallback(() => {
+      loadInitialData();
+    }, [loadInitialData])
+  );
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextState => {

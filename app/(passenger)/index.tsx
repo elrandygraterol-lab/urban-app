@@ -29,7 +29,7 @@ import {
   SecondPickupIcon,
   SecondDropoffIcon,
 } from '@/src/components/map/markers';
-import { computeBearing } from '@/src/utils/mapNav';
+import { computeBearing, bearingAlongRoute, animateNavigationCamera, computeNearestRouteIndex } from '@/src/utils/mapNav';
 import { useAuthStore } from '@/store/authStore';
 import { rideAPI, paymentAPI, ratingAPI } from '@/services/api';
 import { reverseGeocode, getRoute, geocodeAddress } from '@/services/mapsService';
@@ -254,6 +254,7 @@ export default function PassengerHomeScreen() {
     usedFallback: boolean;
   } | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<RouteCoordinates[]>([]);
+  const [nearestRouteIndex, setNearestRouteIndex] = useState(0);
   const [isApproximateRoute, setIsApproximateRoute] = useState(false);
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
 
@@ -952,16 +953,7 @@ export default function PassengerHomeScreen() {
       prevDriverLocationRef.current = newDriverLocation;
 
       // ========== MEJORA 1: Actualización Dinámica de Ruta ==========
-      // Durante 'accepted': mostrar ruta del conductor → punto de recogida
-      if (
-        isDynamicRouteEnabled &&
-        activeRide?.status === 'accepted' &&
-        pickupLocation &&
-        Date.now() - lastRouteUpdate > 15000
-      ) {
-        updateDynamicRoute(newDriverLocation, pickupLocation);
-      }
-
+      // Durante 'accepted' y 'arrived': NO se traza ruta — el pasajero solo espera
       // Durante 'in_progress': mostrar ruta del conductor → destino
       if (
         isDynamicRouteEnabled &&
@@ -1157,20 +1149,24 @@ export default function PassengerHomeScreen() {
       setActiveRide((prev: any) => prev ? { ...prev, status: 'completed' } : null);
 
       // Show text-only notification — no buttons
+      const dualInfo = fareBreakdown?.exchangeRate && fareBreakdown.exchangeRate > 0
+        ? fareCurrency === 'USD'
+          ? `\n≈ Bs. ${(data.finalFare * fareBreakdown.exchangeRate).toFixed(2)}`
+          : `\n≈ $ ${(data.finalFare / fareBreakdown.exchangeRate).toFixed(2)}`
+        : '';
+
       showStatus(
         'success',
-        `Tu viaje ha finalizado exitosamente.\n\nTarifa Final: ${formatCurrency(data.finalFare, fareCurrency)}`,
+        `Tu viaje ha finalizado exitosamente.\n\nTarifa Final: ${formatCurrency(data.finalFare, fareCurrency)}${dualInfo}`,
         'Viaje Completado',
         undefined,
         undefined,
         4000
       );
 
-      // After notification dismisses, show rating modal automatically
-      setTimeout(() => {
-        console.log('[PASSENGER] Opening rating modal after ride completion');
-        setShowRatingModal(true);
-      }, 4200);
+      // Show rating modal immediately — no delay
+      console.log('[PASSENGER] Opening rating modal after ride completion');
+      setShowRatingModal(true);
     };
 
     // Register event listeners
@@ -1197,17 +1193,44 @@ export default function PassengerHomeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRide?.id, listenerVersion]); // Re-run when ride changes OR app returns to foreground
 
-  // Redraw route after foreground restore when driver location + destination are available
+  // Clear route when waiting for driver (accepted/arrived) — route only during in_progress
+  useEffect(() => {
+    if (!activeRide) return;
+    if ((activeRide.status === 'accepted' || activeRide.status === 'arrived') && routeCoordinates.length > 0) {
+      setRouteCoordinates([]);
+      setNearestRouteIndex(0);
+    }
+  }, [activeRide?.status]);
   useEffect(() => {
     if (!activeRide || !driverLocation || !isDynamicRouteEnabled) return;
-    if (listenerVersion === 0) return; // Skip initial mount — only redraw after a real restore
+    if (listenerVersion === 0) return;
 
-    if (activeRide.status === 'accepted' && pickupLocation) {
-      updateDynamicRoute(driverLocation, pickupLocation);
-    } else if (activeRide.status === 'in_progress' && destinationLocation) {
+    if (activeRide.status === 'in_progress' && destinationLocation) {
       updateDynamicRoute(driverLocation, destinationLocation);
     }
   }, [listenerVersion]); // eslint-disable-line
+
+  // Camera follows driver during the ride — same navigation experience as driver
+  useEffect(() => {
+    if (!activeRide || !driverLocation || !mapRef.current) return;
+    if (activeRide.status !== 'in_progress') return;
+
+    const heading = routeCoordinates.length >= 2
+      ? bearingAlongRoute(routeCoordinates, driverLocation)
+      : 0;
+
+    animateNavigationCamera(mapRef, driverLocation, heading, {
+      duration: 1000,
+      zoom: 17,
+    });
+  }, [driverLocation?.latitude, driverLocation?.longitude, routeCoordinates, activeRide?.status]);
+
+  // Compute nearest route index for polyline trimming — matches driver behavior
+  useEffect(() => {
+    if (!driverLocation || routeCoordinates.length < 2) return;
+    const idx = computeNearestRouteIndex(routeCoordinates, driverLocation);
+    setNearestRouteIndex(idx);
+  }, [driverLocation, routeCoordinates]);
 
   // Shared ride invitation listeners (Req. 7.3, 7.4)
   // These run independently of active rides
@@ -3015,8 +3038,11 @@ export default function PassengerHomeScreen() {
               </Marker>
             )}
 
-            {/* Punto de recogida */}
-            {pickupLocation && typeof pickupLocation.latitude === 'number' && activeRide && activeRide.status !== 'completed' && activeRide.status !== 'cancelled' && (
+            {/* Punto de recogida — solo visible si es distinto a la ubicación del pasajero */}
+            {pickupLocation && typeof pickupLocation.latitude === 'number' && activeRide?.status === 'accepted' && currentLocation && (
+              (Math.abs(pickupLocation.latitude - currentLocation.latitude) > 0.0001 ||
+               Math.abs(pickupLocation.longitude - currentLocation.longitude) > 0.0001)
+            ) && (
               <Marker
                 coordinate={{
                   latitude: Number(pickupLocation.latitude),
@@ -3030,7 +3056,7 @@ export default function PassengerHomeScreen() {
               </Marker>
             )}
 
-            {/* Ubicacion actual del pasajero — oculta durante el viaje */}
+            {/* Ubicacion actual del pasajero — se oculta solo cuando inicia el viaje */}
             {currentLocation && typeof currentLocation.latitude === 'number' && activeRide?.status !== 'in_progress' && (
               <Marker
                 coordinate={{
@@ -3056,7 +3082,7 @@ export default function PassengerHomeScreen() {
                 identifier="destination"
                 anchor={{ x: 0.5, y: 0.5 }}
               >
-                <DropoffIcon />
+                <DropoffIcon size={44} />
               </Marker>
             )}
 
@@ -3090,9 +3116,21 @@ export default function PassengerHomeScreen() {
               </Marker>
             )}
 
-            {/* Driver route line */}
-            {routeCoordinates.length > 1 && (
-              <Polyline coordinates={routeCoordinates} strokeColor="#22C55E" strokeWidth={3} />
+            {/* Route line — shown before ride request and during in_progress */}
+            {(!activeRide || activeRide.status === 'pending' || activeRide.status === 'in_progress') && routeCoordinates.length > 1 && (
+              <Polyline
+                coordinates={
+                  routeCoordinates.length >= 2 && nearestRouteIndex > 0
+                    ? routeCoordinates.slice(nearestRouteIndex)
+                    : routeCoordinates
+                }
+                strokeColor={
+                  activeRide?.status === 'accepted' ? '#FF8C00' : '#22C55E'
+                }
+                strokeWidth={4}
+                lineCap="round"
+                lineJoin="round"
+              />
             )}
 
             {/* Nearby Landmarks */}
@@ -4448,6 +4486,13 @@ export default function PassengerHomeScreen() {
                       <Text style={styles.confirmationFareAmount}>
                         {formatCurrency(finalFare || estimatedFare || 0, fareCurrency)}
                       </Text>
+                      {fareBreakdown?.exchangeRate && fareBreakdown.exchangeRate > 0 && (
+                        <Text style={styles.confirmationFareDual}>
+                          {fareCurrency === 'USD'
+                            ? `≈ Bs. ${((finalFare || estimatedFare || 0) * fareBreakdown.exchangeRate).toFixed(2)}`
+                            : `≈ $ ${((finalFare || estimatedFare || 0) / fareBreakdown.exchangeRate).toFixed(2)}`}
+                        </Text>
+                      )}
                     </View>
 
                     <Text style={styles.receiptNote}>
@@ -6375,6 +6420,12 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: 'bold',
     color: '#22c55e',
+  },
+  confirmationFareDual: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginTop: 4,
   },
   receiptNote: {
     fontSize: 13,

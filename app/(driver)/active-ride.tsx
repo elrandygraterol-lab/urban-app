@@ -15,6 +15,7 @@ import {
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useDriverStore } from '@/store/driverStore';
 import Constants from 'expo-constants';
 import api from '@/services/api';
 import { getRoute } from '@/services/mapsService';
@@ -92,6 +93,7 @@ interface Step {
 export default function ActiveRideScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
+  const { setIsAvailable } = useDriverStore();
   const rideId = params.rideId as string;
   const isManualFlow = params.source === 'manual';
   const { playNotificationSound } = useSound();
@@ -775,10 +777,17 @@ export default function ActiveRideScreen() {
       // Play notification sound
       playNotificationSound();
 
-      // Build cancellation message
-      let message = `El pasajero ha cancelado el viaje`;
+      // Build cancellation message based on who cancelled and why
+      let message: string;
+      if (data.cancellationReason === 'payment_timeout' || data.cancellationReason?.includes('timeout') || data.cancelledBy === 'system') {
+        message = 'El tiempo de pago se ha agotado.\nEl pasajero no completó el pago a tiempo.';
+      } else if (data.cancelledBy === 'driver') {
+        message = 'Has cancelado el viaje.';
+      } else {
+        message = 'El pasajero ha cancelado el viaje.';
+      }
 
-      if (data.cancellationReason) {
+      if (data.cancellationReason && data.cancellationReason !== 'payment_timeout') {
         message += `\n\nMotivo: ${data.cancellationReason}`;
       }
 
@@ -787,15 +796,14 @@ export default function ActiveRideScreen() {
         message += `\n\nCompensación recibida: Bs. ${data.cancellationFee.toFixed(2)}`;
       }
 
-      showStatus('ride_cancelled', message, 'Viaje Cancelado', undefined, {
-        label: 'Entendido',
-        onPress: () => router.replace('/(driver)'),
-      });
-
-      // Update ride state to reflect cancellation
-      // Since 'cancelled' is not a valid status in the Ride interface,
-      // we simply set ride to null to indicate the ride is no longer active.
+      // Restore driver availability
+      setIsAvailable(true);
       setRide(null);
+
+      showStatus('ride_cancelled', message, 'Viaje Cancelado');
+
+      // Auto-redirect to home after notification shows
+      setTimeout(() => router.replace('/(driver)'), 3000);
     };
 
     // Listen for payment method change by passenger (Req. 3.4)
@@ -1100,6 +1108,7 @@ export default function ActiveRideScreen() {
       setRouteCoordinates([]);
       setRouteSteps([]);
       showToast('Valoración enviada exitosamente.', 'success');
+      setIsAvailable(true);
       setTimeout(() => router.replace('/(driver)'), 800);
     } catch (error) {
       console.error('Failed to submit rating:', error);
@@ -1113,6 +1122,7 @@ export default function ActiveRideScreen() {
     setShowRatingModal(false);
     setRouteCoordinates([]);
     setRouteSteps([]);
+    setIsAvailable(true);
     setTimeout(() => router.replace('/(driver)'), 800);
   };
 
