@@ -26,6 +26,7 @@ export const useGlobalSocketListeners = ({
   
   // Ref to track if listeners are already registered
   const listenersRegisteredRef = useRef(false);
+  const registeredSocketIdRef = useRef<string | null>(null);
   const connectHandlerRef = useRef<(() => void) | null>(null);
   const disconnectHandlerRef = useRef<((reason: string) => void) | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -345,9 +346,9 @@ export const useGlobalSocketListeners = ({
       console.log('[GLOBAL_SOCKET]    Socket transport:', socket.io?.engine?.transport?.name || 'unknown');
       console.log('[GLOBAL_SOCKET]    listenersRegisteredRef:', listenersRegisteredRef.current);
 
-      // Check if listeners are already registered for this socket
-      if (listenersRegisteredRef.current && socket.id) {
-        console.log('[GLOBAL_SOCKET] ⚠️ Listeners already registered, skipping duplicate registration');
+      // Check if listeners are already registered for THIS socket
+      if (listenersRegisteredRef.current && socket.id && registeredSocketIdRef.current === socket.id) {
+        console.log('[GLOBAL_SOCKET] ⚠️ Listeners already registered on this socket, skipping');
         return;
       }
 
@@ -427,9 +428,10 @@ export const useGlobalSocketListeners = ({
         console.log('[GLOBAL_SOCKET]    ✓ Listener count OK');
       }
 
-      // Mark listeners as registered
+      // Mark listeners as registered on this socket
       listenersRegisteredRef.current = true;
-      console.log('[GLOBAL_SOCKET]    listenersRegisteredRef set to TRUE');
+      registeredSocketIdRef.current = socket.id || null;
+      console.log('[GLOBAL_SOCKET]    listenersRegisteredRef set to TRUE for socket:', socket.id);
 
       // Handle socket reconnection - re-register listeners with fresh callbacks
       connectHandlerRef.current = () => {
@@ -442,7 +444,8 @@ export const useGlobalSocketListeners = ({
         
         // Reset flag and re-register on reconnection
         listenersRegisteredRef.current = false;
-        console.log('[GLOBAL_SOCKET]    listenersRegisteredRef set to FALSE, calling registerListeners...');
+        registeredSocketIdRef.current = null;
+        console.log('[GLOBAL_SOCKET]    listenersRegisteredRef reset for reconnection');
         registerListeners(socket);
       };
 
@@ -651,6 +654,7 @@ export const useGlobalSocketListeners = ({
       
       // Reset flag on cleanup
       listenersRegisteredRef.current = false;
+      registeredSocketIdRef.current = null;
       console.log('[GLOBAL_SOCKET]    listenersRegisteredRef reset to FALSE');
       console.log('[GLOBAL_SOCKET] ========== CLEANUP COMPLETE ==========');
     }

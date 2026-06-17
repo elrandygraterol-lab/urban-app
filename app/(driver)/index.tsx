@@ -454,20 +454,6 @@ export default function DriverHomeScreen() {
 
       // Evento 'ride:payment_completed' ahora se maneja globalmente en useGlobalSocketListeners
 
-      // Defensive local ride:request_created listener — ensures driver always receives requests
-      socket.off('ride:request_created');
-      socket.on('ride:request_created', (data: any) => {
-        console.log('[DRIVER] 🚗 RIDE REQUEST RECEIVED (LOCAL):', data.id, data.passengerName);
-        playNotificationSound();
-        showRideRequest({
-          ...data,
-          passengerRating: 0,
-          estimatedDuration: Math.round((data.distance / 25) * 60),
-          vehicleType: data.vehicleType || 'taxi',
-        });
-      });
-      console.log('[DRIVER]    ✓ ride:request_created registered (local defensive)');
-
       // Add connection status listeners for debugging (store refs for targeted cleanup)
       connectHandlerRef.current = () => {
         console.log('[DRIVER] ========================================');
@@ -513,7 +499,7 @@ export default function DriverHomeScreen() {
 
       localListenersRegisteredRef.current = true;
     },
-    [handleRideCancelled, handleAvailabilityChanged, showRideRequest, playNotificationSound, user?.id, user?.role]
+    [handleRideCancelled, handleAvailabilityChanged, user?.id, user?.role]
   );
 
   const initializeSocket = useCallback(async () => {
@@ -547,6 +533,21 @@ export default function DriverHomeScreen() {
 
       // Setup listeners initially with fresh callback references
       setupSocketListeners(socket);
+
+      // CRITICAL: Always register ride:request_created directly — never skip
+      // This must work regardless of any wrapper function guards
+      socket.off('ride:request_created');
+      socket.on('ride:request_created', (data: any) => {
+        console.log('[DRIVER] 🚗 RIDE REQUEST (DIRECT):', data.id, data.passengerName);
+        playNotificationSound();
+        showRideRequest({
+          ...data,
+          passengerRating: 0,
+          estimatedDuration: Math.round((data.distance / 25) * 60),
+          vehicleType: data.vehicleType || 'taxi',
+        });
+      });
+      console.log('[DRIVER]    ✓ ride:request_created registered (direct — always on)');
 
       // Re-setup listeners on reconnection with fresh callback references
       reconnectHandlerRef.current = () => {

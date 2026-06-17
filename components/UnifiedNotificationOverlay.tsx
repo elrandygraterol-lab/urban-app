@@ -411,16 +411,16 @@ const StatusBanner: React.FC<{
 
   const animateOut = React.useCallback(() => {
     Animated.parallel([
-      Animated.timing(translateY, { toValue: -120, duration: 300, useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: -120, duration: 250, useNativeDriver: false }),
+      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: false }),
     ]).start(() => onDismiss());
   }, [translateY, opacity, onDismiss]);
 
   useEffect(() => {
-    // Slide-in animation
+    // Slide-in animation — useNativeDriver: false keeps touch area synced with visual position
     Animated.parallel([
-      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 90, friction: 10 }),
-      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.spring(translateY, { toValue: 0, useNativeDriver: false, tension: 90, friction: 10 }),
+      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: false }),
     ]).start();
 
     // Auto-dismiss
@@ -469,11 +469,15 @@ const StatusBanner: React.FC<{
         {status.action && (
           <TouchableOpacity
             style={[styles.statusActionBtn, { backgroundColor: config.accentColor }]}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            activeOpacity={0.7}
             onPress={() => {
+              if (dismissTimer.current) {
+                clearTimeout(dismissTimer.current);
+                dismissTimer.current = null;
+              }
               const actionFn = status.action?.onPress;
-              onDismiss();
               if (actionFn) actionFn();
+              onDismiss();
             }}
           >
             <Text style={styles.statusActionText}>{status.action.label}</Text>

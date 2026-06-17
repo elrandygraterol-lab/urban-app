@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
   Switch,
+  Alert,
   ActivityIndicator,
   Image,
 } from 'react-native';
