@@ -69,15 +69,20 @@ export default function DriverRideHistoryScreen() {
 
         if (payload?.rides && Array.isArray(payload.rides)) {
           ridesData = payload.rides;
-          total = payload.total ?? ridesData.length;
-          pages = payload.totalPages ?? 1;
+          const pagination = payload.pagination;
+          total = pagination?.totalCount ?? ridesData.length;
+          pages = pagination?.totalPages ?? 1;
         } else if (Array.isArray(payload)) {
           ridesData = payload;
           total = ridesData.length;
         }
 
         if (append) {
-          setRides(prev => [...prev, ...ridesData]);
+          setRides(prev => {
+            const existingIds = new Set(prev.map(r => r.id));
+            const newRides = ridesData.filter(r => !existingIds.has(r.id));
+            return [...prev, ...newRides];
+          });
         } else {
           setRides(ridesData);
         }
@@ -250,84 +255,86 @@ export default function DriverRideHistoryScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Detalles del Viaje</Text>
               <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setSelectedRide(null)}>
-                <Ionicons name="close" size={22} color="#6b7280" />
+                <Ionicons name="close" size={20} color="#6b7280" />
               </TouchableOpacity>
             </View>
 
-            <View style={[styles.detailStatusBar, { backgroundColor: statusConfig.bg }]}>
-              <View style={[styles.detailStatusDot, { backgroundColor: statusConfig.color }]} />
-              <Text style={[styles.detailStatusText, { color: statusConfig.color }]}>
-                {statusConfig.label}
-              </Text>
-              <Text style={styles.detailStatusVehicle}>
+            {/* Status + Vehicle */}
+            <View style={styles.detailHeader}>
+              <View style={[styles.detailStatusPill, { backgroundColor: statusConfig.bg }]}>
+                <View style={[styles.detailStatusDot, { backgroundColor: statusConfig.color }]} />
+                <Text style={[styles.detailStatusPillText, { color: statusConfig.color }]}>
+                  {statusConfig.label}
+                </Text>
+              </View>
+              <Text style={styles.detailVehicleTag}>
                 {selectedRide.vehicleType === 'taxi' ? 'Taxi' : 'Moto-Taxi'}
               </Text>
             </View>
 
-            <FlatList
-              data={[
-                {
-                  icon: 'calendar-outline' as const,
-                  label: 'Fecha y Hora',
-                  value: `${formatDate(selectedRide.completedAt || selectedRide.requestedAt)} — ${formatTime(selectedRide.completedAt || selectedRide.requestedAt)}`,
-                },
-                {
-                  icon: 'location-outline' as const,
-                  label: 'Origen',
-                  value: selectedRide.pickup?.address || '—',
-                },
-                {
-                  icon: 'flag-outline' as const,
-                  label: 'Destino',
-                  value: selectedRide.destination?.address || '—',
-                },
-                ...(selectedRide.passenger
-                  ? [
-                      {
-                        icon: 'person-outline' as const,
-                        label: 'Pasajero',
-                        value: selectedRide.passenger.name,
-                      },
-                    ]
-                  : []),
-                ...(selectedRide.distance != null
-                  ? [
-                      {
-                        icon: 'navigate-outline' as const,
-                        label: 'Distancia',
-                        value: `${selectedRide.distance.toFixed(2)} km`,
-                      },
-                    ]
-                  : []),
-                ...(selectedRide.duration != null
-                  ? [
-                      {
-                        icon: 'time-outline' as const,
-                        label: 'Duración',
-                        value: `${selectedRide.duration} minutos`,
-                      },
-                    ]
-                  : []),
-              ]}
-              keyExtractor={(_, i) => i.toString()}
-              renderItem={({ item }) => (
-                <View style={styles.detailRow}>
-                  <View style={styles.detailIconBox}>
-                    <Ionicons name={item.icon} size={18} color={Colors.primary} />
-                  </View>
-                  <View style={styles.detailTextCol}>
-                    <Text style={styles.detailLabel}>{item.label}</Text>
-                    <Text style={styles.detailValue}>{item.value}</Text>
-                  </View>
+            {/* Fare — prominent */}
+            <View style={styles.detailFareHero}>
+              <Text style={styles.detailFareHeroLabel}>Tarifa</Text>
+              <Text style={styles.detailFareHeroValue}>{formatCurrency(fare, rideCurrency)}</Text>
+            </View>
+
+            {/* Info cards */}
+            <View style={styles.detailInfoGrid}>
+              <View style={styles.detailInfoCard}>
+                <Ionicons name="calendar-outline" size={15} color="#6b7280" />
+                <Text style={styles.detailInfoLabel}>Fecha</Text>
+                <Text style={styles.detailInfoValue}>
+                  {formatDate(selectedRide.completedAt || selectedRide.requestedAt)}
+                </Text>
+                <Text style={styles.detailInfoSub}>
+                  {formatTime(selectedRide.completedAt || selectedRide.requestedAt)}
+                </Text>
+              </View>
+
+              {selectedRide.distance != null && (
+                <View style={styles.detailInfoCard}>
+                  <Ionicons name="navigate-outline" size={15} color="#6b7280" />
+                  <Text style={styles.detailInfoLabel}>Distancia</Text>
+                  <Text style={styles.detailInfoValue}>{selectedRide.distance.toFixed(1)} km</Text>
                 </View>
               )}
-              showsVerticalScrollIndicator={false}
-              style={{ maxHeight: 320 }}
-            />
 
-            <View style={styles.detailFareCard}>
-              <Text style={styles.detailFareLabel}>Tarifa</Text>
-              <Text style={styles.detailFareValue}>{formatCurrency(fare, rideCurrency)}</Text>
+              {selectedRide.duration != null && (
+                <View style={styles.detailInfoCard}>
+                  <Ionicons name="time-outline" size={15} color="#6b7280" />
+                  <Text style={styles.detailInfoLabel}>Duración</Text>
+                  <Text style={styles.detailInfoValue}>{selectedRide.duration} min</Text>
+                </View>
+              )}
+
+              {selectedRide.passenger && (
+                <View style={styles.detailInfoCard}>
+                  <Ionicons name="person-outline" size={15} color="#6b7280" />
+                  <Text style={styles.detailInfoLabel}>Pasajero</Text>
+                  <Text style={styles.detailInfoValue} numberOfLines={1}>
+                    {selectedRide.passenger.name}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Route card */}
+            <View style={styles.detailRouteCard}>
+              <View style={styles.detailRouteItem}>
+                <View style={styles.detailRouteDotPickup} />
+                <View style={styles.detailRouteTextCol}>
+                  <Text style={styles.detailRouteLabel}>Origen</Text>
+                  <Text style={styles.detailRouteAddress}>{selectedRide.pickup?.address || '—'}</Text>
+                </View>
+              </View>
+              <View style={styles.detailRouteLine} />
+              <View style={styles.detailRouteItem}>
+                <View style={styles.detailRouteDotDest} />
+                <View style={styles.detailRouteTextCol}>
+                  <Text style={styles.detailRouteLabel}>Destino</Text>
+                  <Text style={styles.detailRouteAddress}>{selectedRide.destination?.address || '—'}</Text>
+                </View>
+              </View>
             </View>
           </View>
         </View>
@@ -848,82 +855,138 @@ const styles = StyleSheet.create({
   },
 
   // Detail Modal
-  detailStatusBar: {
+  detailHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    marginBottom: 16,
-    gap: 8,
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  detailStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    gap: 6,
   },
   detailStatusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
-  detailStatusText: {
-    fontSize: 14,
+  detailStatusPillText: {
+    fontSize: 12,
     fontWeight: '700',
-    flex: 1,
   },
-  detailStatusVehicle: {
+  detailVehicleTag: {
     fontSize: 12,
     color: '#9ca3af',
     fontWeight: '500',
   },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 14,
-    gap: 12,
-  },
-  detailIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#f0fdf4',
-    justifyContent: 'center',
+  detailFareHero: {
     alignItems: 'center',
-    marginTop: 2,
+    paddingVertical: 20,
+    marginBottom: 14,
+    backgroundColor: '#f9fafb',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
   },
-  detailTextCol: {
-    flex: 1,
-  },
-  detailLabel: {
-    fontSize: 12,
+  detailFareHeroLabel: {
+    fontSize: 11,
     color: '#9ca3af',
     fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
+    letterSpacing: 0.8,
+    marginBottom: 4,
   },
-  detailValue: {
-    fontSize: 15,
-    color: '#111827',
-    fontWeight: '500',
-    lineHeight: 20,
-  },
-  detailFareCard: {
-    backgroundColor: '#f0fdf4',
-    borderRadius: 14,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-  },
-  detailFareLabel: {
-    fontSize: 14,
-    color: '#6b7280',
-    fontWeight: '600',
-  },
-  detailFareValue: {
-    fontSize: 24,
+  detailFareHeroValue: {
+    fontSize: 28,
     fontWeight: '800',
     color: Colors.primary,
+  },
+  detailInfoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  detailInfoCard: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 10,
+    padding: 12,
+    minWidth: '30%',
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
+  },
+  detailInfoLabel: {
+    fontSize: 10,
+    color: '#9ca3af',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  detailInfoValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  detailInfoSub: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 1,
+  },
+  detailRouteCard: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
+  },
+  detailRouteItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  detailRouteDotPickup: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: Colors.primary,
+    marginTop: 3,
+  },
+  detailRouteDotDest: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#f97316',
+    marginTop: 3,
+  },
+  detailRouteTextCol: {
+    flex: 1,
+  },
+  detailRouteLabel: {
+    fontSize: 10,
+    color: '#9ca3af',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 1,
+  },
+  detailRouteAddress: {
+    fontSize: 13,
+    color: '#374151',
+    lineHeight: 19,
+  },
+  detailRouteLine: {
+    width: 1,
+    height: 20,
+    backgroundColor: '#e5e7eb',
+    marginLeft: 4,
+    marginVertical: 4,
   },
 
   // Filters

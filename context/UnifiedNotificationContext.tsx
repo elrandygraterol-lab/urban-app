@@ -73,6 +73,20 @@ export interface StatusNotification {
   durationMs?: number; // default: 5000
 }
 
+export interface ActionSheetOption {
+  label: string;
+  icon?: keyof typeof import('@expo/vector-icons').Ionicons.glyphMap;
+  onPress: () => void;
+  destructive?: boolean;
+}
+
+export interface ActionSheetState {
+  id: string;
+  title: string;
+  message?: string;
+  options: ActionSheetOption[];
+}
+
 export interface UnifiedNotificationState {
   /** Active ride request (driver-side) — shows accept/reject modal */
   activeRideRequest: RideRequestData | null;
@@ -82,6 +96,9 @@ export interface UnifiedNotificationState {
 
   /** Active status banner (centered card with icon, title, message, optional action) */
   activeStatus: StatusNotification | null;
+
+  /** Active action sheet (bottom sheet with multiple options) */
+  activeActionSheet: ActionSheetState | null;
 }
 
 export interface UnifiedNotificationActions {
@@ -100,6 +117,9 @@ export interface UnifiedNotificationActions {
     durationMs?: number
   ) => void;
   dismissStatus: () => void;
+
+  showActionSheet: (title: string, options: ActionSheetOption[], message?: string) => void;
+  dismissActionSheet: () => void;
 
   /** Convenience: shows a quick success toast */
   showSuccess: (message: string, durationMs?: number) => void;
@@ -126,6 +146,7 @@ export const UnifiedNotificationProvider: React.FC<{ children: React.ReactNode }
   const [activeRideRequest, setActiveRideRequest] = useState<RideRequestData | null>(null);
   const [toastQueue, setToastQueue] = useState<ToastItem[]>([]);
   const [activeStatus, setActiveStatus] = useState<StatusNotification | null>(null);
+  const [activeActionSheet, setActiveActionSheet] = useState<ActionSheetState | null>(null);
 
   // ── Ride Request ──────────────────────────────────────────────────────────
 
@@ -185,6 +206,20 @@ export const UnifiedNotificationProvider: React.FC<{ children: React.ReactNode }
     setActiveStatus(null);
   }, []);
 
+  // ── Action Sheet ──────────────────────────────────────────────────────────
+
+  const showActionSheet = useCallback(
+    (title: string, options: ActionSheetOption[], message?: string) => {
+      const id = `as-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      setActiveActionSheet({ id, title, message, options });
+    },
+    []
+  );
+
+  const dismissActionSheet = useCallback(() => {
+    setActiveActionSheet(null);
+  }, []);
+
   // ── Convenience ───────────────────────────────────────────────────────────
 
   const showSuccess = useCallback((message: string, durationMs?: number) => {
@@ -209,12 +244,15 @@ export const UnifiedNotificationProvider: React.FC<{ children: React.ReactNode }
     activeRideRequest,
     toastQueue,
     activeStatus,
+    activeActionSheet,
     showRideRequest,
     dismissRideRequest,
     showToast,
     dismissToast,
     showStatus,
     dismissStatus,
+    showActionSheet,
+    dismissActionSheet,
     showSuccess,
     showError,
     showWarning,

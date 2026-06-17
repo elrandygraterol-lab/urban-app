@@ -203,6 +203,9 @@ export default function PassengerHomeScreen() {
   const [isRequestingRide, setIsRequestingRide] = useState(false);
   const [isSearchingDriver, setIsSearchingDriver] = useState(false);
   const [userInteractedWithMap, setUserInteractedWithMap] = useState(false);
+
+  // Dynamic search context — resolves city/state from user location for precise geocoding
+  const [searchContext, setSearchContext] = useState<string>('Venezuela');
   const [vehicleType, setVehicleType] = useState<'taxi' | 'moto_taxi'>('taxi');
   const [motoQuantity, setMotoQuantity] = useState<1 | 2>(1);
   const [estimatedFare, setEstimatedFare] = useState<number | null>(null);
@@ -1582,6 +1585,32 @@ export default function PassengerHomeScreen() {
     [initialDistanceToDestination]
   );
 
+  // Resolve dynamic search context from user's current location via reverse geocoding
+  useEffect(() => {
+    if (!currentLocation) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const loc = await reverseGeocode(currentLocation.latitude, currentLocation.longitude);
+        if (!cancelled && loc?.address) {
+          // Extract state/region from address (e.g. "Avenida Bolívar, Valencia, Carabobo, 2001, Venezuela")
+          const parts = loc.address.split(', ');
+          const countryIdx = parts.findIndex(p => p.toLowerCase().includes('venezuela'));
+          if (countryIdx > 0) {
+            const state = parts[countryIdx - 1];
+            const ctx = [state, 'Venezuela'].filter(Boolean).join(', ');
+            setSearchContext(ctx);
+          }
+        }
+      } catch {
+        // Keep default 'Venezuela' context
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [currentLocation]);
+
   // ========== MEJORA 3: Buscar Puntos de Interés Cercanos ==========
   const fetchNearbyLandmarks = useCallback(async (location: LocationCoords) => {
     try {
@@ -2008,22 +2037,10 @@ export default function PassengerHomeScreen() {
       // Keep the original user input
       const userInput = destinationAddress.trim();
 
-      // Build search query with context (behind the scenes)
+      // Build search query with dynamic location context
       let searchQuery = userInput;
-
-      // Add San Juan de los Morros context if not specified
-      const hasCityContext =
-        searchQuery.toLowerCase().includes('san juan') ||
-        searchQuery.toLowerCase().includes('venezuela') ||
-        searchQuery.toLowerCase().includes('guárico') ||
-        searchQuery.toLowerCase().includes('guarico');
-
-      if (!hasCityContext) {
-        // Si no menciona ciudad, agregar San Juan de los Morros (solo para la búsqueda)
-        searchQuery = `${searchQuery}, San Juan de los Morros, Guárico, Venezuela`;
-      } else if (!searchQuery.toLowerCase().includes('venezuela')) {
-        // Si menciona ciudad pero no país, agregar Venezuela (solo para la búsqueda)
-        searchQuery = `${searchQuery}, Venezuela`;
+      if (!searchQuery.toLowerCase().includes('venezuela')) {
+        searchQuery = `${searchQuery}, ${searchContext}`;
       }
 
       console.log('[GEOCODING] User input:', userInput);
@@ -2090,22 +2107,10 @@ export default function PassengerHomeScreen() {
       // Keep the original user input
       const userInput = pickupAddress.trim();
 
-      // Build search query with context (behind the scenes)
+      // Build search query with dynamic location context
       let searchQuery = userInput;
-
-      // Add San Juan de los Morros context if not specified
-      const hasCityContext =
-        searchQuery.toLowerCase().includes('san juan') ||
-        searchQuery.toLowerCase().includes('venezuela') ||
-        searchQuery.toLowerCase().includes('guárico') ||
-        searchQuery.toLowerCase().includes('guarico');
-
-      if (!hasCityContext) {
-        // Si no menciona ciudad, agregar San Juan de los Morros (solo para la búsqueda)
-        searchQuery = `${searchQuery}, San Juan de los Morros, Guárico, Venezuela`;
-      } else if (!searchQuery.toLowerCase().includes('venezuela')) {
-        // Si menciona ciudad pero no país, agregar Venezuela (solo para la búsqueda)
-        searchQuery = `${searchQuery}, Venezuela`;
+      if (!searchQuery.toLowerCase().includes('venezuela')) {
+        searchQuery = `${searchQuery}, ${searchContext}`;
       }
 
       console.log('[PICKUP GEOCODING] User input:', userInput);
@@ -3585,8 +3590,7 @@ export default function PassengerHomeScreen() {
                                       if (!secondPickupAddress.trim()) return;
                                       try {
                                         const loc = await geocodeAddress(
-                                          secondPickupAddress +
-                                            ', San Juan de los Morros, Guárico, Venezuela'
+                                          secondPickupAddress + `, ${searchContext}`
                                         );
                                         if (loc) {
                                           setSecondPickupLocation({
@@ -3730,8 +3734,7 @@ export default function PassengerHomeScreen() {
                                       if (!secondDestinationAddress.trim()) return;
                                       try {
                                         const loc = await geocodeAddress(
-                                          secondDestinationAddress +
-                                            ', San Juan de los Morros, Guárico, Venezuela'
+                                          secondDestinationAddress + `, ${searchContext}`
                                         );
                                         if (loc) {
                                           setSecondDestinationLocation({
@@ -4518,57 +4521,83 @@ export default function PassengerHomeScreen() {
             activeOpacity={1}
             onPress={() => setShowContactModal(false)}
           >
-              <TouchableOpacity
-                style={styles.contactModalContent}
-                activeOpacity={1}
-                onPress={() => {}}
-              >
-                {/* Header sin foto */}
-                <Text style={styles.contactHeaderName}>
-                  Contactar a {activeRide?.driver?.name || 'el conductor'}
+            <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+              <View style={{
+                backgroundColor: '#fff',
+                borderRadius: 16,
+                padding: 24,
+                width: '100%',
+                maxWidth: 320,
+                alignSelf: 'center',
+                alignItems: 'center',
+              }}>
+                <Text style={{ fontSize: 17, fontWeight: '700', color: '#1f2937', textAlign: 'center', marginBottom: 4 }}>
+                  Contactar al Conductor
                 </Text>
-                <View style={styles.contactPhoneRow}>
-                  <Ionicons name="call-outline" size={14} color="#6b7280" />
-                  <Text style={styles.contactPhoneText}>
-                    {activeRide?.driver?.phone || 'No disponible'}
-                  </Text>
-                </View>
-
-                <View style={styles.contactDivider} />
-                <Text style={styles.contactOptionsTitle}>Selecciona el método de contacto</Text>
-
-                <TouchableOpacity style={styles.contactOptionRow} onPress={handlePhoneCall}>
-                  <Ionicons name="call" size={20} color="#22c55e" style={{ marginRight: 12 }} />
-                  <View style={styles.contactOptionInfo}>
-                    <Text style={styles.contactOptionLabel}>Llamada telefónica</Text>
-                    <Text style={styles.contactOptionDesc}>Llamar directamente</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color="#d1d5db" />
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.contactOptionRow} onPress={handleWhatsAppCall}>
-                  <Ionicons name="logo-whatsapp" size={20} color="#25D366" style={{ marginRight: 12 }} />
-                  <View style={styles.contactOptionInfo}>
-                    <Text style={styles.contactOptionLabel}>WhatsApp</Text>
-                    <Text style={styles.contactOptionDesc}>Abrir conversación</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color="#d1d5db" />
-                </TouchableOpacity>
-
-                <View style={styles.contactNote}>
-                  <Ionicons name="information-circle-outline" size={14} color="#22c55e" />
-                  <Text style={styles.contactNoteText}>
-                    Solo si es necesario para coordinar el viaje.
-                  </Text>
-                </View>
+                <Text style={{ fontSize: 13, color: '#6b7280', textAlign: 'center', marginBottom: 24 }}>
+                  {activeRide?.driver?.phone || 'No disponible'}
+                </Text>
 
                 <TouchableOpacity
-                  style={styles.contactCancelBtn}
-                  onPress={() => setShowContactModal(false)}
+                  onPress={handlePhoneCall}
+                  activeOpacity={0.8}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    width: '100%',
+                    backgroundColor: '#f0fdf4',
+                    borderRadius: 12,
+                    padding: 14,
+                    marginBottom: 10,
+                    borderWidth: 1,
+                    borderColor: '#bbf7d0',
+                    gap: 12,
+                  }}
                 >
-                  <Text style={styles.contactCancelBtnText}>Cancelar</Text>
+                  <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: '#16a34a', justifyContent: 'center', alignItems: 'center' }}>
+                    <Ionicons name="call" size={20} color="#fff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937' }}>Llamada Telefónica</Text>
+                    <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 1 }}>Marcar directamente</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
                 </TouchableOpacity>
-              </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleWhatsAppCall}
+                  activeOpacity={0.8}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    width: '100%',
+                    backgroundColor: '#f0fdf4',
+                    borderRadius: 12,
+                    padding: 14,
+                    marginBottom: 16,
+                    borderWidth: 1,
+                    borderColor: '#bbf7d0',
+                    gap: 12,
+                  }}
+                >
+                  <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: '#25D366', justifyContent: 'center', alignItems: 'center' }}>
+                    <Ionicons name="logo-whatsapp" size={22} color="#fff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937' }}>WhatsApp</Text>
+                    <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 1 }}>Abrir conversación</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setShowContactModal(false)}
+                  style={{ paddingVertical: 8, paddingHorizontal: 24 }}
+                >
+                  <Text style={{ fontSize: 14, color: '#9ca3af', fontWeight: '600' }}>Cancelar</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
           </TouchableOpacity>
         </Modal>
       </View>

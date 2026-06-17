@@ -199,7 +199,7 @@ export const useGlobalSocketListeners = ({
     }) => {
       console.log('[GLOBAL_SOCKET] ✅ Ride accepted event received (passenger):', data);
       if (user?.role !== 'passenger') return;
-      playNotificationSound();
+      // Sound handled by local screen handler to avoid duplicate
 
       const driverName = data.driver?.name || 'Conductor';
       const vehicleDesc = data.driver?.vehicleInfo
@@ -238,7 +238,7 @@ export const useGlobalSocketListeners = ({
     }) => {
       console.log('[GLOBAL_SOCKET] 🔄 Ride status changed event received:', data);
       if (user?.role !== 'passenger') return;
-      playNotificationSound();
+      // Sound handled by local screen handler to avoid duplicate
 
       switch (data.status) {
         case 'arrived':

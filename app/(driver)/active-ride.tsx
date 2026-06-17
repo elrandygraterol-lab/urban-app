@@ -44,6 +44,7 @@ interface Ride {
   passengerName: string;
   passengerPhone: string;
   passengerProfilePicture?: string;
+  passengerRating?: number;
   isDelegated?: boolean;
   pickupAddress: string;
   destinationAddress: string;
@@ -152,6 +153,9 @@ export default function ActiveRideScreen() {
   const [passengerComment, setPassengerComment] = useState('');
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [finalFare, setFinalFare] = useState<number | null>(null);
+
+  // Call modal state
+  const [showCallModal, setShowCallModal] = useState(false);
 
   // Panel collapse state
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
@@ -491,7 +495,8 @@ export default function ActiveRideScreen() {
           if (now - lastRouteUpdateRef.current > ROUTE_UPDATE_INTERVAL) {
             console.log('[ACTIVE_RIDE] 🔄 Periodic route update');
             lastRouteUpdateRef.current = now;
-            if (rideRef.current && rideRef.current.status !== 'completed') {
+            const currentRide = rideRef.current;
+            if (currentRide && currentRide.status !== 'completed' && currentRide.status !== 'arrived') {
               fetchAndDrawRoute();
             }
           }
@@ -548,15 +553,23 @@ export default function ActiveRideScreen() {
     let origin, destination;
 
     try {
+      if (ride.status === 'arrived') {
+        // Driver has arrived at pickup — no route should be drawn
+        // Route only appears when ride starts (in_progress)
+        setRouteCoordinates([]);
+        routePolylineRef.current = [];
+        setRouteDistance(null);
+        setRouteDuration(null);
+        setRouteSteps([]);
+        setLoadingRoute(false);
+        isReroutingRef.current = false;
+        return;
+      }
+
       if (ride.status === 'accepted') {
         // Route from driver's current location to pickup
         origin = currentLocation;
         destination = ride.pickupLocation;
-      } else if (ride.status === 'arrived') {
-        // If passenger already paid, navigate to destination
-        // If not paid yet, still navigate to pickup (waiting for payment)
-        origin = currentLocation;
-        destination = isPaymentConfirmed ? ride.destinationLocation : ride.pickupLocation;
       } else if (ride.status === 'in_progress') {
         // If there are multiple route points, navigate to the current active one
         const currentRoutePoints = routePoints.length > 0 ? routePoints : (ride.routePoints ?? []);
@@ -925,24 +938,34 @@ export default function ActiveRideScreen() {
     }
   };
 
-  const handleCallPassenger = () => {
+  const openCallModal = () => {
     if (!ride) return;
+    setShowCallModal(true);
+  };
 
+  const handlePhoneCall = () => {
+    if (!ride) return;
+    setShowCallModal(false);
     const phoneUrl = `tel:${ride.passengerPhone}`;
     Linking.canOpenURL(phoneUrl)
       .then(supported => {
-        if (supported) {
-          return Linking.openURL(phoneUrl);
-        } else {
-          // Device doesn't support calls — show number via toast
-          console.warn('Cannot make calls on this device');
-          showToast(`Número del pasajero: ${ride.passengerPhone}`, 'warning', 5000);
-        }
+        if (supported) return Linking.openURL(phoneUrl);
+        showToast(`Número del pasajero: ${ride.passengerPhone}`, 'warning', 5000);
       })
-      .catch(err => {
-        console.error('Error making call:', err);
-        showToast(`No se pudo iniciar llamada. Número: ${ride.passengerPhone}`, 'error', 5000);
-      });
+      .catch(() => showToast(`No se pudo iniciar llamada`, 'error', 5000));
+  };
+
+  const handleWhatsApp = () => {
+    if (!ride) return;
+    setShowCallModal(false);
+    const cleanPhone = ride.passengerPhone.replace(/[\+\s\-\(\)]/g, '');
+    const waUrl = `https://wa.me/${cleanPhone}`;
+    Linking.canOpenURL(waUrl)
+      .then(supported => {
+        if (supported) return Linking.openURL(waUrl);
+        showToast('WhatsApp no está instalado en este dispositivo', 'warning', 5000);
+      })
+      .catch(() => showToast('No se pudo abrir WhatsApp', 'error', 5000));
   };
 
   // Complete the current active route point and advance to the next one (Req. 6.8)
@@ -1695,96 +1718,83 @@ export default function ActiveRideScreen() {
                 </View>
               )}
 
+              {/* Passenger contact card */}
               <View
                 style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
+                  backgroundColor: '#f9fafb',
+                  borderRadius: 14,
+                  padding: 16,
                   marginBottom: 16,
+                  borderWidth: 1,
+                  borderColor: '#f3f4f6',
                 }}
               >
-                <View
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: 28,
-                    backgroundColor: colors.primary,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    marginRight: 14,
-                    overflow: 'hidden',
-                  }}
-                >
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
                   {ride.passengerProfilePicture && !ride.isDelegated ? (
                     <Image
                       source={{ uri: ride.passengerProfilePicture }}
-                      style={{ width: 56, height: 56 }}
-                      resizeMode="cover"
+                      style={{ width: 40, height: 40, borderRadius: 20, marginRight: 10 }}
                     />
                   ) : (
-                    <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#fff' }}>
-                      {ride.passengerName.charAt(0).toUpperCase()}
-                    </Text>
+                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>
+                        {ride.passengerName.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
                   )}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 18,
-                      fontWeight: 'bold',
-                      color: colors.darkGray,
-                      marginBottom: 4,
-                    }}
-                  >
-                    {ride.passengerName}
-                  </Text>
-                  {ride.isDelegated && (
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        color: '#6366F1',
-                        fontWeight: '600',
-                        marginBottom: 4,
-                      }}
-                    >
-                      Beneficiario (no registrado)
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937' }}>
+                      {ride.passengerName}
                     </Text>
-                  )}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Ionicons name="call-outline" size={16} color={colors.lightGray} />
-                    <Text style={{ fontSize: 14, color: colors.lightGray }}>
-                      {ride.passengerPhone}
-                    </Text>
+                    {ride.passengerRating != null && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 }}>
+                        <Ionicons name="star" size={12} color="#f59e0b" />
+                        <Text style={{ fontSize: 12, color: '#6b7280', fontWeight: '500' }}>
+                          {ride.passengerRating.toFixed(1)}
+                        </Text>
+                      </View>
+                    )}
+                    {ride.isDelegated && (
+                      <Text style={{ fontSize: 12, color: '#6366f1', fontWeight: '500', marginTop: 1 }}>
+                        Beneficiario (no registrado)
+                      </Text>
+                    )}
                   </View>
                 </View>
-              </View>
 
-              {/* Call Button - Disabled for delegated rides (street passengers) and when ride is in progress */}
-              <TouchableOpacity
-                onPress={handleCallPassenger}
-                disabled={ride.isDelegated || ride.status === 'in_progress'}
-                style={{
-                  backgroundColor:
-                    ride.isDelegated || ride.status === 'in_progress' ? '#D1D5DB' : colors.primary,
-                  paddingVertical: 14,
-                  borderRadius: 12,
-                  flexDirection: 'row',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  gap: 8,
-                  opacity: ride.isDelegated || ride.status === 'in_progress' ? 0.5 : 1,
-                }}
-              >
-                <Ionicons name="call" size={20} color="#fff" />
-                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
-                  {ride.status === 'in_progress'
-                    ? ride.isDelegated
-                      ? 'Beneficiario en el Vehículo'
-                      : 'Pasajero en el Vehículo'
-                    : ride.isDelegated
-                      ? 'Llamar al Beneficiario'
-                      : 'Llamar al Pasajero'}
-                </Text>
-              </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <Ionicons name="call-outline" size={15} color="#6b7280" />
+                  <Text style={{ fontSize: 14, color: '#374151', fontWeight: '500' }}>
+                    {ride.passengerPhone}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  onPress={openCallModal}
+                  disabled={ride.isDelegated || ride.status === 'in_progress'}
+                  activeOpacity={0.8}
+                  style={{
+                    backgroundColor: ride.isDelegated || ride.status === 'in_progress' ? '#e5e7eb' : '#16a34a',
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Ionicons name="call" size={16} color={ride.isDelegated || ride.status === 'in_progress' ? '#9ca3af' : '#fff'} />
+                  <Text style={{ color: ride.isDelegated || ride.status === 'in_progress' ? '#9ca3af' : '#fff', fontSize: 14, fontWeight: '600' }}>
+                    {ride.status === 'in_progress'
+                      ? ride.isDelegated
+                        ? 'Beneficiario en el Vehículo'
+                        : 'Pasajero en el Vehículo'
+                      : ride.isDelegated
+                        ? 'Llamar al Beneficiario'
+                        : 'Llamar al Pasajero'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Route Points Sequence — shown during in_progress when multiple stops exist (Req. 6.8) */}
@@ -2468,248 +2478,149 @@ export default function ActiveRideScreen() {
       <Modal
         visible={showRatingModal}
         transparent={true}
-        animationType="slide"
+        animationType="fade"
         onRequestClose={handleSkipRating}
       >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: 20,
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: '#fff',
-              borderRadius: 20,
-              padding: 24,
-              width: '100%',
-              maxWidth: 400,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.25,
-              shadowRadius: 8,
-              elevation: 5,
-            }}
-          >
-            {/* Rating Header */}
-            <View style={{ marginBottom: 20 }}>
-              <Text
-                style={{
-                  fontSize: 24,
-                  fontWeight: 'bold',
-                  color: colors.darkGray,
-                  textAlign: 'center',
-                  marginBottom: 8,
-                }}
-              >
-                ¿Cómo fue el viaje?
-              </Text>
-              <Text
-                style={{
-                  fontSize: 14,
-                  color: colors.lightGray,
-                  textAlign: 'center',
-                }}
-              >
-                Valora tu experiencia con {ride?.passengerName || 'el pasajero'}
-              </Text>
-            </View>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360, alignItems: 'center' }}>
+            <Text style={{ fontSize: 19, fontWeight: '700', color: '#1f2937', textAlign: 'center', marginBottom: 6 }}>
+              Califica tu viaje
+            </Text>
+            <Text style={{ fontSize: 14, color: '#6b7280', textAlign: 'center', marginBottom: 24 }} numberOfLines={1}>
+              {ride?.passengerName || 'el pasajero'}
+            </Text>
 
-            {/* Passenger Info */}
-            {ride && (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: '#F9FAFB',
-                  padding: 16,
-                  borderRadius: 12,
-                  marginBottom: 20,
-                }}
-              >
-                <View
-                  style={{
-                    width: 50,
-                    height: 50,
-                    borderRadius: 25,
-                    backgroundColor: colors.primary,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    marginRight: 12,
-                  }}
-                >
-                  <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#fff' }}>
-                    {ride.passengerName.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 16, fontWeight: '600', color: colors.darkGray }}>
-                    {ride.passengerName}
-                  </Text>
-                  {finalFare && (
-                    <Text style={{ fontSize: 14, color: colors.lightGray, marginTop: 2 }}>
-                      Tarifa: {formatCurrency(finalFare, ride.currency || 'VES')}
-                    </Text>
-                  )}
-                </View>
-              </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 6 }}>
+              {[1, 2, 3, 4, 5].map(star => (
+                <TouchableOpacity key={star} onPress={() => setPassengerRating(star)}>
+                  <Ionicons
+                    name={star <= passengerRating ? 'star' : 'star-outline'}
+                    size={36}
+                    color={star <= passengerRating ? '#f59e0b' : '#d1d5db'}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+            {passengerRating > 0 && (
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#f59e0b', textAlign: 'center', marginBottom: 16 }}>
+                {passengerRating === 1 && 'Muy malo'}
+                {passengerRating === 2 && 'Malo'}
+                {passengerRating === 3 && 'Regular'}
+                {passengerRating === 4 && 'Bueno'}
+                {passengerRating === 5 && 'Excelente'}
+              </Text>
             )}
 
-            {/* Star Rating Component */}
-            <View style={{ marginBottom: 20 }}>
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: '600',
-                  color: colors.darkGray,
-                  marginBottom: 12,
-                  textAlign: 'center',
-                }}
-              >
-                Tu valoración
-              </Text>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'center',
-                  gap: 8,
-                  marginBottom: 8,
-                }}
-              >
-                {[1, 2, 3, 4, 5].map(star => (
-                  <TouchableOpacity
-                    key={star}
-                    onPress={() => setPassengerRating(star)}
-                    style={{
-                      padding: 4,
-                    }}
-                  >
-                    <Ionicons
-                      name={star <= passengerRating ? 'star' : 'star-outline'}
-                      size={40}
-                      color={star <= passengerRating ? '#FFD700' : '#D1D5DB'}
-                    />
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {passengerRating > 0 && (
-                <Text
-                  style={{
-                    fontSize: 14,
-                    color: colors.primary,
-                    textAlign: 'center',
-                    fontWeight: '600',
-                  }}
-                >
-                  {passengerRating === 1 && 'Muy malo'}
-                  {passengerRating === 2 && 'Malo'}
-                  {passengerRating === 3 && 'Regular'}
-                  {passengerRating === 4 && 'Bueno'}
-                  {passengerRating === 5 && 'Excelente'}
-                </Text>
-              )}
-            </View>
+            <TextInput
+              style={{ backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, padding: 10, fontSize: 13, color: '#374151', minHeight: 70, marginBottom: 16, width: '100%' }}
+              placeholder="Comentario (opcional)"
+              placeholderTextColor="#9ca3af"
+              value={passengerComment}
+              onChangeText={setPassengerComment}
+              multiline
+              numberOfLines={3}
+              maxLength={200}
+              textAlignVertical="top"
+            />
 
-            {/* Comment Input */}
-            <View style={{ marginBottom: 20 }}>
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: '600',
-                  color: colors.darkGray,
-                  marginBottom: 8,
-                }}
-              >
-                Comentario (opcional)
-              </Text>
-              <TextInput
-                style={{
-                  backgroundColor: '#F9FAFB',
-                  borderWidth: 1,
-                  borderColor: '#E5E7EB',
-                  borderRadius: 12,
-                  padding: 12,
-                  fontSize: 14,
-                  color: colors.darkGray,
-                  minHeight: 100,
-                  textAlignVertical: 'top',
-                }}
-                placeholder="Cuéntanos más sobre tu experiencia..."
-                placeholderTextColor="#A9A9A9"
-                value={passengerComment}
-                onChangeText={setPassengerComment}
-                multiline
-                numberOfLines={4}
-                maxLength={500}
-              />
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: colors.lightGray,
-                  textAlign: 'right',
-                  marginTop: 4,
-                }}
-              >
-                {passengerComment.length}/500
-              </Text>
-            </View>
-
-            {/* Rating Modal Buttons */}
-            <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
               <TouchableOpacity
-                style={{
-                  flex: 1,
-                  paddingVertical: 12,
-                  paddingHorizontal: 8,
-                  borderRadius: 12,
-                  backgroundColor: '#F3F4F6',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                style={{ flex: 1, backgroundColor: '#f3f4f6', borderRadius: 10, paddingVertical: 11, alignItems: 'center' }}
                 onPress={handleSkipRating}
                 disabled={isSubmittingRating}
               >
-                <Text
-                  style={{ fontSize: 14, fontWeight: '600', color: colors.lightGray }}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.7}
-                >
-                  Omitir
-                </Text>
+                <Text style={{ color: '#6b7280', fontSize: 14, fontWeight: '600' }}>Omitir</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
-                style={{
-                  flex: 1,
-                  paddingVertical: 12,
-                  paddingHorizontal: 8,
-                  borderRadius: 12,
-                  backgroundColor:
-                    passengerRating === 0 || isSubmittingRating ? '#D1D5DB' : colors.primary,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                style={{ flex: 2, backgroundColor: '#22c55e', borderRadius: 10, paddingVertical: 11, alignItems: 'center', opacity: passengerRating === 0 || isSubmittingRating ? 0.5 : 1 }}
                 onPress={handleSubmitRating}
                 disabled={passengerRating === 0 || isSubmittingRating}
               >
                 {isSubmittingRating ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text
-                    style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.7}
-                  >
-                    Enviar Valoración
-                  </Text>
+                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Enviar</Text>
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Call Options Modal */}
+      <Modal
+        visible={showCallModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowCallModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 320, alignItems: 'center' }}>
+            <Text style={{ fontSize: 17, fontWeight: '700', color: '#1f2937', textAlign: 'center', marginBottom: 4 }}>
+              Contactar al Pasajero
+            </Text>
+            <Text style={{ fontSize: 13, color: '#6b7280', textAlign: 'center', marginBottom: 24 }}>
+              {ride?.passengerPhone || ''}
+            </Text>
+
+            <TouchableOpacity
+              onPress={handlePhoneCall}
+              activeOpacity={0.8}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                width: '100%',
+                backgroundColor: '#f0fdf4',
+                borderRadius: 12,
+                padding: 14,
+                marginBottom: 10,
+                borderWidth: 1,
+                borderColor: '#bbf7d0',
+                gap: 12,
+              }}
+            >
+              <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: '#16a34a', justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name="call" size={20} color="#fff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937' }}>Llamada Telefónica</Text>
+                <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 1 }}>Marcar directamente</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleWhatsApp}
+              activeOpacity={0.8}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                width: '100%',
+                backgroundColor: '#f0fdf4',
+                borderRadius: 12,
+                padding: 14,
+                marginBottom: 16,
+                borderWidth: 1,
+                borderColor: '#bbf7d0',
+                gap: 12,
+              }}
+            >
+              <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: '#25D366', justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name="logo-whatsapp" size={22} color="#fff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937' }}>WhatsApp</Text>
+                <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 1 }}>Abrir conversación</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setShowCallModal(false)}
+              style={{ paddingVertical: 8, paddingHorizontal: 24 }}
+            >
+              <Text style={{ fontSize: 14, color: '#9ca3af', fontWeight: '600' }}>Cancelar</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

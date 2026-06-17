@@ -28,9 +28,13 @@ export function useRideTracking(rideId: string | null, rideStatus: string) {
       }
 
       // Solicitar permiso de background para tracking continuo
-      const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
-      if (bgStatus === 'granted') {
-        console.log('[RIDE_TRACKING] Background location permission granted');
+      try {
+        const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+        if (bgStatus === 'granted') {
+          console.log('[RIDE_TRACKING] Background location permission granted');
+        }
+      } catch {
+        console.log('[RIDE_TRACKING] Background location permission not available (requires native build)');
       }
 
       if (cancelled) return;

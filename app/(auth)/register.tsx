@@ -7,7 +7,6 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Image,
@@ -34,7 +33,7 @@ interface DocumentFile {
 export default function RegisterScreen() {
   const router = useRouter();
   const { register, isLoading } = useAuthStore();
-  const { showToast, showStatus } = useUnifiedNotifications();
+  const { showToast, showStatus, showActionSheet } = useUnifiedNotifications();
 
   // Common fields
   const [role, setRole] = useState<UserRole>('passenger');
@@ -175,9 +174,10 @@ export default function RegisterScreen() {
       showToast('Necesitamos permiso para acceder a tus fotos', 'error');
       return;
     }
-    Alert.alert('Foto de perfil', 'Elige una opción', [
+    showActionSheet('Foto de perfil', [
       {
-        text: 'Tomar foto',
+        label: 'Tomar foto',
+        icon: 'camera',
         onPress: async () => {
           const result = await ImagePicker.launchCameraAsync({
             mediaTypes: ['images'],
@@ -196,7 +196,8 @@ export default function RegisterScreen() {
         },
       },
       {
-        text: 'Elegir de galería',
+        label: 'Elegir de galería',
+        icon: 'images',
         onPress: async () => {
           const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
@@ -214,8 +215,7 @@ export default function RegisterScreen() {
           }
         },
       },
-      { text: 'Cancelar', style: 'cancel' },
-    ]);
+    ], 'Elige una opción');
   };
 
   // Document picker
@@ -225,9 +225,10 @@ export default function RegisterScreen() {
       showToast('Necesitamos permiso para acceder a tus archivos', 'error');
       return;
     }
-    Alert.alert('Seleccionar documento', 'Elige una opción', [
+    showActionSheet('Seleccionar documento', [
       {
-        text: 'Tomar foto',
+        label: 'Tomar foto',
+        icon: 'camera',
         onPress: async () => {
           const result = await ImagePicker.launchCameraAsync({
             mediaTypes: ['images'],
@@ -246,7 +247,8 @@ export default function RegisterScreen() {
         },
       },
       {
-        text: 'Elegir de galería',
+        label: 'Elegir de galería',
+        icon: 'images',
         onPress: async () => {
           const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
@@ -264,8 +266,7 @@ export default function RegisterScreen() {
           }
         },
       },
-      { text: 'Cancelar', style: 'cancel' },
-    ]);
+    ], 'Elige una opción');
   };
 
   const handleRegister = async () => {

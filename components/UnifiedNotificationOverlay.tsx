@@ -32,6 +32,7 @@ import {
   type RideRequestData,
   type StatusNotification,
   type ToastItem,
+  type ActionSheetOption,
 } from '@/context/UnifiedNotificationContext';
 import { rideAPI } from '@/services/api';
 import { getSocket } from '@/services/socket';
@@ -172,12 +173,20 @@ const NOTIFICATION_CONFIG: Record<NotificationType, NotificationConfig> = {
 
 // ─── Ride Request Card (driver-side) ───────────────────────────────────────────
 
-const STAR_FILLED = '★';
-const STAR_EMPTY = '☆';
-
-function renderStars(rating: number | undefined | null): string {
+function renderStars(rating: number | undefined | null) {
   const r = typeof rating === 'number' ? Math.round(rating) : 0;
-  return STAR_FILLED.repeat(r) + STAR_EMPTY.repeat(Math.max(0, 5 - r));
+  return (
+    <View style={styles.starsRowSmall}>
+      {[1, 2, 3, 4, 5].map(star => (
+        <Ionicons
+          key={star}
+          name={star <= r ? 'star' : 'star-outline'}
+          size={13}
+          color={star <= r ? '#f59e0b' : '#d1d5db'}
+        />
+      ))}
+    </View>
+  );
 }
 
 function formatMinutes(minutes: number): string {
@@ -241,42 +250,42 @@ const RideRequestCard: React.FC<{
     <Animated.View
       style={[styles.rideCard, { transform: [{ scale: scaleAnim }], opacity: opacityAnim }]}
     >
-      {/* Header */}
+      {/* Header with timer */}
       <View style={styles.rideCardHeader}>
-        <View style={[styles.rideIconCircle, { backgroundColor: '#f0fdf4' }]}>
-          <Ionicons name="car-sport" size={26} color="#16a34a" />
+        <View style={styles.rideIconCircle}>
+          <Ionicons name="car-sport" size={22} color="#16a34a" />
         </View>
         <View style={styles.rideCardHeaderText}>
-          <Text style={styles.rideCardTitle}>Solicitud de Viaje</Text>
-          <View style={styles.timerRow}>
-            <View style={styles.progressTrackCard}>
-              <Animated.View
-                style={[
-                  styles.progressBarCard,
-                  { width: progressWidth, backgroundColor: urgencyColor },
-                ]}
-              />
-            </View>
-            <Text
-              style={[
-                styles.countdownText,
-                secondsRemaining <= 5 && { color: '#ef4444', fontWeight: '700' },
-              ]}
-            >
-              {secondsRemaining}s
-            </Text>
-          </View>
+          <Text style={styles.rideCardTitle}>Nueva Solicitud</Text>
+          <Text style={styles.rideCardSubtitle} numberOfLines={1}>Tienes 30 segundos para responder</Text>
         </View>
       </View>
 
-      {/* Scrollable content */}
+      {/* Timer bar — full width below header */}
+      <View style={styles.timerBarRow}>
+        <View style={styles.timerBarTrack}>
+          <Animated.View
+            style={[
+              styles.timerBarFill,
+              { width: progressWidth, backgroundColor: urgencyColor },
+            ]}
+          />
+        </View>
+        <Text style={[styles.timerBarText, { color: urgencyColor }]}>
+          {secondsRemaining}s
+        </Text>
+      </View>
+
+      {/* Divider */}
+      <View style={styles.rideCardDivider} />
+
       <ScrollView
         style={styles.cardScroll}
         contentContainerStyle={styles.cardScrollContent}
         showsVerticalScrollIndicator={true}
         bounces={false}
       >
-        {/* Passenger card with photo */}
+        {/* Passenger */}
         <View style={styles.passengerCard}>
           {data.passengerProfilePhoto ? (
             <Image source={{ uri: data.passengerProfilePhoto }} style={styles.passengerPhoto} />
@@ -287,9 +296,9 @@ const RideRequestCard: React.FC<{
           )}
           <View style={styles.passengerInfo}>
             <Text style={styles.passengerName}>{data.passengerName || 'Pasajero'}</Text>
-            <View style={styles.ratingRow}>
-              <Text style={styles.starsText}>{renderStars(data.passengerRating || 0)}</Text>
-              <Text style={styles.ratingValue}>
+            <View style={styles.passengerMeta}>
+              {renderStars(data.passengerRating || 0)}
+              <Text style={styles.passengerRatingText}>
                 {typeof data.passengerRating === 'number'
                   ? data.passengerRating.toFixed(1)
                   : 'Nuevo'}
@@ -299,63 +308,68 @@ const RideRequestCard: React.FC<{
         </View>
 
         {/* Route */}
-        <View style={styles.sectionBlock}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="navigate" size={14} color="#6b7280" />
-            <Text style={styles.sectionTitle}>Ruta</Text>
-          </View>
+        <View style={styles.sectionCard}>
           <View style={styles.routeItem}>
             <View style={styles.routeDotPickup} />
             <View style={styles.routeContent}>
               <Text style={styles.routeLabel}>Recogida</Text>
-              <Text style={styles.routeAddress}>{data.pickupAddress}</Text>
+              <Text style={styles.routeAddress} numberOfLines={2}>{data.pickupAddress}</Text>
             </View>
           </View>
           <View style={styles.routeLine} />
           <View style={styles.routeItem}>
-            <View style={styles.routeDotDestination} />
+            <View style={styles.routeDotDest} />
             <View style={styles.routeContent}>
               <Text style={styles.routeLabel}>Destino</Text>
-              <Text style={styles.routeAddress}>{data.destinationAddress}</Text>
+              <Text style={styles.routeAddress} numberOfLines={2}>{data.destinationAddress}</Text>
             </View>
           </View>
         </View>
 
         {/* Trip details */}
-        <View style={styles.sectionBlock}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="bar-chart" size={14} color="#6b7280" />
-            <Text style={styles.sectionTitle}>Detalles</Text>
-          </View>
-          <View style={styles.detailGrid}>
-            <View style={styles.detailGridCard}>
-              <Text style={styles.detailGridValue}>
+        <View style={styles.detailRow}>
+          <View style={styles.detailChip}>
+            <Ionicons name="cash-outline" size={14} color="#6b7280" />
+            <View>
+              <Text style={styles.detailChipValue}>
                 {data.currency === 'USD'
                   ? `$ ${data.estimatedFare.toFixed(2)}`
                   : `Bs. ${data.estimatedFare.toFixed(2)}`}
               </Text>
-              <Text style={styles.detailGridValueUsd}>
+              <Text style={styles.detailChipSub}>
                 {data.currency === 'USD'
                   ? `Bs. ${convertToBs(data.estimatedFare)}`
                   : `$ ${convertToUsd(data.estimatedFare)}`}
               </Text>
-              <Text style={styles.detailGridLabel}>Tarifa est.</Text>
             </View>
-            <View style={styles.detailGridCard}>
-              <Text style={styles.detailGridValue}>
+          </View>
+          <View style={styles.detailChip}>
+            <Ionicons name="navigate-outline" size={14} color="#6b7280" />
+            <View>
+              <Text style={styles.detailChipValue}>
                 {typeof data.distance === 'number' ? data.distance.toFixed(1) : '—'} km
               </Text>
-              <Text style={styles.detailGridLabel}>Distancia</Text>
+              <Text style={styles.detailChipSub}>Distancia</Text>
             </View>
-            <View style={styles.detailGridCard}>
-              <Text style={styles.detailGridValue}>
-                {formatMinutes(data.estimatedDuration || 0)}
-              </Text>
-              <Text style={styles.detailGridLabel}>Duración est.</Text>
+          </View>
+        </View>
+        <View style={styles.detailRow}>
+          <View style={styles.detailChip}>
+            <Ionicons name="time-outline" size={14} color="#6b7280" />
+            <View>
+              <Text style={styles.detailChipValue}>{formatMinutes(data.estimatedDuration || 0)}</Text>
+              <Text style={styles.detailChipSub}>Duración est.</Text>
             </View>
-            <View style={styles.detailGridCard}>
-              <Text style={styles.detailGridValue}>🚕 {data.vehicleType || 'taxi'}</Text>
-              <Text style={styles.detailGridLabel}>Vehículo</Text>
+          </View>
+          <View style={styles.detailChip}>
+            <Ionicons
+              name={data.vehicleType === 'taxi' ? 'car-outline' : 'bicycle-outline'}
+              size={14}
+              color="#6b7280"
+            />
+            <View>
+              <Text style={styles.detailChipValue}>{data.vehicleType === 'taxi' ? 'Taxi' : 'Moto'}</Text>
+              <Text style={styles.detailChipSub}>Vehículo</Text>
             </View>
           </View>
         </View>
@@ -364,7 +378,7 @@ const RideRequestCard: React.FC<{
       {/* Actions */}
       <View style={styles.rideCardActions}>
         <TouchableOpacity
-          style={[styles.rideActionBtn, styles.rideRejectBtn]}
+          style={styles.rideRejectBtn}
           onPress={() => onReject(data.id)}
           activeOpacity={0.8}
         >
@@ -372,7 +386,7 @@ const RideRequestCard: React.FC<{
           <Text style={styles.rideRejectText}>Rechazar</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.rideActionBtn, styles.rideAcceptBtn]}
+          style={styles.rideAcceptBtn}
           onPress={() => onAccept(data.id)}
           activeOpacity={0.8}
         >
@@ -455,10 +469,11 @@ const StatusBanner: React.FC<{
         {status.action && (
           <TouchableOpacity
             style={[styles.statusActionBtn, { backgroundColor: config.accentColor }]}
-            onPress={e => {
-              e.stopPropagation();
-              status.action?.onPress();
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={() => {
+              const actionFn = status.action?.onPress;
               onDismiss();
+              if (actionFn) actionFn();
             }}
           >
             <Text style={styles.statusActionText}>{status.action.label}</Text>
@@ -538,6 +553,92 @@ const ToastNotificationItem: React.FC<{
   );
 };
 
+// ─── Action Sheet (bottom picker replacing Alert.alert) ─────────────────────────
+
+const ActionSheetComponent: React.FC<{
+  title: string;
+  message?: string;
+  options: ActionSheetOption[];
+  onDismiss: () => void;
+  bottomInset: number;
+}> = ({ title, message, options, onDismiss, bottomInset }) => {
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const translateY = useRef(new Animated.Value(300)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 100, friction: 8 }),
+      Animated.timing(translateY, { toValue: 0, duration: 300, useNativeDriver: true }),
+      Animated.timing(opacityAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  return (
+    <View style={styles.asWrapper} pointerEvents="box-none">
+      <Animated.View
+        style={[
+          styles.asContainer,
+          {
+            transform: [{ scale: scaleAnim }, { translateY }],
+            opacity: opacityAnim,
+            paddingBottom: 34 + bottomInset,
+          },
+        ]}
+      >
+        <View style={styles.asHandleBar} />
+        <Text style={styles.asTitle}>{title}</Text>
+        {message ? <Text style={styles.asMessage}>{message}</Text> : null}
+        <View style={styles.asOptionsList}>
+          {options.map((option, idx) => (
+            <TouchableOpacity
+              key={idx}
+              style={[
+                styles.asOption,
+                idx < options.length - 1 && styles.asOptionBorder,
+              ]}
+              activeOpacity={0.7}
+              onPress={() => {
+                option.onPress();
+                onDismiss();
+              }}
+            >
+              {option.icon && (
+                <Ionicons
+                  name={option.icon}
+                  size={22}
+                  color={option.destructive ? '#ef4444' : Colors.primary}
+                  style={styles.asOptionIcon}
+                />
+              )}
+              <Text
+                style={[
+                  styles.asOptionText,
+                  option.destructive && styles.asOptionDestructive,
+                ]}
+              >
+                {option.label}
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color="#d1d5db"
+              />
+            </TouchableOpacity>
+          ))}
+        </View>
+        <TouchableOpacity
+          style={styles.asCancelBtn}
+          activeOpacity={0.7}
+          onPress={onDismiss}
+        >
+          <Text style={styles.asCancelText}>Cancelar</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
+  );
+};
+
 // ─── Main Overlay Component ────────────────────────────────────────────────────
 
 export const UnifiedNotificationOverlay: React.FC = () => {
@@ -547,13 +648,15 @@ export const UnifiedNotificationOverlay: React.FC = () => {
     activeRideRequest,
     toastQueue,
     activeStatus,
+    activeActionSheet,
     dismissRideRequest,
     dismissToast,
     dismissStatus,
+    dismissActionSheet,
     showToast,
   } = useUnifiedNotifications();
 
-  const isVisible = !!activeRideRequest || toastQueue.length > 0 || !!activeStatus;
+  const isVisible = !!activeRideRequest || toastQueue.length > 0 || !!activeStatus || !!activeActionSheet;
 
   // ── Ride Request handlers ─────────────────────────────────────────────────
 
@@ -594,6 +697,15 @@ export const UnifiedNotificationOverlay: React.FC = () => {
       presentationStyle="overFullScreen"
     >
       <View style={styles.overlay} pointerEvents="box-none">
+        {/* Backdrop tap-to-dismiss for action sheet */}
+        {activeActionSheet && (
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={dismissActionSheet}
+          />
+        )}
+
         {/* Toast area — top of screen, stacked, below status bar */}
         {toastQueue.length > 0 && (
           <View style={[styles.toastArea, { paddingTop: insets.top }]} pointerEvents="box-none">
@@ -625,6 +737,17 @@ export const UnifiedNotificationOverlay: React.FC = () => {
               onExpire={dismissRideRequest}
             />
           </View>
+        )}
+
+        {/* Action sheet — bottom sheet */}
+        {activeActionSheet && (
+          <ActionSheetComponent
+            title={activeActionSheet.title}
+            message={activeActionSheet.message}
+            options={activeActionSheet.options}
+            onDismiss={dismissActionSheet}
+            bottomInset={insets.bottom}
+          />
         )}
       </View>
     </Modal>
@@ -762,13 +885,13 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     maxHeight: '88%',
     backgroundColor: '#fff',
-    borderRadius: 24,
-    paddingTop: 20,
-    paddingHorizontal: 20,
+    borderRadius: 20,
+    paddingTop: 18,
+    paddingHorizontal: 18,
     paddingBottom: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.15,
     shadowRadius: 24,
     elevation: 20,
   },
@@ -776,70 +899,64 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
-  },
-  rideIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+    gap: 10,
   },
   rideCardHeaderText: {
     flex: 1,
   },
-  rideCardTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111827',
-    marginBottom: 6,
-  },
-  rideCardSubtitle: {
-    fontSize: 13,
-    color: '#6b7280',
-    marginTop: 2,
-  },
-  timerRow: {
+  timerBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginBottom: 10,
   },
-  progressTrackCard: {
+  timerBarTrack: {
     flex: 1,
-    height: 5,
+    height: 6,
     backgroundColor: '#e5e7eb',
     borderRadius: 3,
     overflow: 'hidden',
   },
-  progressBarCard: {
+  timerBarFill: {
     height: '100%',
     borderRadius: 3,
   },
-  countdownText: {
+  timerBarText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#6b7280',
-    minWidth: 32,
+    fontWeight: '700',
+    minWidth: 30,
     textAlign: 'right',
   },
-  progressTrack: {
-    height: 5,
-    backgroundColor: '#e5e7eb',
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: 20,
+  rideCardTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#111827',
   },
-  progressBar: {
-    height: '100%',
-    borderRadius: 3,
+  rideCardSubtitle: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 1,
+  },
+  rideIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#f0fdf4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rideCardDivider: {
+    height: 1,
+    backgroundColor: '#f3f4f6',
+    marginBottom: 12,
   },
 
   // ── Card Scroll ─────────────────────────────────────────────────────────
   cardScroll: {
-    maxHeight: 340,
+    maxHeight: 280,
   },
   cardScrollContent: {
-    paddingBottom: 8,
+    paddingBottom: 4,
   },
 
   // ── Passenger ───────────────────────────────────────────────────────────
@@ -847,28 +964,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f9fafb',
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 12,
-    marginBottom: 12,
-    gap: 12,
+    marginBottom: 10,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
   },
   passengerPhoto: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#e5e7eb',
   },
   passengerAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
   },
   passengerInfo: {
@@ -876,19 +995,32 @@ const styles = StyleSheet.create({
   },
   passengerName: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#111827',
     marginBottom: 3,
   },
-  ratingRow: {
+  passengerMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
+  },
+  starsRowSmall: {
+    flexDirection: 'row',
+    gap: 1,
+  },
+  passengerRatingText: {
+    fontSize: 12,
+    color: '#6b7280',
   },
   starsText: {
     fontSize: 15,
     color: '#F59E0B',
     letterSpacing: 1,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   ratingValue: {
     fontSize: 12,
@@ -896,6 +1028,14 @@ const styles = StyleSheet.create({
   },
 
   // ── Route ───────────────────────────────────────────────────────────────
+  sectionCard: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
+  },
   sectionBlock: {
     marginBottom: 12,
   },
@@ -918,10 +1058,17 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   routeDotPickup: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
     backgroundColor: Colors.primary,
+    marginTop: 4,
+  },
+  routeDotDest: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#f97316',
     marginTop: 4,
   },
   routeDotDestination: {
@@ -935,7 +1082,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   routeLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     color: '#9ca3af',
     textTransform: 'uppercase',
@@ -948,43 +1095,40 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   routeLine: {
-    width: 2,
-    height: 14,
+    width: 1,
+    height: 16,
     backgroundColor: '#e5e7eb',
     marginLeft: 4,
-    marginVertical: 3,
+    marginVertical: 4,
   },
 
-  // ── Detail Grid ─────────────────────────────────────────────────────────
-  detailGrid: {
+  // ── Detail Chips ────────────────────────────────────────────────────────
+  detailRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
+    marginBottom: 8,
   },
-  detailGridCard: {
+  detailChip: {
     flex: 1,
-    minWidth: '45%',
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#f9fafb',
     borderRadius: 10,
     padding: 10,
-    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
   },
-  detailGridValue: {
-    fontSize: 14,
+  detailChipValue: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#111827',
-    marginBottom: 1,
   },
-  detailGridValueUsd: {
-    fontSize: 12,
-    color: '#16a34a',
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  detailGridLabel: {
+  detailChipSub: {
     fontSize: 10,
     color: '#9ca3af',
-    textAlign: 'center',
+    fontWeight: '500',
+    marginTop: 1,
   },
 
   rideDetails: {
@@ -1014,9 +1158,8 @@ const styles = StyleSheet.create({
   },
   rideCardActions: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     paddingVertical: 12,
-    paddingHorizontal: 2,
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
   },
@@ -1026,30 +1169,120 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    borderRadius: 12,
-    gap: 6,
+    borderRadius: 10,
+    gap: 5,
   },
   rideRejectBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#fef2f2',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#fecaca',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 5,
   },
   rideRejectText: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
     color: '#dc2626',
   },
   rideAcceptBtn: {
+    flex: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#16a34a',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 5,
     shadowColor: '#16a34a',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
   rideAcceptText: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
     color: '#fff',
+  },
+
+  // ── Action Sheet ──────────────────────────────────────────────────────────
+  asWrapper: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  asContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+  },
+  asHandleBar: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#e5e7eb',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  asTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  asMessage: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  asOptionsList: {
+    marginBottom: 12,
+    backgroundColor: '#f9fafb',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  asOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+  },
+  asOptionBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e5e7eb',
+  },
+  asOptionIcon: {
+    marginRight: 14,
+  },
+  asOptionText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#111827',
+  },
+  asOptionDestructive: {
+    color: '#ef4444',
+  },
+  asCancelBtn: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  asCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6b7280',
   },
 });
