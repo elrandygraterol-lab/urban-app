@@ -10,6 +10,7 @@ export interface User {
   phone: string;
   role: 'passenger' | 'driver' | 'owner';
   profilePhotoUrl?: string;
+  rating?: number;
   driverId?: string;
 }
 

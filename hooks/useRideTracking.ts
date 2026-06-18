@@ -46,13 +46,12 @@ export function useRideTracking(rideId: string | null, rideStatus: string) {
           accuracy: Location.Accuracy.High,
           timeInterval: 5000,
           distanceInterval: 10,
-          // Permitir actualizaciones en segundo plano
           foregroundService: {
             notificationTitle: 'UrbanTaxi',
             notificationBody: 'Compartiendo tu ubicación con el pasajero',
             notificationColor: '#22c55e',
           },
-        },
+        } as any,
         (location) => {
           rideAPI
             .updateLocation(

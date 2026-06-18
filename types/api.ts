@@ -16,6 +16,7 @@ export interface CancellationPolicy {
   refundAmount?: number;
   timeElapsed: number;
   gracePeriodRemaining?: number;
+  description?: string;
 }
 
 export interface GetCancellationPolicyResponse {
@@ -24,6 +25,7 @@ export interface GetCancellationPolicyResponse {
     canCancel: boolean;
     policy: CancellationPolicy;
     warnings: string[];
+    exchangeRate?: number;
   };
 }
 

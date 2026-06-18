@@ -25,7 +25,8 @@ export const useSound = () => {
 
   const playNotificationSound = useCallback(async () => {
     try {
-      // Seek to start in case it was played before
+      // Prevent rapid successive plays that can cause OOM (expo-audio bug)
+      if (player.playing) return;
       player.seekTo(0);
       player.play();
       console.log('[SOUND] ✅ Notification sound played');

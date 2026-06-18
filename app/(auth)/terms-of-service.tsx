@@ -180,9 +180,9 @@ export default function TermsOfServiceScreen() {
         <Section title="13. Contacto">
           Para consultas sobre estos Términos:
           {'\n\n'}
-          📧 <Bold>Email:</Bold> soporte@urbantaxi.app
+          📧 <Bold>Email:</Bold> urbantaxisapp@gmail.com
           {'\n'}
-          🌐 <Bold>Sitio Web:</Bold> https://urbantaxi.app
+          🌐 <Bold>Sitio Web:</Bold> https://administracionurbantaxis.com/terminos
         </Section>
 
         <View style={styles.footer}>

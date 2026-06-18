@@ -168,9 +168,9 @@ export default function PrivacyPolicyScreen() {
           Si tienes preguntas sobre esta Política de Privacidad o deseas ejercer 
           tus derechos de protección de datos, contáctanos:
           {'\n\n'}
-          📧 <Bold>Email:</Bold> privacidad@urbantaxi.app
+          📧 <Bold>Email:</Bold> urbantaxisapp@gmail.com
           {'\n'}
-          🌐 <Bold>Sitio Web:</Bold> https://urbantaxi.app/privacidad
+          🌐 <Bold>Sitio Web:</Bold> https://administracionurbantaxis.com/privacidad
           {'\n'}
           📍 <Bold>Dirección:</Bold> Venezuela
         </Section>

@@ -255,6 +255,8 @@ export default function PassengerHomeScreen() {
   } | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<RouteCoordinates[]>([]);
   const [nearestRouteIndex, setNearestRouteIndex] = useState(0);
+  const [displayDistance, setDisplayDistance] = useState<number | null>(null);
+  const [displayDuration, setDisplayDuration] = useState<number | null>(null);
   const [isApproximateRoute, setIsApproximateRoute] = useState(false);
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
 
@@ -349,6 +351,17 @@ export default function PassengerHomeScreen() {
                   latitude: Number(ride.driver.currentLocation.latitude),
                   longitude: Number(ride.driver.currentLocation.longitude),
                 });
+              }
+              // Restaurar estado de pago
+              if (ride.payment?.status === 'completed') {
+                setPaymentCompleted(true);
+              }
+              // Restaurar tarifa estimada
+              if (ride.estimatedFare) {
+                setEstimatedFare(Number(ride.estimatedFare));
+              }
+              if (ride.currency) {
+                setFareCurrency(ride.currency);
               }
               setIsSearchingDriver(ride.status === 'pending');
             }
@@ -843,6 +856,14 @@ export default function PassengerHomeScreen() {
     // Join ride room
     joinRide(activeRide.id);
 
+    // Re-join ride room on every socket reconnect — ensures listener recovery after background
+    const socket = getSocket();
+    const handleReconnect = () => {
+      console.log('[PASSENGER] Socket reconnected, re-joining ride room:', activeRide.id);
+      joinRide(activeRide.id);
+    };
+    socket?.on('connect', handleReconnect);
+
     // Listen for ride accepted event
     const handleRideAccepted = (data: any) => {
       console.log('🚗 Ride accepted:', data);
@@ -1187,6 +1208,7 @@ export default function PassengerHomeScreen() {
       if (activeRide) {
         leaveRide(activeRide.id);
       }
+      socket?.off('connect', handleReconnect);
       // Remove ride-specific listeners, keep shared ride invitation listeners alive
       removeRideListeners();
     };
@@ -1199,6 +1221,8 @@ export default function PassengerHomeScreen() {
     if ((activeRide.status === 'accepted' || activeRide.status === 'arrived') && routeCoordinates.length > 0) {
       setRouteCoordinates([]);
       setNearestRouteIndex(0);
+      setDisplayDistance(null);
+      setDisplayDuration(null);
     }
   }, [activeRide?.status]);
   useEffect(() => {
@@ -1377,9 +1401,9 @@ export default function PassengerHomeScreen() {
 
         locationSubscription = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.Balanced,
-            timeInterval: 5000,
-            distanceInterval: 10,
+            accuracy: Location.Accuracy.BestForNavigation,
+            timeInterval: 2000,
+            distanceInterval: 1,
           },
           location => {
             const { latitude, longitude } = location.coords;
@@ -1483,6 +1507,9 @@ export default function PassengerHomeScreen() {
   const calculateRoute = useCallback(async () => {
     if (!pickupLocation || !destinationLocation) return;
 
+    // Build ordered waypoints: Current location → Pickup → Destination
+    const waypoints: LocationCoords[] = [];
+
     try {
       logInfo('PassengerHomeScreen', 'Calculating route with OSRM...', {
         pickup: pickupLocation,
@@ -1491,8 +1518,6 @@ export default function PassengerHomeScreen() {
         secondDestination: secondDestinationLocation,
       });
 
-      // Build ordered waypoints: Current location → Pickup → Destination
-      const waypoints: LocationCoords[] = [];
       // Start from where the passenger actually is
       if (currentLocation) {
         waypoints.push(currentLocation);
@@ -1591,6 +1616,8 @@ export default function PassengerHomeScreen() {
           setRouteCoordinates([driverLoc, destination]);
           setIsApproximateRoute(true);
           setLastRouteUpdate(Date.now());
+          setDisplayDistance(null);
+          setDisplayDuration(null);
           return;
         }
         const newRouteCoords: RouteCoordinates[] = [
@@ -1600,6 +1627,8 @@ export default function PassengerHomeScreen() {
 
         setRouteCoordinates(newRouteCoords);
         setLastRouteUpdate(Date.now());
+        setDisplayDistance(routeData.distance ?? null);
+        setDisplayDuration(routeData.duration ?? null);
 
         console.log('[DYNAMIC_ROUTE] Route updated successfully', {
           pointsCount: newRouteCoords.length,
@@ -2097,10 +2126,8 @@ export default function PassengerHomeScreen() {
     Keyboard.dismiss();
 
     try {
-      // Keep the original user input
       const userInput = destinationAddress.trim();
 
-      // Build search query with dynamic location context
       let searchQuery = userInput;
       if (!searchQuery.toLowerCase().includes('venezuela')) {
         searchQuery = `${searchQuery}, ${searchContext}`;
@@ -2128,32 +2155,16 @@ export default function PassengerHomeScreen() {
         latitude: location.latitude,
         longitude: location.longitude,
       });
-
-      // Keep the original user input in the text field (don't update with full address)
-      // The full address is only used internally for accuracy
     } catch (error: any) {
       console.error('Geocoding error:', error);
-
-      // Check if it's a "not found" error or server error (500)
-      const isNotFound =
-        error.response?.status === 404 ||
-        error.response?.status === 500 ||
-        error.message?.includes('no encontr') ||
-        error.message?.includes('not found') ||
-        error.message?.includes('status code 500');
-
-      if (isNotFound) {
-        showStatus(
-          'info',
-          'Esta dirección aún no está registrada en nuestro mapa. Pronto será agregada.\n\nPor favor, selecciona manualmente la ubicación en el mapa.',
-          'Dirección no encontrada',
-          undefined,
-          { label: 'Seleccionar en mapa', onPress: () => handleEnableMapSelection('destination') }
-        );
-      } else {
-        logError('PassengerHomeScreen', error, { context: 'Geocoding destination' });
-        showToast('No se pudo buscar la dirección. Verifica tu conexión.', 'error');
-      }
+      // If backend fails, prompt user to select on map
+      showStatus(
+        'info',
+        'No se pudo encontrar esa dirección. Intenta buscarla manualmente en el mapa.',
+        'Dirección no encontrada',
+        undefined,
+        { label: 'Seleccionar en mapa', onPress: () => handleEnableMapSelection('destination') }
+      );
     }
   };
 
@@ -2764,11 +2775,7 @@ export default function PassengerHomeScreen() {
         // Ocultar loading
         setIsRequestingRide(false);
 
-        // Mostrar confirmación de éxito
-        showToast(
-          'Tu Pago Móvil ha sido verificado exitosamente. El conductor ha sido notificado.',
-          'success'
-        );
+        // Confirmation shown by MobilePaymentModal — no duplicate toast here
       } else {
         // Legacy payment methods (transfer, cash)
         const response = await paymentAPI.completePayment(activeRide.id, {
@@ -2948,6 +2955,9 @@ export default function PassengerHomeScreen() {
     setEstimatedFare(null);
     setFareBreakdown(null);
     setRouteCoordinates([]);
+    setNearestRouteIndex(0);
+    setDisplayDistance(null);
+    setDisplayDuration(null);
     setIsSearchingDriver(false);
     setHasShownNearbyNotification(false);
     setZoneInfo(null);
@@ -2964,6 +2974,19 @@ export default function PassengerHomeScreen() {
         },
         1000
       );
+    }
+
+    // Auto-set pickup to current location so user can start a new request immediately
+    if (currentLocation) {
+      setPickupLocation(currentLocation);
+      reverseGeocode(currentLocation.latitude, currentLocation.longitude)
+        .then(loc => {
+          if (loc?.address) {
+            setPickupAddress(loc.address);
+            setPickupFullAddress(loc.address);
+          }
+        })
+        .catch(() => {});
     }
   };
 
@@ -3339,15 +3362,22 @@ export default function PassengerHomeScreen() {
                     </View>
                   </View>
 
-                  {/* ETA strip */}
-                  {activeRide.eta && (
+                  {/* ETA strip — dynamic based on ride phase */}
+                  {activeRide && (activeRide.status === 'accepted' || activeRide.status === 'in_progress') && (
                     <View style={styles.rideEtaStrip}>
                       <Ionicons name="time-outline" size={14} color="#22c55e" />
                       <Text style={styles.rideEtaText}>
-                        {Math.round(activeRide.eta.estimatedMinutes)} min · {activeRide.eta.distanceKm.toFixed(1)} km
+                        {activeRide.status === 'accepted'
+                          ? (activeRide.eta
+                              ? `${Math.round(activeRide.eta.estimatedMinutes)} min · ${activeRide.eta.distanceKm.toFixed(1)} km`
+                              : 'Calculando...')
+                          : (displayDuration !== null && displayDistance !== null
+                              ? `${Math.round(displayDuration)} min · ${displayDistance.toFixed(1)} km`
+                              : 'Calculando...')
+                        }
                       </Text>
                       <Text style={styles.rideEtaLabel}>
-                        {activeRide.status === 'accepted' ? 'hasta la recogida' : activeRide.status === 'in_progress' ? 'hasta el destino' : ''}
+                        {activeRide.status === 'accepted' ? 'hasta la recogida' : 'hasta el destino'}
                       </Text>
                     </View>
                   )}

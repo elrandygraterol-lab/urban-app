@@ -247,6 +247,7 @@ export default function ActiveRideScreen() {
 
     // Payment status updates are handled via socket event (ride:payment_completed).
     // Removed HTTP polling to save battery — socket push is more efficient.
+  }, [ride?.status, isPaymentConfirmed, rideId, passengerPaymentMode]);
 
   // Stop TTS when ride is completed or arrived
   useEffect(() => {
@@ -451,7 +452,7 @@ export default function ActiveRideScreen() {
           distanceInterval: 5,
           pausesUpdatesAutomatically: false,
           activityType: Location.ActivityType.AutomotiveNavigation,
-        },
+        } as any,
         newLocation => {
           const newCoords = {
             latitude: newLocation.coords.latitude,

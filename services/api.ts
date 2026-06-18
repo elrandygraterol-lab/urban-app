@@ -84,7 +84,11 @@ api.interceptors.response.use(
       try {
         const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
         if (!refreshToken) {
-          throw new Error('No refresh token available');
+          // No refresh token — session is stale, clear auth and reject silently
+          await SecureStore.deleteItemAsync(TOKEN_KEY);
+          await SecureStore.deleteItemAsync(USER_KEY);
+          isRefreshing = false;
+          return Promise.reject(error);
         }
 
         const response = await axios.post(`${API_URL}/api/auth/refresh`, { refreshToken });

@@ -158,8 +158,10 @@ export const useGlobalSocketListeners = ({
         message += `\n\nCargo por cancelación: Bs. ${data.cancellationFee.toFixed(2)}`;
       }
 
-      // Show status notification for cancellation
-      showStatus('ride_cancelled', message, undefined, { rideId: data.rideId, cancelledBy: data.cancelledBy });
+      // Show status notification for cancellation — drivers only (passenger handled locally)
+      if (user?.role === 'driver') {
+        showStatus('ride_cancelled', message, undefined, { rideId: data.rideId, cancelledBy: data.cancelledBy });
+      }
     },
     [user?.id, user?.role, showStatus]
   );
@@ -199,44 +201,10 @@ export const useGlobalSocketListeners = ({
     }) => {
       console.log('[GLOBAL_SOCKET] 🔄 Ride status changed event received:', data);
       if (user?.role !== 'passenger') return;
-      // Sound handled by local screen handler to avoid duplicate
-
-      switch (data.status) {
-        case 'arrived':
-          showStatus(
-            'driver_arrived',
-            'Tu conductor ha llegado al punto de recogida. Por favor, dirígete al vehículo.',
-            '📍 ¡Tu Conductor Te Espera!',
-            { rideId: data.rideId },
-            undefined,
-            10000
-          );
-          break;
-        case 'in_progress':
-          showStatus(
-            'ride_started',
-            'Tu viaje ha comenzado. ¡Buen viaje!',
-            '🚗 Viaje Iniciado',
-            { rideId: data.rideId },
-            undefined,
-            6000
-          );
-          break;
-        case 'completed':
-          showStatus(
-            'ride_completed',
-            data.finalFare
-              ? `Tu viaje ha finalizado. Tarifa final: Bs. ${data.finalFare.toFixed(2)}`
-              : 'Tu viaje ha finalizado.',
-            '🏁 ¡Viaje Completado!',
-            { rideId: data.rideId, finalFare: data.finalFare },
-            undefined,
-            8000
-          );
-          break;
-      }
+      // All status notifications handled by local screen (index.tsx) with sound + actions.
+      // No duplicate notifications from global hook.
     },
-    [user?.role, playNotificationSound, showStatus]
+    [user?.role]
   );
 
   // Handler for ride:eta_update event (PASSENGER — ETA updates, informational)
@@ -248,14 +216,9 @@ export const useGlobalSocketListeners = ({
       targetType: string;
     }) => {
       if (user?.role !== 'passenger') return;
-      // ETA updates are frequent — use toast to not overwhelm
-      const minutes = Math.round(data.eta.estimatedMinutes);
-      if (minutes <= 1) {
-        showSuccess(`¡Tu conductor está a ${minutes} minuto!`, 3000);
-      }
-      // We don't show every ETA update to avoid notification spam
+      // ETA updates handled by local screen — no duplicate notification
     },
-    [user?.role, showSuccess]
+    [user?.role]
   );
 
   // Handler for ride:completed event (BOTH roles)
@@ -294,16 +257,8 @@ export const useGlobalSocketListeners = ({
           undefined,
           7000
         );
-      } else {
-        showStatus(
-          'ride_completed',
-          `¡Viaje completado! Tarifa final: ${currencySymbol} ${fare.toFixed(2)}. Gracias por viajar con UrbanTaxi.`,
-          '🏁 ¡Viaje Completado!',
-          { rideId: data.rideId, finalFare: fare, currency: curr },
-          undefined,
-          8000
-        );
       }
+      // Passenger: ride completed handled by local screen with rating modal — no duplicate
     },
     [user?.role, playNotificationSound, showStatus]
   );

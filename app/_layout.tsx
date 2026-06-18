@@ -109,7 +109,13 @@ function AppContent() {
         logInfo('Navigation', 'Redirecting to login (not authenticated)');
         router.replace('/(auth)/login' as any);
       } else if (isAuthenticated && inAuthGroup) {
-        // Redirect to appropriate home based on role
+        // Redirect to appropriate home based on role, but allow legal docs
+        const isLegalRoute = segments[1] === 'privacy-policy' || segments[1] === 'terms-of-service';
+        if (isLegalRoute) {
+          logInfo('Navigation', 'Allowing legal route:', segments[1]);
+          return;
+        }
+
         if (user?.role === 'driver') {
           // Check if driver needs to complete registration
           if (

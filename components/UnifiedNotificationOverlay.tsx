@@ -1143,11 +1143,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
   detailLabel: {
     fontSize: 13,
     color: '#6b7280',

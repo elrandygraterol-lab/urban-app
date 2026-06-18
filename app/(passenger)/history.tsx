@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   View,
   Text,
@@ -41,6 +42,7 @@ export default function PassengerHistoryScreen() {
   const { isActive: needsTutorial } = useSmartTutorial('passenger_history');
 
   const [rides, setRides] = useState<RideHistoryItem[]>([]);
+  const scrollRef = useRef<ScrollView>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -102,6 +104,7 @@ export default function PassengerHistoryScreen() {
             return [...prev, ...newRides];
           });
         }
+
         setCurrentPage(page);
       } catch (error) {
         console.error('Error loading history:', error);
@@ -118,13 +121,28 @@ export default function PassengerHistoryScreen() {
   const getFilters = useCallback(() => {
     const filters: { startDate?: string; endDate?: string } = {};
     if (startDate) filters.startDate = startDate.toISOString();
-    if (endDate) filters.endDate = endDate.toISOString();
+    if (endDate) {
+      // If same day as startDate, set endDate to end of that day
+      if (startDate && endDate.toDateString() === startDate.toDateString()) {
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        filters.endDate = endOfDay.toISOString();
+      } else {
+        filters.endDate = endDate.toISOString();
+      }
+    }
     return filters;
   }, [startDate, endDate]);
 
-  useEffect(() => {
-    loadRideHistory();
-  }, [loadRideHistory]);
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      loadRideHistory(undefined, 1).finally(() => {
+        setLoading(false);
+        setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: false }), 100);
+      });
+    }, [loadRideHistory])
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -406,23 +424,23 @@ export default function PassengerHistoryScreen() {
                 </View>
               )}
 
-              {isCancelled && selectedRide.cancellation && (
+              {isCancelled && (selectedRide as any).cancellation && (
                 <View style={styles.detailCard}>
                   <View style={styles.detailRow}>
                     <Ionicons name="close-circle-outline" size={15} color="#ef4444" />
                     <Text style={styles.detailRowLabel}>Cancelación</Text>
                   </View>
                   <Text style={styles.detailCancelled}>
-                    {selectedRide.cancellation.cancelledBy === 'passenger' ? 'Cancelado por ti' :
-                     selectedRide.cancellation.cancelledBy === 'driver' ? 'Cancelado por el conductor' :
+                    {(selectedRide as any).cancellation.cancelledBy === 'passenger' ? 'Cancelado por ti' :
+                     (selectedRide as any).cancellation.cancelledBy === 'driver' ? 'Cancelado por el conductor' :
                      'Cancelado por el sistema'}
                   </Text>
-                  {selectedRide.cancellation.reason && (
-                    <Text style={styles.detailCancelledReason}>{selectedRide.cancellation.reason}</Text>
+                  {(selectedRide as any).cancellation.reason && (
+                    <Text style={styles.detailCancelledReason}>{(selectedRide as any).cancellation.reason}</Text>
                   )}
-                  {selectedRide.cancellation.fee > 0 && (
+                  {(selectedRide as any).cancellation.fee > 0 && (
                     <Text style={styles.detailCancelledFee}>
-                      Tarifa de cancelación: {formatCurrencyAmount(selectedRide.cancellation.fee, selectedRide.currency)}
+                      Tarifa de cancelación: {formatCurrencyAmount((selectedRide as any).cancellation.fee, selectedRide.currency)}
                     </Text>
                   )}
                 </View>
@@ -582,6 +600,7 @@ export default function PassengerHistoryScreen() {
         </ScrollView>
       ) : (
         <ScrollView
+          ref={scrollRef}
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
           refreshControl={
