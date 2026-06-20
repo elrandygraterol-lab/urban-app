@@ -29,7 +29,7 @@ export default function TermsOfServiceScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.lastUpdated}>Última actualización: 17 de junio de 2026</Text>
+        <Text style={styles.lastUpdated}>Última actualización: 20 de junio de 2026</Text>
 
         <Section title="1. Aceptación de los Términos">
           Al descargar, instalar o utilizar la aplicación UrbanTaxi ("la Aplicación"), 

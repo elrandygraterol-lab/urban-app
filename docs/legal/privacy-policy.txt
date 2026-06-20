@@ -1,6 +1,6 @@
 POLÍTICA DE PRIVACIDAD DE URBANTAXI
 ======================================
-Última actualización: 17 de junio de 2026
+Última actualización: 20 de junio de 2026
 
 
 1. INTRODUCCIÓN
@@ -17,24 +17,44 @@ política. Si no estás de acuerdo, por favor no utilices la aplicación.
 
 2. INFORMACIÓN QUE RECOPILAMOS
 
-2.1 Información de cuenta: Nombre completo, correo electrónico, número de teléfono
-y contraseña encriptada al registrarte.
+2.1 Información de cuenta: Nombre completo, correo electrónico, número de teléfono,
+foto de perfil y contraseña encriptada al registrarte. También puedes iniciar
+sesión mediante Google Sign-In, en cuyo caso recibimos tu nombre y correo
+electrónico asociados a tu cuenta de Google.
 
 2.2 Datos de ubicación: Recopilamos tu ubicación GPS en tiempo real para:
    - Mostrar tu posición en el mapa
    - Conectar pasajeros con conductores cercanos
-   - Calcular tarifas basadas en zonas
+   - Calcular tarifas basadas en zonas y rutas
    - Compartir tu ubicación con el conductor durante el viaje (pasajero)
+   - Compartir tu ubicación con el pasajero durante el viaje (conductor)
    - Registrar la ruta del viaje para facturación y seguridad
 
 2.3 Datos de vehículo (conductores): Tipo de vehículo, modelo, placa, licencia de
-conducir y certificado médico.
+conducir, certificado médico y fotografía del vehículo. Estos documentos son
+verificados por nuestro equipo.
 
-2.4 Información de pago: Datos de pago móvil y transferencia bancaria para que los
-conductores reciban sus ganancias.
+2.4 Información de verificación de pagos:
+   - Pasajeros: Para verificar pagos realizados mediante Pago Móvil, la plataforma
+     envía al Banco Venezolano de Crédito (BVC) los siguientes datos de la
+     transacción: número de referencia del pago, fecha, monto, banco emisor, número
+     de teléfono del pagador y número de cédula de identidad. Esta verificación
+     confirma que el pago fue procesado exitosamente sin que la plataforma tenga
+     acceso a credenciales bancarias, números de tarjeta o claves del usuario.
+   - Conductores: Para recibir sus ganancias, los conductores proporcionan sus
+     datos bancarios (banco, tipo de cuenta, número de cuenta, cédula del titular)
+     los cuales son utilizados exclusivamente para procesar transferencias
+     bancarias desde el panel administrativo de UrbanTaxi hacia la cuenta del
+     conductor. Estas transferencias se ejecutan a través del BVC únicamente
+     cuando el administrador de la plataforma las autoriza manualmente.
 
-2.5 Datos del dispositivo: Modelo del dispositivo, sistema operativo, identificadores
-únicos y datos de diagnóstico para mejorar el servicio.
+2.5 Datos del dispositivo y uso: Modelo del dispositivo, sistema operativo,
+identificadores únicos, idioma/configuración regional, token de notificaciones
+push (Expo), dirección IP y datos de diagnóstico para mejorar el servicio
+y prevenir fraudes.
+
+2.6 Datos de uso de la app: Registros de actividad (solicitudes de viaje,
+cancelaciones, calificaciones), tiempo de uso y funcionalidades utilizadas.
 
 
 3. CÓMO USAMOS TU INFORMACIÓN
@@ -42,13 +62,16 @@ conductores reciban sus ganancias.
 Utilizamos tu información para:
    - Procesar y gestionar solicitudes de viaje
    - Conectar pasajeros con conductores disponibles
-   - Calcular tarifas y procesar pagos
+   - Calcular tarifas y facilitar la verificación de pagos
    - Mostrar el mapa con rutas y ubicaciones en tiempo real
    - Enviar notificaciones sobre el estado del viaje
    - Verificar la identidad y documentos de los conductores
+   - Facilitar la verificación de pagos Pago Móvil a través del BVC
+   - Procesar la dispersión de ganancias a conductores vía transferencia bancaria
    - Mejorar la seguridad de todos los usuarios
-   - Cumplir con obligaciones legales
+   - Cumplir con obligaciones legales y fiscales
    - Enviar comunicaciones de servicio y soporte
+   - Personalizar la experiencia del usuario (idioma, preferencias)
 
 
 4. COMPARTICIÓN DE DATOS
@@ -56,13 +79,19 @@ Utilizamos tu información para:
 4.1 Entre usuarios: Durante un viaje activo, compartimos:
    - Pasajero → Conductor: nombre, foto de perfil y ubicación de recogida
    - Conductor → Pasajero: nombre, foto, calificación, datos del vehículo
-     y ubicación en tiempo real
+     (modelo, color, placa) y ubicación en tiempo real
 
-4.2 Con terceros: No vendemos tu información personal. Solo compartimos datos
-cuando es necesario para:
-   - Procesadores de pago (datos de transacción)
-   - Servicios de mapas y navegación (coordenadas GPS)
-   - Autoridades legales (cuando la ley lo requiera)
+4.2 Con terceros proveedores de servicios:
+   - Google Maps SDK: coordenadas GPS para visualización de mapas (SDK gratuito)
+   - Expo Push Service: token de dispositivo para notificaciones push
+   - Banco Venezolano de Crédito (BVC): para verificación de pagos Pago Móvil
+     (referencia, fecha, monto, banco emisor, teléfono, cédula del pagador) y
+     para dispersión de créditos a conductores (datos bancarios del conductor)
+   - Servidores de Socket.io: conexiones en tiempo real para seguimiento de viajes
+
+4.3 No vendemos tu información personal a terceros. Solo compartimos datos cuando
+es estrictamente necesario para la prestación del servicio o cuando la ley lo
+requiera (autoridades competentes).
 
 
 5. ALMACENAMIENTO Y SEGURIDAD
@@ -71,19 +100,22 @@ Tus datos se almacenan en servidores seguros con encriptación. Implementamos
 medidas técnicas y organizativas para proteger tu información contra acceso no
 autorizado, alteración, divulgación o destrucción.
 
-Las contraseñas se almacenan encriptadas (hash). Los datos de pago sensible se
-transmiten mediante conexiones seguras (HTTPS/TLS).
+Las contraseñas se almacenan encriptadas (hash). Los datos de pago y tokens de
+autenticación se almacenan en el almacenamiento seguro del dispositivo
+(expo-secure-store). Las comunicaciones con nuestros servidores utilizan
+conexiones seguras (HTTPS/TLS).
 
 
 6. RETENCIÓN DE DATOS
 
 Conservamos tu información personal mientras tu cuenta esté activa y durante un
 período adicional razonable para:
-   - Cumplir con obligaciones legales y fiscales
+   - Cumplir con obligaciones legales y fiscales venezolanas
    - Resolver disputas
    - Hacer cumplir nuestros términos
 
 Los datos de ubicación de viajes completados se anonimizan después de 90 días.
+Los tokens de notificaciones se eliminan al cerrar sesión o eliminar la cuenta.
 
 
 7. TUS DERECHOS
@@ -94,6 +126,7 @@ Como usuario de UrbanTaxi, tienes derecho a:
    - Eliminar tu cuenta y datos asociados (opción disponible en tu perfil)
    - Exportar tus datos en un formato portable
    - Oponerte al procesamiento de tus datos
+   - Revocar permisos del dispositivo en cualquier momento
 
 Para ejercer estos derechos, contáctanos a través de los canales indicados en
 la sección de Contacto.
@@ -102,13 +135,15 @@ la sección de Contacto.
 8. ELIMINACIÓN DE CUENTA
 
 Puedes eliminar tu cuenta y todos tus datos asociados en cualquier momento desde
-la sección "Cuenta" en tu perfil de usuario. El proceso requiere una doble
-confirmación para evitar eliminaciones accidentales.
+la sección "Cuenta" o "Eliminar cuenta" en tu perfil de usuario. El proceso
+requiere una doble confirmación para evitar eliminaciones accidentales.
 
 Al eliminar tu cuenta:
-   - Se eliminarán permanentemente tus datos personales
-   - Los registros de viajes se anonimizarán
-   - Los datos de transacciones se conservarán por obligaciones fiscales
+   - Se eliminarán permanentemente tus datos personales (nombre, email, teléfono,
+     foto de perfil)
+   - Los registros de viajes se anonimizarán (disociados de tu identidad)
+   - Los datos de transacciones se conservarán por obligaciones fiscales venezolanas
+   - Tu token de notificaciones será revocado
 
 
 9. PERMISOS DEL DISPOSITIVO
@@ -116,25 +151,85 @@ Al eliminar tu cuenta:
 La aplicación solicita los siguientes permisos:
 
 Ubicación (en uso y en segundo plano): Necesario para mostrar tu posición en
-el mapa, conectar con conductores cercanos y compartir tu ubicación durante el
-viaje. Los conductores necesitan ubicación en segundo plano para seguir
-compartiendo su posición cuando la app está minimizada.
+el mapa, conectar con conductores cercanos, calcular rutas y tarifas, y compartir
+tu ubicación durante el viaje. Los conductores necesitan ubicación en segundo
+plano para seguir compartiendo su posición cuando la app está minimizada.
 
 Notificaciones Push: Para informarte sobre el estado de tus viajes, solicitudes
-de conductor y mensajes importantes.
+de conductor, verificación de pagos y mensajes importantes del servicio.
 
-Cámara y Galería: Opcional, solo para agregar foto de perfil y cargar documentos
-de verificación (conductores).
+Cámara y Galería: Opcional, para agregar foto de perfil y para que los
+conductores carguen documentos de verificación (licencia, certificado médico,
+datos del vehículo).
+
+Almacenamiento: Para guardar fotos de perfil y documentos de verificación
+temporalmente durante el proceso de carga. Los conductores también pueden cargar
+comprobantes de datos bancarios para recibir sus pagos.
+
+Audio: Utilizado por el lector de texto a voz (Text-to-Speech) para mejorar la
+accesibilidad de notificaciones durante el viaje.
 
 
-10. MENORES DE EDAD
+10. SERVICIOS DE TERCEROS INTEGRADOS
+
+10.1 Google Maps SDK: Utilizamos el SDK gratuito de Google Maps exclusivamente
+para la visualización de mapas y geocodificación dentro de la aplicación. No
+utilizamos servicios de pago de Google Maps Platform (Directions API, Places API,
+etc.). Las rutas y distancias se calculan mediante nuestro propio servidor de
+enrutamiento (OSRM auto-hospedado). El uso del SDK de Google Maps está sujeto a
+los Términos de Servicio de Google Maps.
+
+10.2 Notificaciones Push (Expo): Utilizamos el servicio de notificaciones push
+de Expo (Expo Push Service) para enviar notificaciones a tu dispositivo. Firebase
+es utilizado únicamente como dependencia técnica del ecosistema, pero las
+notificaciones se entregan a través de la infraestructura de Expo, no de Firebase
+Cloud Messaging.
+
+10.3 Banco Venezolano de Crédito (BVC): La plataforma se conecta con el BVC,
+entidad bancaria regulada en Venezuela, para dos propósitos específicos:
+
+   a) Verificación de pagos Pago Móvil (P2C): Cuando un pasajero realiza un pago
+      mediante Pago Móvil, la plataforma envía al BVC los datos necesarios para
+      verificar que la transacción fue procesada (referencia, fecha, monto, banco
+      emisor, teléfono y cédula del pagador). El BVC responde confirmando o
+      rechazando la verificación. La plataforma no tiene acceso a las credenciales
+      bancarias del pasajero ni realiza el cobro — solo verifica que el pago
+      existe en el sistema bancario.
+
+   b) Dispersión de pagos a conductores (Créditos): Cuando un administrador de la
+      plataforma autoriza un pago a un conductor, la plataforma envía al BVC los
+      datos bancarios del conductor (número de cuenta, código de banco, monto y
+      referencia) para ejecutar una transferencia bancaria. El BVC procesa la
+      transferencia y la plataforma monitorea el estado hasta su confirmación.
+
+Toda comunicación con el BVC se realiza mediante canales encriptados (AES-128-CBC
+sobre HTTPS). La plataforma opera actualmente en modo de simulación (mock) para
+pruebas; la conexión real al BVC se activará cuando el banco apruebe las
+credenciales de producción.
+
+10.4 Socket.io: Utilizamos conexiones WebSocket para comunicación en tiempo real
+durante los viajes (ubicación del conductor, estado del viaje, notificaciones).
+
+
+11. MENORES DE EDAD
 
 UrbanTaxi no está dirigido a menores de 18 años. No recopilamos intencionadamente
 información de menores. Si descubres que un menor ha proporcionado datos
-personales, contáctanos para eliminarlos.
+personales, contáctanos para eliminarlos inmediatamente.
 
 
-11. CAMBIOS A ESTA POLÍTICA
+12. TRANSFERENCIA INTERNACIONAL DE DATOS
+
+Tus datos se almacenan y procesan en servidores ubicados en Venezuela. Al utilizar
+servicios de terceros como Google (Maps SDK) y Expo (Push Service), ciertos datos
+técnicos (tokens de dispositivo, coordenadas anónimas) pueden ser procesados en
+servidores internacionales bajo los términos de privacidad de dichos proveedores.
+
+La verificación de pagos y dispersión de créditos a través del BVC se realiza
+íntegramente en Venezuela, bajo la jurisdicción y regulación bancaria venezolana.
+
+
+13. CAMBIOS A ESTA POLÍTICA
 
 Podemos actualizar esta Política de Privacidad periódicamente. Te notificaremos
 sobre cambios significativos a través de la aplicación o por correo electrónico.
@@ -142,13 +237,12 @@ El uso continuado de la aplicación después de los cambios constituye tu acepta
 de la política actualizada.
 
 
-12. CONTACTO
+14. CONTACTO
 
 Si tienes preguntas sobre esta Política de Privacidad o deseas ejercer tus
 derechos de protección de datos, contáctanos:
 
    Email: urbantaxisapp@gmail.com
-   Sitio Web: https://administracionurbantaxis.com/privacidad
    Dirección: Venezuela
 
 © 2026 UrbanTaxi. Todos los derechos reservados.

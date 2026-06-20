@@ -15,6 +15,7 @@ import { useGlobalSocketListeners } from '@/hooks/useGlobalSocketListeners';
 import { useBadgeSync } from '@/hooks/useBadgeSync';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { logInfo, logError } from '@/utils/errorLogger';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 // Initialize log capture for the in-app Sistema log viewer
 // Must be imported early to intercept all console.log/warn/error
@@ -168,7 +169,9 @@ export default function RootLayout() {
     <ErrorBoundary>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <UnifiedNotificationProvider>
-          <AppContent />
+          <KeyboardProvider>
+            <AppContent />
+          </KeyboardProvider>
         </UnifiedNotificationProvider>
       </ThemeProvider>
     </ErrorBoundary>

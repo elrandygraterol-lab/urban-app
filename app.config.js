@@ -88,7 +88,6 @@ module.exports = ({ config }) => {
         {
           icon: './assets/images/icon.png',
           color: '#22c55e',
-          sounds: ['./assets/sounds/notification.wav'],
           androidCollapsedTitle: 'UrbanTaxi',
         },
       ],
@@ -106,6 +105,7 @@ module.exports = ({ config }) => {
     updates: {
       fallbackToCacheTimeout: 0,
     },
+    privacyPolicyUrl: 'https://administracionurbantaxis.com/privacidad',
     assetBundlePatterns: ['**/*'],
     extra: {
       router: {},

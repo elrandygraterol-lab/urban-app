@@ -284,28 +284,34 @@ export default function ActiveRideScreen() {
   // Resume route tracking when app returns from background (e.g., after external nav)
   useEffect(() => {
     const sub = AppState.addEventListener('change', nextState => {
-      if (nextState === 'active' && rideRef.current) {
-        console.log('[ACTIVE_RIDE] App returned to foreground, refreshing state...');
-        // Re-fetch ride data to get latest status
-        fetchRide().then(() => {
-          // Re-initialize GPS and route after getting latest ride state
-          if (locationRef.current) {
-            fetchAndDrawRoute();
-          } else {
-            // GPS was lost while in background, request fresh location
-            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
-              .then(pos => {
-                const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-                setLocation(coords);
-                locationRef.current = coords;
-                fetchAndDrawRoute();
-              })
-              .catch(() =>
-                console.log('[ACTIVE_RIDE] Failed to get fresh location after background')
-              );
-          }
-        });
-      }
+      if (nextState !== 'active') return;
+      if (!rideRef.current && !ride) return; // No active ride at all
+
+      console.log('[ACTIVE_RIDE] App returned to foreground, refreshing state...');
+
+      // Reset throttle so route updates immediately after restore
+      lastRouteUpdateRef.current = 0;
+      isReroutingRef.current = false;
+
+      // Re-fetch ride data to get latest status
+      fetchRide().then(() => {
+        // Re-initialize GPS and route after getting latest ride state
+        if (locationRef.current) {
+          fetchAndDrawRoute();
+        } else {
+          // GPS was lost while in background, request fresh location
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
+            .then(pos => {
+              const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+              setLocation(coords);
+              locationRef.current = coords;
+              fetchAndDrawRoute();
+            })
+            .catch(() =>
+              console.log('[ACTIVE_RIDE] Failed to get fresh location after background')
+            );
+        }
+      });
     });
     return () => sub.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -855,9 +861,17 @@ export default function ActiveRideScreen() {
         console.log('[ACTIVE_RIDE] Re-joined ride room:', currentRideId);
       }
 
+      // Reset throttles so route updates immediately after reconnect
+      lastRouteUpdateRef.current = 0;
+      isReroutingRef.current = false;
+
       // Re-register payment listener and refresh ride state after reconnect
       onPaymentConfirmed(handlePaymentConfirmed);
-      fetchRide();
+      fetchRide().then(() => {
+        if (locationRef.current) {
+          fetchAndDrawRoute();
+        }
+      });
     };
 
     const handleDisconnect = (reason: string) => {

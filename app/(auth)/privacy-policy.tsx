@@ -29,7 +29,7 @@ export default function PrivacyPolicyScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.lastUpdated}>Última actualización: 17 de junio de 2026</Text>
+        <Text style={styles.lastUpdated}>Última actualización: 20 de junio de 2026</Text>
 
         <Section title="1. Introducción">
           UrbanTaxi ("nosotros", "nuestro" o "la aplicación") es una plataforma de movilidad 
@@ -44,7 +44,8 @@ export default function PrivacyPolicyScreen() {
 
         <Section title="2. Información que Recopilamos">
           <Bold>2.1 Información de cuenta:</Bold> Nombre completo, correo electrónico, 
-          número de teléfono y contraseña encriptada al registrarte.
+          número de teléfono, foto de perfil y contraseña encriptada al registrarte.
+          También puedes iniciar sesión mediante Google Sign-In.
           {'\n\n'}
           <Bold>2.2 Datos de ubicación:</Bold> Recopilamos tu ubicación GPS en tiempo real 
           para:

@@ -17,7 +17,7 @@ import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import Svg, { Path, G } from 'react-native-svg';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, withRepeat, withSequence, Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
@@ -351,6 +351,16 @@ export default function PassengerHomeScreen() {
                   latitude: Number(ride.driver.currentLocation.latitude),
                   longitude: Number(ride.driver.currentLocation.longitude),
                 });
+              } else if (prevDriverLocationRef.current) {
+                // Fallback: use last known driver location from previous session
+                setDriverLocation(prevDriverLocationRef.current);
+              } else if ((ride.status === 'arrived' || ride.status === 'in_progress') && ride.pickupLatitude && ride.pickupLongitude) {
+                // Fallback: driver is at/near pickup, use it until socket delivers real location
+                // Only for arrived/in_progress — NOT for 'accepted' (driver is still en route)
+                setDriverLocation({
+                  latitude: Number(ride.pickupLatitude),
+                  longitude: Number(ride.pickupLongitude),
+                });
               }
               // Restaurar estado de pago
               if (ride.payment?.status === 'completed') {
@@ -379,6 +389,12 @@ export default function PassengerHomeScreen() {
         restoreActiveRide().then(() => {
           // Force socket listener re-registration even for the same ride
           setListenerVersion(v => v + 1);
+          // Force socket reconnection to recover real-time driver location
+          const s = getSocket();
+          if (s && !s.connected && !s.active) {
+            console.log('[PASSENGER] App foreground - reconnecting socket');
+            s.connect();
+          }
         });
       }
     });
@@ -542,7 +558,7 @@ export default function PassengerHomeScreen() {
   // ========== MEJORAS DE NAVEGACIÓN ==========
   // Mejora 1: Actualización dinámica de ruta
   const [isDynamicRouteEnabled] = useState(true);
-  const [lastRouteUpdate, setLastRouteUpdate] = useState<number>(Date.now());
+  const [lastRouteUpdate, setLastRouteUpdate] = useState<number>(0);
 
   // Mejora 2: Indicador de progreso visual
   const [rideProgress, setRideProgress] = useState<number>(0); // 0-100%
@@ -980,7 +996,7 @@ export default function PassengerHomeScreen() {
         isDynamicRouteEnabled &&
         activeRide?.status === 'in_progress' &&
         destinationLocation &&
-        Date.now() - lastRouteUpdate > 30000
+        (Date.now() - lastRouteUpdate > 30000 || routeCoordinates.length === 0)
       ) {
         updateDynamicRoute(newDriverLocation, destinationLocation);
       }
@@ -1229,10 +1245,10 @@ export default function PassengerHomeScreen() {
     if (!activeRide || !driverLocation || !isDynamicRouteEnabled) return;
     if (listenerVersion === 0) return;
 
-    if (activeRide.status === 'in_progress' && destinationLocation) {
+    if (activeRide.status === 'in_progress' && destinationLocation && routeCoordinates.length === 0) {
       updateDynamicRoute(driverLocation, destinationLocation);
     }
-  }, [listenerVersion]); // eslint-disable-line
+  }, [listenerVersion, driverLocation]); // Added driverLocation: fires when socket delivers first location after restore
 
   // Camera follows driver during the ride — same navigation experience as driver
   useEffect(() => {
@@ -1447,6 +1463,9 @@ export default function PassengerHomeScreen() {
       setInitialDistanceToDestination(initialDistance);
       setRideProgress(0); // Iniciar en 0%
 
+      // Show initial Haversine distance immediately while OSRM route loads
+      setDisplayDistance(initialDistance);
+
       console.log(
         '[RIDE_IMPROVEMENTS] Initial distance to destination:',
         initialDistance.toFixed(2),
@@ -1455,6 +1474,9 @@ export default function PassengerHomeScreen() {
 
       // Mejora 3: Buscar puntos de interés cercanos
       fetchNearbyLandmarks(driverLocation);
+
+      // Mejora 1: Fetch OSRM route from driver to destination for accurate ETA
+      updateDynamicRoute(driverLocation, destinationLocation);
     }
 
     // Resetear cuando el viaje termina
@@ -3226,14 +3248,6 @@ export default function PassengerHomeScreen() {
           </View>
         )}
 
-        {/* Approximate Route Banner */}
-        {isApproximateRoute && (
-          <View style={styles.approximateRouteBanner}>
-            <Ionicons name="information-circle" size={16} color="#fff" style={{ marginRight: 6 }} />
-            <Text style={styles.approximateRouteBannerText}>Ruta estimada</Text>
-          </View>
-        )}
-
         {/* Map Selection Mode Banner */}
         {mapSelectionMode !== 'none' && (
           <View style={styles.mapSelectionBanner}>
@@ -3264,7 +3278,7 @@ export default function PassengerHomeScreen() {
           </View>
         )}
 
-        {/* Search and Request Panel with Keyboard Aware ScrollView */}
+        {/* Search and Request Panel with native keyboard handling */}
         <View style={[styles.panelContainer, isPanelCollapsed && styles.panelContainerCollapsed]}>
           {/* Collapsible Handle - Always visible */}
           <TouchableOpacity
@@ -3278,16 +3292,13 @@ export default function PassengerHomeScreen() {
           {/* Panel Content - Hidden when collapsed */}
           {!isPanelCollapsed && (
             <KeyboardAwareScrollView
-              enableOnAndroid={true}
-              enableAutomaticScroll={true}
-              extraScrollHeight={100}
-              keyboardShouldPersistTaps="always"
+              keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.panelContent}
               style={styles.panelScrollView}
-              keyboardOpeningTime={0}
-              resetScrollToCoords={{ x: 0, y: 0 }}
               scrollEnabled={true}
+              bounces={false}
+              overScrollMode="never"
             >
               {/* Active Ride - Driver Info */}
               {activeRide && activeRide.driver && (
@@ -4813,6 +4824,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
     maxHeight: '65%',
+    overflow: 'hidden',
   },
   panelContainerCollapsed: {
     maxHeight: 50,
@@ -4829,7 +4841,6 @@ const styles = StyleSheet.create({
   },
   panelContent: {
     padding: 16,
-    paddingBottom: 32,
   },
   panelHandle: {
     width: 40,

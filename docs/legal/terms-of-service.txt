@@ -1,6 +1,6 @@
 TÉRMINOS DE SERVICIO DE URBANTAXI
 ===================================
-Última actualización: 17 de junio de 2026
+Última actualización: 20 de junio de 2026
 
 
 1. ACEPTACIÓN DE LOS TÉRMINOS
@@ -12,6 +12,8 @@ acuerdo con estos Términos, no debes utilizar la Aplicación.
 UrbanTaxi es una plataforma tecnológica que conecta a pasajeros que solicitan
 servicios de transporte con conductores independientes que ofrecen dichos
 servicios. UrbanTaxi NO es una empresa de transporte y no emplea conductores.
+Los conductores son prestadores de servicio independientes que utilizan la
+plataforma para conectarse con pasajeros.
 
 
 2. ELEGIBILIDAD
@@ -22,8 +24,12 @@ registrarte como conductor debes:
    - Poseer licencia de conducir vigente
    - Tener un vehículo en condiciones adecuadas
    - Proporcionar documentación verídica (licencia, certificado médico,
-     datos del vehículo)
+     datos del vehículo, foto del vehículo)
    - Aprobar el proceso de verificación de la plataforma
+   - Mantener tus documentos actualizados
+
+UrbanTaxi se reserva el derecho de rechazar o revocar el registro de cualquier
+usuario que no cumpla con estos requisitos.
 
 
 3. CUENTA DE USUARIO
@@ -31,7 +37,12 @@ registrarte como conductor debes:
 Eres responsable de mantener la confidencialidad de tu cuenta y contraseña.
 Debes proporcionar información precisa, actualizada y completa durante el
 registro. No debes compartir tu cuenta con terceros ni usar la cuenta de
-otra persona.
+otra persona. Eres responsable de todas las actividades que ocurran bajo tu
+cuenta.
+
+Puedes iniciar sesión mediante correo electrónico y contraseña, o mediante
+Google Sign-In. Al usar Google Sign-In, autorizas a Google a compartir con
+nosotros tu nombre y correo electrónico asociados a tu cuenta de Google.
 
 
 4. SERVICIOS DE LA PLATAFORMA
@@ -43,7 +54,10 @@ acepta el viaje, y calificar al conductor al finalizar.
 
 4.2 Para Conductores: La Aplicación te permite recibir solicitudes de viaje,
 navegar hacia puntos de recogida y destino, gestionar tu disponibilidad, y
-recibir pagos por tus servicios.
+recibir pagos por tus servicios. Como conductor, eres responsable de:
+   - Mantener tu vehículo en condiciones seguras y legales
+   - Cumplir con las leyes de tránsito aplicables
+   - Portar todos los documentos requeridos por la ley
 
 4.3 Tarifas: Las tarifas se calculan mediante un motor de tarifas por zonas
 que considera el tipo de tarifa configurado para cada ruta:
@@ -60,31 +74,62 @@ condiciones especiales configuradas por la plataforma. La tarifa estimada
 se muestra antes de confirmar el viaje.
 
 
-5. PAGOS
+5. PAGOS Y VERIFICACIÓN BANCARIA
 
-5.1 Pasajeros: Puedes pagar en efectivo directamente al conductor o mediante
-Pago Móvil. El pago debe realizarse según lo acordado antes de iniciar el viaje.
+5.1 Métodos de Pago: Los pasajeros pueden pagar en efectivo directamente al
+conductor o mediante Pago Móvil. El método de pago se acuerda antes de
+iniciar el viaje.
 
-5.2 Conductores: Recibirás tus ganancias a través de Pago Móvil o transferencia
-bancaria según los datos que proporciones en tu perfil. Las ganancias están
-sujetas a la comisión de la plataforma.
+5.2 Verificación de Pagos Pago Móvil (BVC - P2C): La plataforma integra el
+servicio de verificación de pagos P2C (Person-to-Customer) del Banco Venezolano
+de Crédito (BVC) para confirmar que un pago realizado por Pago Móvil fue
+procesado exitosamente. Para ello, la plataforma envía al BVC los datos de la
+transacción (número de referencia, fecha, monto, banco emisor, teléfono y cédula
+del pagador). El BVC responde confirmando o rechazando la verificación. Este
+proceso NO implica que UrbanTaxi cobre, retenga o procese el pago — únicamente
+verifica que la transacción existe en el sistema bancario. La plataforma no
+tiene acceso a credenciales bancarias, números de tarjeta ni claves del pasajero.
+
+5.3 Pagos a Conductores (Dispersión de Créditos): Los conductores proporcionan
+sus datos bancarios (banco, tipo de cuenta, número de cuenta, cédula del titular)
+en su perfil. Las ganancias acumuladas en la billetera digital del conductor
+son transferidas a su cuenta bancaria exclusivamente cuando un administrador de
+la plataforma procesa manualmente el pago. Estas transferencias se ejecutan a
+través del servicio de dispersión de créditos del BVC. La plataforma monitorea
+el estado de cada transferencia hasta su confirmación o rechazo. Las ganancias
+están sujetas a la comisión de la plataforma, la cual se deduce automáticamente
+al completar cada viaje.
+
+5.4 Comisión de la Plataforma: Por cada viaje completado, la plataforma retiene
+una comisión sobre la tarifa cobrada. El porcentaje exacto es configurado por
+la administración y puede variar. Las ganancias netas (tarifa menos comisión)
+se acreditan a la billetera digital del conductor.
+
+5.5 Responsabilidad de Pago: El pasajero es responsable de realizar el pago
+completo de la tarifa acordada. La plataforma no es responsable de pagos no
+realizados entre usuarios, aunque puede suspender cuentas de usuarios con
+pagos pendientes o fraudulentos. El BVC y los bancos emisores son responsables
+únicamente por la verificación de las transacciones, no por la prestación del
+servicio de transporte.
 
 
 6. CONDUCTA DEL USUARIO
 
 Todos los usuarios se comprometen a:
    - Tratar a los demás con respeto y cortesía
-   - No discriminar por raza, género, religión u orientación
+   - No discriminar por raza, género, religión, orientación sexual o cualquier
+     otra condición
    - No dañar la propiedad ajena
    - No usar la plataforma para actividades ilegales
-   - No manipular el sistema de tarifas o calificaciones
+   - No manipular el sistema de tarifas, calificaciones o verificación de pagos
    - Reportar cualquier incidente o comportamiento inapropiado
+   - No compartir información falsa o engañosa
 
-UrbanTaxi se reserva el derecho de suspender o cancelar cuentas que violen
-estas normas de conducta.
+UrbanTaxi se reserva el derecho de suspender o cancelar permanentemente las
+cuentas que violen estas normas de conducta, sin reembolso de saldos pendientes.
 
 
-7. CANCELACIONES
+7. CANCELACIONES Y REEMBOLSOS
 
 7.1 Período de Gracia: Las cancelaciones realizadas dentro de los primeros
 2 minutos después de solicitar el viaje son gratuitas y no generan ningún cargo.
@@ -94,70 +139,106 @@ estas normas de conducta.
      cancelación gratuita en cualquier momento.
    - Si el viaje está en estado "aceptado" (conductor asignado) después del
      período de gracia: se aplica un cargo por cancelación equivalente a un
-     porcentaje de la tarifa estimada o una tarifa estándar (Bs. 5,00), lo
-     que resulte aplicable según la configuración vigente.
+     porcentaje de la tarifa estimada o una tarifa estándar, lo que resulte
+     aplicable según la configuración vigente de la plataforma.
    - Si el conductor ya "llegó" al punto de recogida: se aplica una penalidad
      del 50% de la tarifa estimada. El pasajero recibe un reembolso del 50%
      en un plazo de 24 horas.
 
 7.3 Cancelación por el Conductor: El conductor puede cancelar un viaje en
 estado "aceptado" sin costo. Si el conductor cancela, el sistema genera
-automáticamente una nueva solicitud para el pasajero.
+automáticamente una nueva solicitud para el pasajero. Cancelaciones frecuentes
+por parte del conductor pueden resultar en penalizaciones de la plataforma.
 
 7.4 Viajes en Progreso: No se permiten cancelaciones una vez que el viaje ha
-iniciado (estado "en progreso").
+iniciado (estado "en progreso"), salvo causas de fuerza mayor.
 
-7.5 Cancelación por Tiempo de Espera: Si ningún conductor acepta el viaje en
-un plazo de 60 segundos, el sistema cancela automáticamente la solicitud sin
-costo para el pasajero.
+7.5 Cancelación Automática: Si ningún conductor acepta el viaje en un plazo
+de 60 segundos, el sistema cancela automáticamente la solicitud sin costo para
+el pasajero.
 
 
-8. LIMITACIÓN DE RESPONSABILIDAD
+8. VERIFICACIÓN DE CONDUCTORES
+
+Todos los conductores deben pasar por un proceso de verificación que incluye:
+   - Validación de licencia de conducir vigente
+   - Certificado médico
+   - Datos del vehículo (placa, modelo, color, foto)
+   - Datos bancarios para recibir pagos
+   - Datos de Pago Móvil
+
+La plataforma se reserva el derecho de rechazar, suspender o revocar la
+verificación de cualquier conductor. Los conductores son responsables de
+mantener sus documentos actualizados.
+
+
+9. LIMITACIÓN DE RESPONSABILIDAD
 
 UrbanTaxi actúa como plataforma de conexión entre pasajeros y conductores
 independientes. No somos responsables de:
    - La conducta de pasajeros o conductores
-   - La calidad del servicio de transporte
-   - Daños, pérdidas o lesiones durante el viaje
+   - La calidad del servicio de transporte prestado por conductores
+   - Daños, pérdidas, lesiones o accidentes durante el viaje
    - Problemas técnicos fuera de nuestro control
-   - Retrasos o cancelaciones inevitables
+   - Retrasos o cancelaciones por causas inevitables
+   - Pagos no realizados o disputas entre usuarios
+   - La exactitud de la información proporcionada por los usuarios
 
-Nuestra responsabilidad se limita al monto pagado por el servicio de plataforma
-(comisión), en la medida permitida por la ley.
-
-
-9. PROPIEDAD INTELECTUAL
-
-La Aplicación, su diseño, código fuente, marca, logotipo y contenido son
-propiedad de UrbanTaxi. No puedes copiar, modificar, distribuir o crear obras
-derivadas sin autorización expresa.
+Nuestra responsabilidad se limita al monto de la comisión cobrada por el
+servicio de plataforma, en la medida máxima permitida por la ley venezolana.
 
 
-10. TERMINACIÓN
+10. PROPIEDAD INTELECTUAL
 
-Puedes dejar de usar la Aplicación en cualquier momento. UrbanTaxi puede
-suspender o cerrar tu cuenta si violas estos Términos, con o sin previo aviso.
-La eliminación de cuenta eliminará tus datos personales según nuestra Política
-de Privacidad.
+La Aplicación, su diseño, código fuente, marca "UrbanTaxi", logotipo, gráficos,
+interfaz de usuario y todo el contenido original son propiedad exclusiva de
+UrbanTaxi. No puedes copiar, modificar, distribuir, realizar ingeniería inversa
+o crear obras derivadas sin autorización expresa y por escrito.
 
 
-11. MODIFICACIONES
+11. PRIVACIDAD Y DATOS PERSONALES
+
+El tratamiento de tus datos personales se rige por nuestra Política de Privacidad,
+la cual forma parte integral de estos Términos. Al utilizar la Aplicación,
+consientes el tratamiento de tus datos según lo descrito en dicha política.
+
+La plataforma utiliza servicios de terceros (Google Maps SDK gratuito, Expo Push,
+BVC) que tienen sus propias políticas de privacidad. No nos hacemos responsables
+por el tratamiento de datos que dichos terceros realicen de forma independiente.
+
+
+12. TERMINACIÓN
+
+Puedes dejar de usar la Aplicación y eliminar tu cuenta en cualquier momento
+desde la sección de perfil. UrbanTaxi puede suspender o cerrar tu cuenta si
+violas estos Términos, con o sin previo aviso. La eliminación de cuenta
+conlleva la eliminación de tus datos personales según nuestra Política de
+Privacidad.
+
+Las obligaciones de pago pendientes sobreviven a la terminación de la cuenta.
+
+
+13. MODIFICACIONES A LOS TÉRMINOS
 
 Podemos modificar estos Términos en cualquier momento. Los cambios significativos
-se notificarán a través de la Aplicación. El uso continuado después de las
-modificaciones constituye tu aceptación de los nuevos términos.
+se notificarán a través de la Aplicación con al menos 7 días de antelación.
+El uso continuado después de las modificaciones constituye tu aceptación de
+los nuevos términos. Si no estás de acuerdo con los cambios, debes dejar de
+usar la Aplicación y eliminar tu cuenta.
 
 
-12. LEY APLICABLE
+14. LEY APLICABLE Y JURISDICCIÓN
 
 Estos Términos se rigen por las leyes de la República Bolivariana de Venezuela.
-Cualquier disputa se resolverá en los tribunales competentes de Caracas, Venezuela.
+Cualquier disputa derivada de o relacionada con estos Términos o el uso de la
+plataforma será resuelta mediante negociación de buena fe y, de no ser posible,
+ante los tribunales competentes de la ciudad de Caracas, Venezuela.
 
 
-13. CONTACTO
+15. CONTACTO
 
-Para consultas sobre estos Términos:
+Para consultas sobre estos Términos, reportar violaciones o ejercer tus derechos:
+
    Email: urbantaxisapp@gmail.com
-   Sitio Web: https://administracionurbantaxis.com/terminos
 
 © 2026 UrbanTaxi. Todos los derechos reservados.
