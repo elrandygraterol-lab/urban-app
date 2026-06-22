@@ -63,15 +63,20 @@ export const useGlobalSocketListeners = ({
       playNotificationSound();
 
       // Show ride request modal via notification manager (deduplication handled by context)
-      // Backend socket only sends a subset of RideRequestData fields;
-      // supply defaults for fields not included in the event payload
-      const avgSpeedKmh = 25;
-      const calcDuration = Math.round((data.distance / avgSpeedKmh) * 60);
+      // Backend sends estimatedDuration (trip duration) and distance (trip distance).
+      // Use the backend values directly; only compute as fallback if missing.
+      const safeDistance = Number(data.distance) || 0;
+      const backendDuration = Number((data as any).estimatedDuration) || 0;
+      const calcDuration = backendDuration > 0
+        ? backendDuration
+        : safeDistance > 0
+          ? Math.round((safeDistance / 25) * 60)
+          : 0;
       showRideRequest({
         ...data,
-        passengerRating: 0,
+        passengerRating: (data as any).passengerRating || 0,
         estimatedDuration: calcDuration,
-        vehicleType: 'taxi',
+        vehicleType: (data as any).vehicleType || 'taxi',
       });
     },
     [user?.role, playNotificationSound, showRideRequest]

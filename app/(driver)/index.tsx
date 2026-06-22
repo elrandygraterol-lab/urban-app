@@ -544,8 +544,8 @@ export default function DriverHomeScreen() {
         playNotificationSound();
         showRideRequest({
           ...data,
-          passengerRating: 0,
-          estimatedDuration: Math.round((data.distance / 25) * 60),
+          passengerRating: data.passengerRating || 0,
+          estimatedDuration: data.estimatedDuration || Math.round((Number(data.distance) / 25) * 60),
           vehicleType: data.vehicleType || 'taxi',
         });
       });

@@ -58,7 +58,7 @@ const NOTIFICATION_CONFIG: Record<NotificationType, NotificationConfig> = {
     accentColor: '#16a34a',
   },
   ride_accepted: {
-    icon: 'checkmark-circle',
+    icon: 'car-sport',
     iconColor: '#22c55e',
     bgColor: '#f0fdf4',
     borderColor: '#bbf7d0',
@@ -190,10 +190,11 @@ function renderStars(rating: number | undefined | null) {
 }
 
 function formatMinutes(minutes: number): string {
-  if (!minutes) return '—';
-  if (minutes < 60) return `${minutes} min`;
+  if (minutes == null || isNaN(minutes)) return '—';
+  if (minutes < 1) return '< 1 min';
+  if (minutes < 60) return `${Math.round(minutes)} min`;
   const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
+  const m = Math.round(minutes % 60);
   return m > 0 ? `${h}h ${m}min` : `${h}h`;
 }
 

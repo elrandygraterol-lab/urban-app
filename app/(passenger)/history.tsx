@@ -300,7 +300,7 @@ export default function PassengerHistoryScreen() {
         onRequestClose={() => setSelectedRide(null)}
       >
         <View style={styles.modalOverlay}>
-          <SafeAreaView edges={['bottom']} style={styles.modalSafeContent}>
+          <SafeAreaView edges={['top', 'bottom']} style={styles.modalSafeContent}>
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderLeft}>
                 <View style={[styles.statusDot, { backgroundColor: isCancelled ? '#ef4444' : Colors.primary }]} />
@@ -461,7 +461,7 @@ export default function PassengerHistoryScreen() {
       onRequestClose={() => setShowFilters(false)}
     >
       <View style={styles.modalOverlay}>
-        <SafeAreaView edges={['bottom']} style={styles.modalSafeContent}>
+        <SafeAreaView edges={['top', 'bottom']} style={styles.modalSafeContent}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Filtrar por Fecha</Text>
             <TouchableOpacity onPress={() => setShowFilters(false)}>

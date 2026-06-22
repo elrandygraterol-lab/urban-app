@@ -48,6 +48,7 @@ export interface RideRequestData {
   estimatedFare: number;
   currency?: string;
   distance: number;
+  pickupDistance?: number;
   estimatedDuration: number;
   vehicleType: string;
   expiresAt: string; // ISO 8601
@@ -283,19 +284,19 @@ export const useUnifiedNotifications = (): UnifiedNotificationContextValue => {
 
 function getDefaultTitle(type: NotificationType): string {
   switch (type) {
-    case 'ride_accepted':     return '✅ Viaje Aceptado';
-    case 'ride_cancelled':    return '❌ Viaje Cancelado';
-    case 'ride_started':      return '🚗 Viaje Iniciado';
-    case 'ride_completed':    return '🏁 Viaje Completado';
-    case 'driver_arrived':    return '📍 Conductor Ha Llegado';
-    case 'payment_completed': return '💰 Pago Completado';
-    case 'payment_failed':    return '⚠️ Pago Fallido';
-    case 'commission_credited': return '💵 Comisión Acreditada';
-    case 'store_approved':    return '🏪 Tienda Aprobada';
-    case 'store_rejected':    return '🏪 Tienda Rechazada';
-    case 'new_review':        return '⭐ Nueva Reseña';
-    case 'review_reply':      return '💬 Respuesta a Reseña';
-    case 'success':           return '✅ Éxito';
+    case 'ride_accepted':     return 'Viaje Aceptado';
+    case 'ride_cancelled':    return 'Viaje Cancelado';
+    case 'ride_started':      return 'Viaje Iniciado';
+    case 'ride_completed':    return 'Viaje Completado';
+    case 'driver_arrived':    return 'Conductor Ha Llegado';
+    case 'payment_completed': return 'Pago Completado';
+    case 'payment_failed':    return 'Pago Fallido';
+    case 'commission_credited': return 'Comision Acreditada';
+    case 'store_approved':    return 'Tienda Aprobada';
+    case 'store_rejected':    return 'Tienda Rechazada';
+    case 'new_review':        return 'Nueva Resena';
+    case 'review_reply':      return 'Respuesta a Resena';
+    case 'success':           return 'Exito';
     case 'warning':           return '⚠️ Atención';
     case 'error':             return '❌ Error';
     case 'info':              return 'ℹ️ Información';

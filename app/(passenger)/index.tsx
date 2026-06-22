@@ -882,7 +882,7 @@ export default function PassengerHomeScreen() {
 
     // Listen for ride accepted event
     const handleRideAccepted = (data: any) => {
-      console.log('🚗 Ride accepted:', data);
+      console.log('[PASSENGER] Ride accepted:', data);
 
       // Play notification sound
       playNotificationSound();
@@ -900,28 +900,17 @@ export default function PassengerHomeScreen() {
         setDriverLocation(data.driver.currentLocation);
       }
 
-      // Show mobile payment modal for payment
-      setFinalFare(estimatedFare || 0);
-      setShowMobilePaymentModal(true);
-
-      // Build vehicle info text with safe access
-      const vehicleInfo = data.driver?.vehicleInfo;
-      const vehicleText = vehicleInfo
-        ? `${vehicleInfo.model || 'Información no disponible'} - ${vehicleInfo.licensePlate || 'N/A'}`
-        : 'Información del vehículo no disponible';
-      const ratingText = data.driver?.rating ? `★ ${data.driver.rating.toFixed(1)}` : '';
-
-      // Show single comprehensive driver info alert
+      // Show ONE clear notification with driver name — give 3s to read before payment modal
+      const driverName = data.driver?.name || 'Tu conductor';
       showStatus(
-        'info',
-        `${data.driver?.name || 'Tu conductor'} ha aceptado tu viaje y se dirige hacia ti.\n\n` +
-          `🚙 Vehículo: ${vehicleText}\n` +
-          `${ratingText ? `${ratingText}\n` : ''}` +
-          `\nRealiza el pago para confirmar el viaje.`,
-        'Conductor Viene en Camino',
-        undefined,
-        undefined
+        'ride_accepted',
+        `${driverName} ha aceptado tu viaje y se dirige hacia ti.`,
+        'Conductor en camino',
       );
+
+      // Open payment modal after 3 seconds so passenger can read the notification
+      setFinalFare(estimatedFare || 0);
+      setTimeout(() => setShowMobilePaymentModal(true), 3000);
     };
 
     // Listen for ride status changes
@@ -961,7 +950,7 @@ export default function PassengerHomeScreen() {
         );
       } else if (data.status === 'in_progress') {
         playNotificationSound();
-        showToast('¡Buen viaje! Tu conductor te llevará a tu destino de forma segura.', 'success');
+        showToast('Buen viaje! Tu conductor te llevara a tu destino.', 'success');
       }
       // Note: 'completed' status is handled by the dedicated handleRideCompleted event listener
     };
@@ -1061,9 +1050,9 @@ export default function PassengerHomeScreen() {
 
         showStatus(
           'info',
-          `Tu conductor llegará en aproximadamente ${Math.ceil(estimatedMinutes)} minuto${estimatedMinutes > 1 ? 's' : ''}.\n\n` +
-            `Prepárate para abordar el vehículo.`,
-          '¡Tu Conductor Está Cerca!'
+          `Tu conductor llegara en aproximadamente ${Math.ceil(estimatedMinutes)} minuto${estimatedMinutes > 1 ? 's' : ''}.\n\n` +
+            `Preparate para abordar el vehiculo.`,
+          'Tu conductor esta cerca'
         );
       }
     };
@@ -1145,12 +1134,55 @@ export default function PassengerHomeScreen() {
         showStatus(
           'ride_cancelled',
           `El conductor ha cancelado tu viaje.\n\n` +
-            `Motivo: ${data.cancellationReason || 'No especificado'}\n\n` +
-            `Estamos buscando otro conductor disponible para ti.`,
+            `Motivo: ${data.cancellationReason || 'No especificado'}`,
           'Conductor Canceló el Viaje'
         );
 
+        // Full reset — passenger goes back to the initial state (same as passenger-initiated cancel)
+        setActiveRide(null);
         setDriverLocation(null);
+        setIsSearchingDriver(false);
+        setPaymentCompleted(false);
+        setShowMobilePaymentModal(false);
+        setShowPaymentModal(false);
+        setShowRatingModal(false);
+        setFinalFare(null);
+        setPaymentMethod('cash');
+        setRouteCoordinates([]);
+        setNearestRouteIndex(0);
+        setDisplayDistance(null);
+        setDisplayDuration(null);
+        prevDriverLocationRef.current = null;
+        // Clear map markers
+        setPickupLocation(null);
+        setPickupAddress('');
+        setPickupFullAddress('');
+        setDestinationLocation(null);
+        setDestinationAddress('');
+        setDestinationFullAddress('');
+        setEstimatedFare(null);
+        setFareBreakdown(null);
+        setIsCalculatingFare(false);
+        setZoneInfo(null);
+        setHasShownNearbyNotification(false);
+
+        // Center map on user's current location
+        if (currentLocation && mapRef.current) {
+          mapRef.current.animateToRegion(
+            {
+              latitude: currentLocation.latitude,
+              longitude: currentLocation.longitude,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            },
+            1000
+          );
+        }
+
+        // Auto-set pickup to current location so user can start a new request immediately
+        if (currentLocation) {
+          setPickupLocation(currentLocation);
+        }
       } else if (data.cancelledBy === 'passenger') {
         // Show cancellation fee if applicable
         const feeMessage =
@@ -1201,9 +1233,16 @@ export default function PassengerHomeScreen() {
         4000
       );
 
-      // Show rating modal immediately — no delay
-      console.log('[PASSENGER] Opening rating modal after ride completion');
-      setShowRatingModal(true);
+      // If payment is not yet completed, show payment modal first.
+      // Rating modal will be shown after payment is completed (handleClosePaymentModal).
+      if (!paymentCompleted) {
+        console.log('[PASSENGER] Opening payment modal after ride completion');
+        setShowPaymentModal(true);
+      } else {
+        // Payment already completed — show rating modal directly
+        console.log('[PASSENGER] Payment already completed — opening rating modal');
+        setShowRatingModal(true);
+      }
     };
 
     // Register event listeners
@@ -2713,8 +2752,18 @@ export default function PassengerHomeScreen() {
   const handleProcessPayment = async () => {
     if (!activeRide) return;
 
-    // If cash, just show confirmation
+    // If cash, call backend to mark payment as completed, then show confirmation
     if (paymentMethod === 'cash') {
+      try {
+        await paymentAPI.completePayment(activeRide.id, {
+          method: 'cash',
+          amount: finalFare || estimatedFare || 0,
+        });
+        console.log('✅ Cash payment completed on backend');
+      } catch (error: any) {
+        console.error('Cash payment completion error:', error);
+        // Still show as completed locally — cash is paid physically at end of ride
+      }
       setPaymentCompleted(true);
       return;
     }
@@ -2797,6 +2846,9 @@ export default function PassengerHomeScreen() {
         // Ocultar loading
         setIsRequestingRide(false);
 
+        // Mark payment as completed so ride completion doesn't show payment modal again
+        setPaymentCompleted(true);
+
         // Confirmation shown by MobilePaymentModal — no duplicate toast here
       } else {
         // Legacy payment methods (transfer, cash)
@@ -2813,6 +2865,9 @@ export default function PassengerHomeScreen() {
 
         // Ocultar loading
         setIsRequestingRide(false);
+
+        // Mark payment as completed so ride completion doesn't show payment modal again
+        setPaymentCompleted(true);
 
         // Mostrar confirmación de éxito
         showToast(
@@ -3077,16 +3132,16 @@ export default function PassengerHomeScreen() {
                 title="Conductor"
                 anchor={{ x: 0.5, y: 0.5 }}
                 flat={false}
-                rotation={driverHeading || 0}
+                rotation={0}
               >
                 <DriverTaxiIcon />
               </Marker>
             )}
 
-            {/* Punto de recogida — solo visible si es distinto a la ubicación del pasajero */}
+            {/* Pickup marker — shown only during 'accepted' when far from passenger */}
             {pickupLocation && typeof pickupLocation.latitude === 'number' && activeRide?.status === 'accepted' && currentLocation && (
-              (Math.abs(pickupLocation.latitude - currentLocation.latitude) > 0.0001 ||
-               Math.abs(pickupLocation.longitude - currentLocation.longitude) > 0.0001)
+              Math.abs(pickupLocation.latitude - currentLocation.latitude) > 0.0005 ||
+              Math.abs(pickupLocation.longitude - currentLocation.longitude) > 0.0005
             ) && (
               <Marker
                 coordinate={{

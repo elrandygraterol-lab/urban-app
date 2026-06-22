@@ -10,10 +10,11 @@ import {
   RefreshControl,
   Modal,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { rideAPI } from '../../services/api';
 import { Ride } from '../../src/types';
 import { Colors, Spacing } from '../../constants/theme';
@@ -253,7 +254,7 @@ export default function DriverRideHistoryScreen() {
         onRequestClose={() => setSelectedRide(null)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: Spacing.lg + insets.bottom }]}>
+          <SafeAreaView edges={['top', 'bottom']} style={styles.modalContent}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Detalles del Viaje</Text>
@@ -261,6 +262,8 @@ export default function DriverRideHistoryScreen() {
                 <Ionicons name="close" size={20} color="#6b7280" />
               </TouchableOpacity>
             </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
 
             {/* Status + Vehicle */}
             <View style={styles.detailHeader}>
@@ -339,7 +342,8 @@ export default function DriverRideHistoryScreen() {
                 </View>
               </View>
             </View>
-          </View>
+            </ScrollView>
+          </SafeAreaView>
         </View>
       </Modal>
     );
@@ -352,8 +356,8 @@ export default function DriverRideHistoryScreen() {
       animationType="slide"
       onRequestClose={() => setShowFilters(false)}
     >
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { paddingBottom: Spacing.lg + insets.bottom }]}>
+        <View style={styles.modalOverlay}>
+        <SafeAreaView edges={['top', 'bottom']} style={styles.modalContent}>
           <View style={styles.modalHandle} />
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Filtrar por Fecha</Text>
@@ -439,7 +443,7 @@ export default function DriverRideHistoryScreen() {
               <Text style={styles.filterBtnPrimaryText}>Aplicar filtros</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </SafeAreaView>
       </View>
     </Modal>
   );
@@ -827,7 +831,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
-    maxHeight: '85%',
+    maxHeight: '90%',
   },
   modalHandle: {
     width: 40,

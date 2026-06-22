@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   Image,
+  Keyboard,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
@@ -79,6 +80,7 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
+    Keyboard.dismiss();
     if (!email.trim() || !password.trim()) {
       showToast('Por favor ingresa tu email/teléfono y contraseña', 'error');
       return;
@@ -602,12 +604,12 @@ const styles = StyleSheet.create({
 
   /* Primary Button */
   primaryBtn: {
-    height: 54,
+    height: 48,
     backgroundColor: '#22c55e',
-    borderRadius: 14,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: 14,
     shadowColor: '#22c55e',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,

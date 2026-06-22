@@ -244,53 +244,44 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
       }
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        body: formData,
+      // Use XMLHttpRequest for reliable multipart upload (fetch has issues with FormData in RN)
+      const result = await new Promise<{ status: number; data: any }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url);
+        xhr.timeout = 30000;
+        xhr.onload = () => {
+          try {
+            resolve({ status: xhr.status, data: JSON.parse(xhr.responseText) });
+          } catch {
+            reject(new Error('Invalid response'));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Network request failed'));
+        xhr.ontimeout = () => reject(new Error('Request timeout'));
+        xhr.send(formData);
       });
 
-      console.log('[REGISTER] Response status:', response.status);
+      console.log('[REGISTER] Response status:', result.status);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+      if (result.status < 200 || result.status >= 300) {
+        const errorData = result.data;
         console.error('[REGISTER] Error response:', errorData);
-
-        // Extract validation details if available
         let errorMessage = 'Registration failed';
-
         if (errorData?.error) {
           errorMessage = errorData.error.message || errorMessage;
-
-          // If there are validation details, format them
           if (errorData.error.details && Array.isArray(errorData.error.details)) {
             const validationErrors = errorData.error.details
-              .map((detail: any) => {
-                const field = detail.field || detail.path?.[0] || 'Campo';
-                const message = detail.message || 'inválido';
-                return `• ${field}: ${message}`;
-              })
+              .map((d: any) => `• ${d.field || d.path?.[0] || 'Campo'}: ${d.message || 'inválido'}`)
               .join('\n');
-
-            if (validationErrors) {
-              errorMessage = `Errores de validación:\n\n${validationErrors}`;
-            }
+            if (validationErrors) errorMessage = `Errores de validación:\n\n${validationErrors}`;
           }
         } else if (errorData?.message) {
           errorMessage = errorData.message;
         }
-
         throw new Error(errorMessage);
       }
 
-      const result = await response.json();
-      console.log('[REGISTER] Success! Full result:', JSON.stringify(result));
-
-      // Registration successful - user should login manually
-      // We don't auto-authenticate to avoid navigation conflicts
-      console.log('[REGISTER] Complete! User should now login.');
+      console.log('[REGISTER] Success! Complete! User should now login.');
     } catch (error) {
       console.error('[REGISTER] Error:', error);
       throw error;

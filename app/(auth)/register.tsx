@@ -11,14 +11,17 @@ import {
   Platform,
   Image,
   Linking,
+  Modal,
+  Keyboard,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/authStore';
+import { PRIVACY_TEXT, TERMS_TEXT } from '@/constants/legalText';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 type UserRole = 'passenger' | 'driver' | 'owner';
 type VehicleType = 'taxi' | 'moto_taxi';
@@ -54,6 +57,8 @@ export default function RegisterScreen() {
   const [licensePlateError, setLicensePlateError] = useState('');
   const [vehicleModelError, setVehicleModelError] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [termsScrolled, setTermsScrolled] = useState(false);
   const [termsError, setTermsError] = useState('');
 
   // Driver-specific fields
@@ -272,6 +277,7 @@ export default function RegisterScreen() {
   };
 
   const handleRegister = async () => {
+    Keyboard.dismiss();
     if (nameError || emailError || phoneError || passwordError || confirmPasswordError) {
       showToast('Por favor corrige los errores antes de continuar', 'error');
       return;
@@ -674,13 +680,19 @@ export default function RegisterScreen() {
             </>
           )}
 
-          {/* Privacy & Terms */}
+          {/* Privacy & Terms — single line, clean */}
           <View style={styles.termsContainer}>
             <TouchableOpacity
               style={styles.termsCheckRow}
               onPress={() => {
-                setAcceptedTerms(!acceptedTerms);
-                setTermsError('');
+                if (acceptedTerms) {
+                  setAcceptedTerms(false);
+                  setTermsError('');
+                } else {
+                  setShowTermsModal(true);
+                  setTermsScrolled(false);
+                  setTermsError('');
+                }
               }}
               activeOpacity={0.7}
             >
@@ -689,19 +701,80 @@ export default function RegisterScreen() {
               </View>
               <Text style={styles.termsText}>
                 Acepto los{' '}
+                <Text style={styles.termsLink} onPress={() => { setShowTermsModal(true); setTermsScrolled(false); }}>
+                  Términos de Servicio
+                </Text>
+                {' '}y{' '}
+                <Text style={styles.termsLink} onPress={() => { setShowTermsModal(true); setTermsScrolled(false); }}>
+                  Política de Privacidad
+                </Text>
               </Text>
             </TouchableOpacity>
-            <View style={styles.termsLinksRow}>
-              <TouchableOpacity onPress={() => router.push('/(auth)/terms-of-service' as any)}>
-                <Text style={styles.termsLink}>Términos de Servicio</Text>
-              </TouchableOpacity>
-              <Text style={styles.termsText}>{' '}y{' '}</Text>
-              <TouchableOpacity onPress={() => router.push('/(auth)/privacy-policy' as any)}>
-                <Text style={styles.termsLink}>Política de Privacidad</Text>
-              </TouchableOpacity>
-            </View>
             {termsError ? <Text style={styles.termsError}>{termsError}</Text> : null}
           </View>
+
+          {/* Terms & Privacy Modal */}
+          <Modal
+            visible={showTermsModal}
+            animationType="slide"
+            presentationStyle="fullScreen"
+          >
+            <SafeAreaView style={styles.termsModalSafe}>
+              <View style={styles.termsModalHeader}>
+                <Text style={styles.termsModalTitle}>Términos y Privacidad</Text>
+                <TouchableOpacity onPress={() => setShowTermsModal(false)}>
+                  <Ionicons name="close" size={22} color="#9ca3af" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView
+                style={styles.termsModalScroll}
+                contentContainerStyle={styles.termsModalContent}
+                showsVerticalScrollIndicator={true}
+                onScroll={({ nativeEvent }) => {
+                  const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+                  const scrolledEnough = layoutMeasurement.height + contentOffset.y >= contentSize.height * 0.6;
+                  if (scrolledEnough && !termsScrolled) {
+                    setTermsScrolled(true);
+                  }
+                }}
+                scrollEventThrottle={100}
+              >
+                <Text style={styles.termsModalHeading}>TÉRMINOS DE SERVICIO</Text>
+                <Text style={styles.termsModalText}>{TERMS_TEXT}</Text>
+                <View style={styles.termsDivider} />
+                <Text style={styles.termsModalHeading}>POLÍTICA DE PRIVACIDAD</Text>
+                <Text style={styles.termsModalText}>{PRIVACY_TEXT}</Text>
+              </ScrollView>
+              <View style={styles.termsModalFooter}>
+                <TouchableOpacity
+                  style={styles.termsRejectBtn}
+                  onPress={() => {
+                    setAcceptedTerms(false);
+                    setShowTermsModal(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.termsRejectBtnText}>Rechazar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.termsAcceptBtn, !termsScrolled && !acceptedTerms && styles.termsAcceptBtnDisabled]}
+                  onPress={() => {
+                    if (termsScrolled || acceptedTerms) {
+                      setAcceptedTerms(true);
+                      setTermsError('');
+                      setShowTermsModal(false);
+                    }
+                  }}
+                  activeOpacity={0.8}
+                  disabled={acceptedTerms || !termsScrolled}
+                >
+                  <Text style={styles.termsAcceptBtnText}>
+                    {acceptedTerms ? 'Aceptado' : 'Aceptar'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </SafeAreaView>
+          </Modal>
 
           {/* Submit */}
           <TouchableOpacity
@@ -1005,15 +1078,94 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginLeft: 30,
   },
+  /* Terms modal */
+  termsModalSafe: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  termsModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  termsModalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  termsModalScroll: {
+    flex: 1,
+  },
+  termsModalContent: {
+    padding: 20,
+    paddingBottom: 30,
+  },
+  termsModalHeading: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginBottom: 12,
+    letterSpacing: 0.5,
+  },
+  termsDivider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
+    marginVertical: 24,
+  },
+  termsModalText: {
+    fontSize: 13,
+    lineHeight: 21,
+    color: '#4b5563',
+  },
+  termsModalFooter: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    gap: 10,
+  },
+  termsRejectBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    alignItems: 'center',
+  },
+  termsRejectBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  termsAcceptBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: '#22c55e',
+    alignItems: 'center',
+  },
+  termsAcceptBtnDisabled: {
+    backgroundColor: '#a3e4b8',
+  },
+  termsAcceptBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
   /* Primary btn */
   primaryBtn: {
-    marginTop: 24,
-    height: 54,
+    marginTop: 20,
+    height: 48,
     backgroundColor: '#22c55e',
-    borderRadius: 14,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
     shadowColor: '#22c55e',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
