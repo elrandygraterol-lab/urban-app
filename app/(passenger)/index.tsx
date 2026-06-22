@@ -386,6 +386,20 @@ export default function PassengerHomeScreen() {
               setIsSearchingDriver(ride.status === 'pending');
             }
           }
+        } else {
+          // No active rides found — if we had one, it was cancelled or completed while in background
+          if (isMounted && activeRide) {
+            console.log('[PASSENGER] Active ride no longer exists — clearing state');
+            setActiveRide(null);
+            setDriverLocation(null);
+            setIsSearchingDriver(false);
+            setPaymentCompleted(false);
+            setShowMobilePaymentModal(false);
+            setShowPaymentModal(false);
+            setShowRatingModal(false);
+            setRouteCoordinates([]);
+            prevDriverLocationRef.current = null;
+          }
         }
       } catch (err) {
         console.log('[PASSENGER] restoreActiveRide - error:', err);
@@ -401,7 +415,7 @@ export default function PassengerHomeScreen() {
           setListenerVersion(v => v + 1);
           // Force socket reconnection to recover real-time driver location
           const s = getSocket();
-          if (s && !s.connected && !s.active) {
+          if (s && !s.connected) {
             console.log('[PASSENGER] App foreground - reconnecting socket');
             s.connect();
           }
@@ -2732,7 +2746,7 @@ export default function PassengerHomeScreen() {
       return;
     }
 
-    // If there's a cancellation fee, check if passenger has payment methods registered
+    // If there's a cancellation fee, warn if passenger has no payment methods registered
     if (cancellationPolicy && cancellationPolicy.fee > 0) {
       try {
         const payResponse = await passengerAPI.getPaymentInfo();
@@ -2742,14 +2756,13 @@ export default function PassengerHomeScreen() {
 
         if (!hasPagoMovil && !hasBankTransfer) {
           showStatus(
-            'error',
-            'No tienes método de pago registrado. Ve a tu perfil en la sección de métodos de pago y registra tu método de pago para tu reembolso.',
+            'info',
+            'No tienes método de pago registrado. Ve a tu perfil en la sección de métodos de pago y registra tu método de pago para recibir tu reembolso.',
             'Método de pago requerido'
           );
-          return;
+          // Do NOT block cancellation — just warn and continue
         }
       } catch {
-        // If we can't check, proceed with cancellation anyway
         console.log('Could not verify payment methods, proceeding with cancellation');
       }
     }

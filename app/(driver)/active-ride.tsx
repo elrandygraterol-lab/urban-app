@@ -305,7 +305,13 @@ export default function ActiveRideScreen() {
       const currentRideId = rideRef.current?.id || ride?.id;
       if (currentRideId) {
         const socket = getSocket();
-        if (socket && socket.connected) {
+        if (socket) {
+          // Force reconnect if socket is not connected
+          if (!socket.connected) {
+            console.log('[ACTIVE_RIDE] Socket not connected — reconnecting...');
+            socket.connect();
+          }
+          // Always emit join_ride — works even if socket just reconnected
           socket.emit('join_ride', { rideId: currentRideId });
           console.log('[ACTIVE_RIDE] Re-joined ride room after foreground:', currentRideId);
         }
@@ -418,6 +424,18 @@ export default function ActiveRideScreen() {
       }
 
       const rideData = response.data?.data || response.data;
+
+      // Check if ride was cancelled while app was in background
+      if (rideData?.status === 'cancelled') {
+        console.log('[ACTIVE_RIDE] ⚠️ Ride was cancelled while app was in background');
+        setIsAvailable(true);
+        setRide(null);
+        rideRef.current = null;
+        showStatus('ride_cancelled', 'El viaje fue cancelado mientras estabas fuera de la app.', 'Viaje Cancelado');
+        setTimeout(() => router.replace('/(driver)'), 3000);
+        return;
+      }
+
       setRide(rideData);
       // Update ref immediately so initializeLocation() can use it without waiting for re-render
       rideRef.current = rideData;
