@@ -12,6 +12,7 @@ import {
   Modal,
   Linking,
   AppState,
+  ScrollView,
 } from 'react-native';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import Svg, { Path, G } from 'react-native-svg';
@@ -31,7 +32,7 @@ import {
 } from '@/src/components/map/markers';
 import { computeBearing, bearingAlongRoute, animateNavigationCamera, computeNearestRouteIndex } from '@/src/utils/mapNav';
 import { useAuthStore } from '@/store/authStore';
-import { rideAPI, paymentAPI, ratingAPI } from '@/services/api';
+import { rideAPI, paymentAPI, ratingAPI, passengerAPI } from '@/services/api';
 import { reverseGeocode, getRoute, geocodeAddress } from '@/services/mapsService';
 import {
   connectSocket,
@@ -274,6 +275,15 @@ export default function PassengerHomeScreen() {
 
   // Cancellation modal states
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState<string>('');
+
+  const PASSENGER_CANCEL_REASONS = [
+    'Conductor tarda mucho',
+    'Cambié de opinión',
+    'Ya no necesito el viaje',
+    'Encontré otro transporte',
+    'Otra razón',
+  ];
   const [isCancelling, setIsCancelling] = useState(false);
   const [, setCancellationFeeWarning] = useState<string | null>(null);
 
@@ -1148,6 +1158,7 @@ export default function PassengerHomeScreen() {
         setShowRatingModal(false);
         setFinalFare(null);
         setPaymentMethod('cash');
+        setCancelReason('');
         setRouteCoordinates([]);
         setNearestRouteIndex(0);
         setDisplayDistance(null);
@@ -2716,11 +2727,37 @@ export default function PassengerHomeScreen() {
 
   const handleConfirmCancellation = async () => {
     if (!activeRide) return;
+    if (!cancelReason.trim()) {
+      showToast('Debes seleccionar un motivo para cancelar', 'warning');
+      return;
+    }
+
+    // If there's a cancellation fee, check if passenger has payment methods registered
+    if (cancellationPolicy && cancellationPolicy.fee > 0) {
+      try {
+        const payResponse = await passengerAPI.getPaymentInfo();
+        const info = payResponse.data?.data;
+        const hasPagoMovil = info?.pagoMovilPhone && info?.pagoMovilBank && info?.pagoMovilCedula;
+        const hasBankTransfer = info?.bankTransferBank && info?.bankTransferAccount;
+
+        if (!hasPagoMovil && !hasBankTransfer) {
+          showStatus(
+            'error',
+            'No tienes método de pago registrado. Ve a tu perfil en la sección de métodos de pago y registra tu método de pago para tu reembolso.',
+            'Método de pago requerido'
+          );
+          return;
+        }
+      } catch {
+        // If we can't check, proceed with cancellation anyway
+        console.log('Could not verify payment methods, proceeding with cancellation');
+      }
+    }
 
     setIsCancelling(true);
 
     try {
-      const response = await rideAPI.cancelRide(activeRide.id, { reason: 'passenger_cancelled' });
+      const response = await rideAPI.cancelRide(activeRide.id, { reason: cancelReason });
 
       console.log('✅ Ride cancelled:', response.data);
 
@@ -2747,6 +2784,7 @@ export default function PassengerHomeScreen() {
   const handleCloseCancelModal = () => {
     setShowCancelModal(false);
     setCancellationFeeWarning(null);
+    setCancelReason('');
   };
 
   const handleProcessPayment = async () => {
@@ -3418,13 +3456,13 @@ export default function PassengerHomeScreen() {
                     <View style={styles.rideTripRow}>
                       <View style={styles.rideTripDot} />
                       <Text style={styles.rideTripLabel}>Recogida</Text>
-                      <Text style={styles.rideTripValueSm} numberOfLines={1}>{pickupAddress || 'No especificada'}</Text>
+                      <Text style={styles.rideTripValueSm} numberOfLines={1}>{pickupAddress || pickupFullAddress || activeRide?.pickupAddress || 'Ubicación actual'}</Text>
                     </View>
                     {/* Destination row */}
                     <View style={styles.rideTripRow}>
                       <View style={[styles.rideTripDot, { backgroundColor: '#ef4444' }]} />
                       <Text style={styles.rideTripLabel}>Destino</Text>
-                      <Text style={styles.rideTripValueSm} numberOfLines={1}>{destinationAddress || 'No especificado'}</Text>
+                      <Text style={styles.rideTripValueSm} numberOfLines={1}>{destinationAddress || destinationFullAddress || activeRide?.destinationAddress || 'No especificado'}</Text>
                     </View>
                   </View>
 
@@ -4206,8 +4244,9 @@ export default function PassengerHomeScreen() {
           animationType="fade"
           onRequestClose={handleCloseCancelModal}
         >
-          <View style={styles.modalOverlay}>
+          <View style={[styles.modalOverlay, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.cancelModalContent}>
+              <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
               {/* Header */}
               <View style={styles.cancelModalHeader}>
                 <Ionicons name="alert-circle-outline" size={32} color="#6b7280" />
@@ -4274,7 +4313,7 @@ export default function PassengerHomeScreen() {
                 </View>
                 <View style={styles.cancelPolicyRow}>
                   <Ionicons name="time-outline" size={18} color="#6b7280" />
-                  <Text style={styles.cancelPolicyRowText}>Con tarifa si el conductor ya aceptó</Text>
+                  <Text style={styles.cancelPolicyRowText}>Con tarifa después de 2 minutos</Text>
                 </View>
                 <View style={styles.cancelPolicyRow}>
                   <Ionicons name="warning-outline" size={18} color="#6b7280" />
@@ -4282,15 +4321,55 @@ export default function PassengerHomeScreen() {
                 </View>
               </View>
 
+              {/* Cancel reason selection */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937', marginBottom: 10 }}>
+                  Motivo de cancelación
+                </Text>
+                {PASSENGER_CANCEL_REASONS.map((reason) => (
+                  <TouchableOpacity
+                    key={reason}
+                    onPress={() => setCancelReason(reason)}
+                    activeOpacity={0.7}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 12,
+                      paddingHorizontal: 14,
+                      borderRadius: 10,
+                      marginBottom: 6,
+                      borderWidth: 2,
+                      borderColor: cancelReason === reason ? '#ef4444' : '#e5e7eb',
+                      backgroundColor: cancelReason === reason ? '#fef2f2' : '#f9fafb',
+                    }}
+                  >
+                    <View style={{
+                      width: 22, height: 22, borderRadius: 11, borderWidth: 2,
+                      borderColor: cancelReason === reason ? '#ef4444' : '#d1d5db',
+                      justifyContent: 'center', alignItems: 'center', marginRight: 12,
+                    }}>
+                      {cancelReason === reason && <Ionicons name="checkmark" size={14} color="#ef4444" />}
+                    </View>
+                    <Text style={{ fontSize: 15, fontWeight: '500', color: '#374151', flex: 1 }}>{reason}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               {/* Action buttons */}
               <View style={styles.cancelModalActions}>
                 <TouchableOpacity style={styles.cancelBtnKeep} onPress={handleCloseCancelModal} disabled={isCancelling} activeOpacity={0.7}>
                   <Text style={styles.cancelBtnKeepText}>Mantener viaje</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.cancelBtnConfirm, isCancelling && { opacity: 0.6 }]} onPress={handleConfirmCancellation} disabled={isCancelling} activeOpacity={0.8}>
+                <TouchableOpacity
+                  style={[styles.cancelBtnConfirm, (!cancelReason || isCancelling) && { opacity: 0.6 }]}
+                  onPress={handleConfirmCancellation}
+                  disabled={!cancelReason || isCancelling}
+                  activeOpacity={0.8}
+                >
                   {isCancelling ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.cancelBtnConfirmText}>Cancelar viaje</Text>}
                 </TouchableOpacity>
               </View>
+              </ScrollView>
             </View>
           </View>
         </Modal>
@@ -6138,6 +6217,7 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '100%',
     maxWidth: 360,
+    maxHeight: '90%',
   },
   cancelModalHeader: {
     alignItems: 'center',

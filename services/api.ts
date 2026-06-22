@@ -348,6 +348,7 @@ export const paymentAPI = {
     bankName?: string;
   }) => api.post(`/api/payments/rides/${rideId}/confirm-mobile-payment`, {
     method: data.method,
+    amount: data.amount,
     referenceNumber: data.referenceNumber,
     phoneNumber: data.phoneNumber,
     accountNumber: data.accountNumber,
@@ -433,6 +434,19 @@ export const userAPI = {
       }
     });
   },
+};
+
+export const passengerAPI = {
+  getPaymentInfo: () => api.get('/api/users/passengers/payment-info'),
+
+  updatePaymentInfo: (data: {
+    pagoMovilPhone?: string;
+    pagoMovilBank?: string;
+    pagoMovilCedula?: string;
+    bankTransferBank?: string;
+    bankTransferAccount?: string;
+    bankTransferAccountType?: string;
+  }) => api.patch('/api/users/passengers/payment-info', data),
 };
 
 export const passengersAPI = {

@@ -306,11 +306,8 @@ export const useGlobalSocketListeners = ({
       console.log('[GLOBAL_SOCKET]    Socket transport:', socket.io?.engine?.transport?.name || 'unknown');
       console.log('[GLOBAL_SOCKET]    listenersRegisteredRef:', listenersRegisteredRef.current);
 
-      // Check if listeners are already registered for THIS socket
-      if (listenersRegisteredRef.current && socket.id && registeredSocketIdRef.current === socket.id) {
-        console.log('[GLOBAL_SOCKET] ⚠️ Listeners already registered on this socket, skipping');
-        return;
-      }
+      // Always re-register listeners — the socket.off calls above prevent duplicates
+      // This ensures ride:request_created is never missed after reconnects or re-renders
 
       console.log('[GLOBAL_SOCKET] ============================================');
       console.log('[GLOBAL_SOCKET] ✅ REGISTERING GLOBAL SOCKET LISTENERS');

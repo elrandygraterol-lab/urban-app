@@ -69,12 +69,13 @@ export const useNotifications = () => {
   const { incrementUnreadCount } = useNotificationStore();
   const { showStatus } = useUnifiedNotifications();
 
-  // Check if running in Expo Go
-  const isExpoGo = Constants.appOwnership === 'expo';
+  // Check if running in Expo Go (NOT EAS Build — EAS dev builds also report 'expo' but support push)
+  const isExpoGo = Constants.appOwnership === 'expo' && !__DEV__;
 
   useEffect(() => {
-    // Skip push notification setup in Expo Go (SDK 53+ doesn't support it)
-    if (isExpoGo) {
+    // Skip push notification setup ONLY in Expo Go (SDK 53+ doesn't support push there)
+    // EAS Build apps (production or development) DO support push notifications
+    if (Constants.appOwnership === 'expo' && !__DEV__) {
       console.warn(
         'Push notifications are not supported in Expo Go. Please use a Development Build.'
       );
@@ -180,13 +181,42 @@ export const useNotifications = () => {
     });
 
     if (Platform.OS === 'android') {
+      // Default channel for general notifications
       await Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
-        importance: Notifications.AndroidImportance.MAX,
+        name: 'UrbanTaxi',
+        importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#22c55e',
       });
-      console.log('[NOTIFICATIONS] Android notification channel configured');
+      // High-priority channel for ride requests — overrides Do Not Disturb on Android
+      await Notifications.setNotificationChannelAsync('ride_requests', {
+        name: 'Solicitudes de Viaje',
+        description: 'Notificaciones de nuevas solicitudes de viaje',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250, 0, 250],
+        lightColor: '#22c55e',
+        showBadge: true,
+        bypassDnd: true,
+      });
+      // Channel for ride status updates (accepted, arrived, cancelled, etc.)
+      await Notifications.setNotificationChannelAsync('ride_status', {
+        name: 'Estado del Viaje',
+        description: 'Actualizaciones del estado de tu viaje',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250],
+        lightColor: '#22c55e',
+        showBadge: true,
+      });
+      // Channel for payment notifications
+      await Notifications.setNotificationChannelAsync('payments', {
+        name: 'Pagos',
+        description: 'Notificaciones de pagos y ganancias',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250],
+        lightColor: '#f59e0b',
+        showBadge: true,
+      });
+      console.log('[NOTIFICATIONS] Android notification channels configured (default, ride_requests, ride_status, payments)');
     }
 
     // Allow notifications in dev builds even if isDevice is false

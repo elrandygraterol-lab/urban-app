@@ -18,7 +18,7 @@ import { Colors, Spacing } from '../../constants/theme';
 import { useAuthStore } from '../../store/authStore';
 import { useLanguage } from '../../hooks/useLanguage';
 import { translations } from '../../i18n/translations';
-import { userAPI, notificationAPI } from '../../services/api';
+import { userAPI, notificationAPI, passengerAPI } from '../../services/api';
 import * as ImagePicker from 'expo-image-picker';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import { useSmartTutorial } from '@/hooks/useSmartTutorial';
@@ -64,6 +64,17 @@ export default function PassengerProfileScreen() {
     promotions: true,
   });
 
+  const [paymentInfo, setPaymentInfo] = useState({
+    pagoMovilPhone: '',
+    pagoMovilBank: '',
+    pagoMovilCedula: '',
+    bankTransferBank: '',
+    bankTransferAccount: '',
+    bankTransferAccountType: 'Corriente',
+  });
+  const [isPaymentSectionExpanded, setIsPaymentSectionExpanded] = useState(false);
+  const [isSavingPayment, setIsSavingPayment] = useState(false);
+
   useEffect(() => {
     const loadUserData = async () => {
       try {
@@ -100,6 +111,15 @@ export default function PassengerProfileScreen() {
         } catch {
           console.log('No notification preferences found, using defaults');
         }
+
+        try {
+          const payResponse = await passengerAPI.getPaymentInfo();
+          if (payResponse.data?.data) {
+            setPaymentInfo(payResponse.data.data);
+          }
+        } catch {
+          console.log('No payment info found for passenger');
+        }
       } catch (error) {
         console.error('Error loading user data:', error);
         showToast(t.loadError, 'error');
@@ -135,6 +155,33 @@ export default function PassengerProfileScreen() {
       'Esta opción estará disponible en una futura actualización. Por ahora, las notificaciones permanecen activadas por defecto.',
       'En desarrollo'
     );
+  };
+
+  const handleSavePaymentInfo = async () => {
+    try {
+      const hasPagoMovil =
+        paymentInfo.pagoMovilPhone && paymentInfo.pagoMovilBank && paymentInfo.pagoMovilCedula;
+      const hasBankTransfer = paymentInfo.bankTransferBank && paymentInfo.bankTransferAccount;
+
+      if (!hasPagoMovil && !hasBankTransfer) {
+        showToast(
+          'Debes configurar al menos un método de pago completo',
+          'error'
+        );
+        return;
+      }
+
+      setIsSavingPayment(true);
+      await passengerAPI.updatePaymentInfo(paymentInfo);
+      showToast('Información de pago actualizada exitosamente', 'success');
+      setIsPaymentSectionExpanded(false);
+    } catch (error: any) {
+      const errorMessage =
+        error?.response?.data?.error?.message || 'Error al actualizar información de pago';
+      showToast(errorMessage, 'error');
+    } finally {
+      setIsSavingPayment(false);
+    }
   };
 
   const handleLanguageChange = async (newLanguage: 'es' | 'en') => {
@@ -396,6 +443,137 @@ export default function PassengerProfileScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+          </View>
+        </View>
+
+        {/* Payment Methods */}
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionTitle}>MÉTODOS DE PAGO</Text>
+
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.rowItem}
+              onPress={() => setIsPaymentSectionExpanded(!isPaymentSectionExpanded)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.rowLeft}>
+                <View style={styles.iconBox}>
+                  <Ionicons name="wallet-outline" size={20} color={Colors.primary} />
+                </View>
+                <Text style={styles.rowLabel}>Pago Móvil y Transferencia</Text>
+              </View>
+              <Ionicons
+                name={isPaymentSectionExpanded ? 'chevron-up' : 'chevron-down'}
+                size={20}
+                color="#9ca3af"
+              />
+            </TouchableOpacity>
+
+            {isPaymentSectionExpanded && (
+              <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+                {/* Pago Móvil */}
+                <View style={{ marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Ionicons name="phone-portrait-outline" size={18} color={Colors.primary} />
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937' }}>Pago Móvil</Text>
+                    </View>
+                    {paymentInfo.pagoMovilPhone && paymentInfo.pagoMovilBank && paymentInfo.pagoMovilCedula && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#f0fdf4', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                        <Ionicons name="checkmark-circle" size={12} color={Colors.primary} />
+                        <Text style={{ fontSize: 11, color: Colors.primary, fontWeight: '600' }}>Listo</Text>
+                      </View>
+                    )}
+                  </View>
+                  <TextInput
+                    style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, marginBottom: 8, color: '#1f2937' }}
+                    value={paymentInfo.pagoMovilCedula}
+                    onChangeText={text => setPaymentInfo({ ...paymentInfo, pagoMovilCedula: text })}
+                    placeholder="Cédula — V-12345678"
+                    placeholderTextColor="#9ca3af"
+                  />
+                  <TextInput
+                    style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, marginBottom: 8, color: '#1f2937' }}
+                    value={paymentInfo.pagoMovilPhone}
+                    onChangeText={text => setPaymentInfo({ ...paymentInfo, pagoMovilPhone: text })}
+                    placeholder="Teléfono — 0414-1234567"
+                    placeholderTextColor="#9ca3af"
+                    keyboardType="phone-pad"
+                  />
+                  <TextInput
+                    style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#1f2937' }}
+                    value={paymentInfo.pagoMovilBank}
+                    onChangeText={text => setPaymentInfo({ ...paymentInfo, pagoMovilBank: text })}
+                    placeholder="Banco — Ej: Venezuela"
+                    placeholderTextColor="#9ca3af"
+                  />
+                </View>
+
+                <View style={{ height: 1, backgroundColor: '#f3f4f6', marginBottom: 16 }} />
+
+                {/* Transferencia */}
+                <View style={{ marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Ionicons name="business-outline" size={18} color={Colors.primary} />
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937' }}>Transferencia</Text>
+                    </View>
+                    {paymentInfo.bankTransferAccount && paymentInfo.bankTransferBank && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#f0fdf4', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                        <Ionicons name="checkmark-circle" size={12} color={Colors.primary} />
+                        <Text style={{ fontSize: 11, color: Colors.primary, fontWeight: '600' }}>Listo</Text>
+                      </View>
+                    )}
+                  </View>
+                  <TextInput
+                    style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, marginBottom: 8, color: '#1f2937' }}
+                    value={paymentInfo.bankTransferBank}
+                    onChangeText={text => setPaymentInfo({ ...paymentInfo, bankTransferBank: text })}
+                    placeholder="Banco"
+                    placeholderTextColor="#9ca3af"
+                  />
+                  <TextInput
+                    style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, marginBottom: 8, color: '#1f2937' }}
+                    value={paymentInfo.bankTransferAccount}
+                    onChangeText={text => setPaymentInfo({ ...paymentInfo, bankTransferAccount: text })}
+                    placeholder="N° de Cuenta — 0102-1234-5678"
+                    placeholderTextColor="#9ca3af"
+                    keyboardType="number-pad"
+                  />
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity
+                      style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: paymentInfo.bankTransferAccountType === 'Corriente' ? Colors.primary : '#e5e7eb', backgroundColor: paymentInfo.bankTransferAccountType === 'Corriente' ? '#f0fdf4' : '#fff' }}
+                      onPress={() => setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Corriente' })}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: paymentInfo.bankTransferAccountType === 'Corriente' ? Colors.primary : '#6b7280' }}>Corriente</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: paymentInfo.bankTransferAccountType === 'Ahorro' ? Colors.primary : '#e5e7eb', backgroundColor: paymentInfo.bankTransferAccountType === 'Ahorro' ? '#f0fdf4' : '#fff' }}
+                      onPress={() => setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Ahorro' })}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: paymentInfo.bankTransferAccountType === 'Ahorro' ? Colors.primary : '#6b7280' }}>Ahorro</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, backgroundColor: '#f9fafb', padding: 10, borderRadius: 8 }}>
+                  <Ionicons name="information-circle-outline" size={14} color="#6b7280" />
+                  <Text style={{ fontSize: 12, color: '#6b7280', flex: 1 }}>Configura al menos un método para recibir reembolsos por cancelaciones.</Text>
+                </View>
+
+                <TouchableOpacity
+                  style={{ backgroundColor: Colors.primary, paddingVertical: 13, borderRadius: 12, alignItems: 'center' }}
+                  onPress={handleSavePaymentInfo}
+                  disabled={isSavingPayment}
+                >
+                  {isSavingPayment ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>Guardar Métodos de Pago</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
 

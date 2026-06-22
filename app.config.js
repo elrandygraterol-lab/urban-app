@@ -17,7 +17,7 @@ module.exports = ({ config }) => {
           'UrbanTaxi necesita acceso a tu ubicación para mostrarte en el mapa y solicitar viajes.',
         NSLocationAlwaysAndWhenInUseUsageDescription:
           'UrbanTaxi necesita acceso a tu ubicación para mostrarte en el mapa y solicitar viajes, incluso en segundo plano para compartir tu ubicación con el pasajero.',
-        UIBackgroundModes: ['location', 'fetch'],
+        UIBackgroundModes: ['location', 'fetch', 'remote-notification'],
       },
       config: {
         googleMapsApiKey: 'AIzaSyDu-vsndSIMluuvLfmGf_sAhQiNDliznrU',

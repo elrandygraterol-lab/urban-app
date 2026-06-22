@@ -192,6 +192,7 @@ export default function ActiveRideScreen() {
 
     // Reset all ride-specific state to prevent stale data from previous ride bleeding in
     setRide(null);
+    rideRef.current = null; // Immediately clear ref to stop stale location emissions
     setLoading(true);
     setIsPaymentConfirmed(false);
     setRoutePoints([]);
@@ -522,13 +523,12 @@ export default function ActiveRideScreen() {
           }
 
           // Only send location updates if ride is still active (not completed)
-          // This prevents "Ride ID does not match active ride" errors after completion
-          if (rideRef.current && rideRef.current.status !== 'completed') {
-            // Send location update to server via socket
+          // and the current rideRef matches the component's rideId (prevents stale emissions)
+          if (rideRef.current && rideRef.current.status !== 'completed' && rideRef.current.id === rideId) {
             const socket = getSocket();
             if (socket && socket.connected) {
               socket.emit('driver:location_update', {
-                rideId: rideId,
+                rideId: rideRef.current.id,
                 latitude: newCoords.latitude,
                 longitude: newCoords.longitude,
                 heading: newLocation.coords.heading,
@@ -1020,27 +1020,49 @@ export default function ActiveRideScreen() {
   };
 
   const [isCancelling, setIsCancelling] = useState(false);
+  const [showCancelReasonModal, setShowCancelReasonModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState<string>('');
+
+  const DRIVER_CANCEL_REASONS = [
+    'Pasajero no apareció',
+    'Pasajero no pagó',
+    'Problema con el vehículo',
+    'Tráfico intenso',
+    'Otra razón',
+  ];
 
   const handleCancelRide = async () => {
     if (!ride || isCancelling) return;
 
-    // Block cancellation if passenger already paid
-    if (isPaymentConfirmed) {
-      showToast('No puedes cancelar: el pasajero ya realizó el pago', 'warning');
+    // Block cancellation for pago_movil if passenger already paid
+    if (isPaymentConfirmed && passengerPaymentMode === 'pago_movil') {
+      showToast('No puedes cancelar: el pasajero ya realizó el pago móvil', 'warning');
       return;
     }
 
+    // Open the cancel reason modal instead of cancelling directly
+    setShowCancelReasonModal(true);
+  };
+
+  const handleConfirmCancelRide = async () => {
+    if (!ride || isCancelling) return;
+    if (!cancelReason.trim()) {
+      showToast('Debes seleccionar un motivo para cancelar', 'warning');
+      return;
+    }
+
+    setShowCancelReasonModal(false);
     setIsCancelling(true);
     try {
       await rideAPI.cancelRide(rideId, {
-        reason: 'Conductor canceló el viaje',
+        reason: cancelReason,
       });
-      // Backend emits ride:cancelled → handleRideCancelled handles notification + redirect
     } catch (error: any) {
       const msg = error?.response?.data?.error?.message || 'No se pudo cancelar el viaje';
       showToast(msg, 'error');
     } finally {
       setIsCancelling(false);
+      setCancelReason('');
     }
   }; 
 
@@ -2150,8 +2172,8 @@ export default function ActiveRideScreen() {
                     </Text>
                   </TouchableOpacity>
 
-                  {/* Cancel button — only if passenger has NOT paid yet */}
-                  {!isPaymentConfirmed && (
+                  {/* Cancel button — cash: always visible; pago_movil: only if not paid */}
+                  {!(isPaymentConfirmed && passengerPaymentMode === 'pago_movil') && (
                     <TouchableOpacity
                       onPress={handleCancelRide}
                       disabled={isCancelling}
@@ -2199,6 +2221,95 @@ export default function ActiveRideScreen() {
           </ScrollView>
         )}
       </View>
+
+      {/* Cancel Reason Modal */}
+      <Modal
+        visible={showCancelReasonModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => { setShowCancelReasonModal(false); setCancelReason(''); }}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20, paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360, maxHeight: '90%' }}>
+            <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+              {/* Header */}
+              <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#fef2f2', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+                  <Ionicons name="alert-circle-outline" size={32} color="#6b7280" />
+                </View>
+                <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937', marginTop: 10, marginBottom: 6, textAlign: 'center' }}>
+                  Confirmar cancelación
+                </Text>
+                <Text style={{ fontSize: 13, color: '#6b7280', textAlign: 'center', lineHeight: 18 }}>
+                  Selecciona el motivo de la cancelación
+                </Text>
+              </View>
+
+              {/* Cancel reason selection */}
+              <View style={{ marginBottom: 16 }}>
+                {DRIVER_CANCEL_REASONS.map((reason) => (
+                  <TouchableOpacity
+                    key={reason}
+                    onPress={() => setCancelReason(reason)}
+                    activeOpacity={0.7}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 12,
+                      paddingHorizontal: 14,
+                      borderRadius: 10,
+                      marginBottom: 6,
+                      borderWidth: 2,
+                      borderColor: cancelReason === reason ? '#ef4444' : '#e5e7eb',
+                      backgroundColor: cancelReason === reason ? '#fef2f2' : '#f9fafb',
+                    }}
+                  >
+                    <View style={{
+                      width: 22, height: 22, borderRadius: 11, borderWidth: 2,
+                      borderColor: cancelReason === reason ? '#ef4444' : '#d1d5db',
+                      justifyContent: 'center', alignItems: 'center', marginRight: 12,
+                    }}>
+                      {cancelReason === reason && <Ionicons name="checkmark" size={14} color="#ef4444" />}
+                    </View>
+                    <Text style={{ fontSize: 15, fontWeight: '500', color: '#374151', flex: 1 }}>{reason}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Action buttons */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => { setShowCancelReasonModal(false); setCancelReason(''); }}
+                  disabled={isCancelling}
+                  activeOpacity={0.7}
+                  style={{
+                    flex: 1, paddingVertical: 13, borderRadius: 12,
+                    backgroundColor: '#f3f4f6', alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#6b7280' }}>No cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleConfirmCancelRide}
+                  disabled={!cancelReason || isCancelling}
+                  activeOpacity={0.8}
+                  style={{
+                    flex: 1, paddingVertical: 13, borderRadius: 12,
+                    backgroundColor: cancelReason ? '#ef4444' : '#d1d5db',
+                    alignItems: 'center', opacity: (!cancelReason || isCancelling) ? 0.6 : 1,
+                  }}
+                >
+                  {isCancelling ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>Cancelar viaje</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* Navigation App Chooser Modal */}
       <Modal

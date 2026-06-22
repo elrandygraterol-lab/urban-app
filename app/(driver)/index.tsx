@@ -522,7 +522,11 @@ export default function DriverHomeScreen() {
       console.log('[DRIVER]    Token length:', token.length);
       console.log('[DRIVER] ========================================');
 
-      const socket = await connectSocket(token);
+      // Use existing socket if already connected (avoids destroying global listeners)
+      let socket = getSocket();
+      if (!socket || !socket.connected) {
+        socket = await connectSocket(token);
+      }
 
       console.log('[DRIVER] ========================================');
       console.log('[DRIVER] ✅ SOCKET CONNECTED');
@@ -530,48 +534,32 @@ export default function DriverHomeScreen() {
       console.log('[DRIVER]    Connected:', socket.connected);
       console.log('[DRIVER] ========================================');
 
-      // Update socket instance state AFTER connection
       setSocketInstance(socket);
 
-      // Setup listeners initially with fresh callback references
       setupSocketListeners(socket);
 
-      // CRITICAL: Always register ride:request_created directly — never skip
-      // This must work regardless of any wrapper function guards
-      socket.off('ride:request_created');
-      socket.on('ride:request_created', (data: any) => {
-        console.log('[DRIVER] 🚗 RIDE REQUEST (DIRECT):', data.id, data.passengerName);
-        playNotificationSound();
-        showRideRequest({
-          ...data,
-          passengerRating: data.passengerRating || 0,
-          estimatedDuration: data.estimatedDuration || Math.round((Number(data.distance) / 25) * 60),
-          vehicleType: data.vehicleType || 'taxi',
-        });
-      });
-      console.log('[DRIVER]    ✓ ride:request_created registered (direct — always on)');
+      // ride:request_created is handled by the global listener (useGlobalSocketListeners)
+      // No need for a direct handler — the global one is more reliable across reconnects
 
-      // Re-setup listeners on reconnection with fresh callback references
       reconnectHandlerRef.current = () => {
         console.log('[DRIVER] ========================================');
         console.log('[DRIVER] 🔄 SOCKET RECONNECTED');
         console.log('[DRIVER]    Socket ID:', socket.id);
         console.log('[DRIVER]    Re-registering listeners with fresh callbacks...');
         console.log('[DRIVER] ========================================');
-        localListenersRegisteredRef.current = false; // Allow re-registration
-        setSocketInstance(socket); // Update state on reconnect
-        setupSocketListeners(socket); // Re-register with fresh callbacks
+        localListenersRegisteredRef.current = false;
+        setSocketInstance(socket);
+        setupSocketListeners(socket);
       };
       socket.on('connect', reconnectHandlerRef.current);
 
-      // Update state on disconnect
       disconnectLogHandlerRef.current = (reason: string) => {
         console.log('[DRIVER] ========================================');
         console.log('[DRIVER] ❌ SOCKET DISCONNECTED');
         console.log('[DRIVER]    Reason:', reason);
         console.log('[DRIVER]    Socket ID:', socket.id);
         console.log('[DRIVER] ========================================');
-        setSocketInstance(socket); // Trigger re-render to show disconnected state
+        setSocketInstance(socket);
       };
       socket.on('disconnect', disconnectLogHandlerRef.current);
 
