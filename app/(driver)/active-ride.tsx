@@ -494,6 +494,7 @@ export default function ActiveRideScreen() {
         longitude: currentLocation.coords.longitude,
       };
       setLocation(coords);
+      locationRef.current = coords; // Update ref immediately for fetchAndDrawRoute
 
       // Set initial heading if available
       if (currentLocation.coords.heading !== null && currentLocation.coords.heading !== undefined) {
