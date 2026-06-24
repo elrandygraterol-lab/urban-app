@@ -673,6 +673,13 @@ export default function ActiveRideScreen() {
         setRouteDuration(routeData.duration);
         setIsApproximateRoute(false);
 
+        // Reset backend ETA and scale refs so display uses the fresh route values
+        // until the next socket ETA update arrives and recalibrates
+        setBackendEtaDistance(null);
+        setBackendEtaMinutes(null);
+        distanceScaleRef.current = null;
+        durationScaleRef.current = null;
+
         // Save route steps for turn-by-turn navigation
         setRouteSteps(routeData.steps ?? []);
         // Reset navigation progress on route recalculation
@@ -1146,6 +1153,11 @@ export default function ActiveRideScreen() {
               routePolylineRef.current = routeCoords;
               setRouteDistance(routeData.distance);
               setRouteDuration(routeData.duration);
+              // Reset backend ETA and scale refs for correct display
+              setBackendEtaDistance(null);
+              setBackendEtaMinutes(null);
+              distanceScaleRef.current = null;
+              durationScaleRef.current = null;
               setRouteSteps(routeData.steps ?? []);
               setNearestRouteIndex(0);
               setNearestStepIndex(0);

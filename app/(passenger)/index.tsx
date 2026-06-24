@@ -4394,7 +4394,7 @@ export default function PassengerHomeScreen() {
           animationType="slide"
           onRequestClose={paymentCompleted ? handleClosePaymentModal : undefined}
         >
-          <View style={styles.modalOverlay}>
+          <View style={[styles.modalOverlay, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.paymentModalContent}>
               {!paymentCompleted ? (
                 <>
