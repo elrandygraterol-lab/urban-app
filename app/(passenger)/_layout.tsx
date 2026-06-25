@@ -10,6 +10,7 @@ export default function PassengerLayout() {
           tabBarActiveTintColor: '#22c55e',
           tabBarInactiveTintColor: '#A9A9A9',
           headerShown: false,
+          lazy: true,
         }}
       >
         <Tabs.Screen

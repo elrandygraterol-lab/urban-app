@@ -31,8 +31,8 @@ describe('useNotifications - Store Notifications', () => {
     (useRouter as jest.Mock).mockReturnValue(mockRouter);
   });
 
-  describe('Store Approved Notification', () => {
-    it('should navigate to store details when store_approved notification is tapped', async () => {
+  describe('Store Approved / Rejected Notification', () => {
+    it('should navigate to passenger home when store_approved notification is tapped', async () => {
       const { result } = renderHook(() => useNotifications());
 
       // Simulate notification response
@@ -58,11 +58,11 @@ describe('useNotifications - Store Notifications', () => {
       responseCallback(mockResponse);
 
       await waitFor(() => {
-        expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)/stores/123');
+        expect(mockRouter.push).toHaveBeenCalledWith('/(passenger)/index');
       });
     });
 
-    it('should navigate to my-stores when store_approved notification has no storeId', async () => {
+    it('should navigate to passenger home when store_approved notification has no storeId', async () => {
       const { result } = renderHook(() => useNotifications());
 
       const mockResponse = {
@@ -84,7 +84,7 @@ describe('useNotifications - Store Notifications', () => {
       responseCallback(mockResponse);
 
       await waitFor(() => {
-        expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)/stores/my-stores');
+        expect(mockRouter.push).toHaveBeenCalledWith('/(passenger)/index');
       });
     });
   });
@@ -114,7 +114,7 @@ describe('useNotifications - Store Notifications', () => {
       responseCallback(mockResponse);
 
       await waitFor(() => {
-        expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)/stores/456');
+        expect(mockRouter.push).toHaveBeenCalledWith('/(passenger)/index');
       });
     });
   });
@@ -144,7 +144,7 @@ describe('useNotifications - Store Notifications', () => {
       responseCallback(mockResponse);
 
       await waitFor(() => {
-        expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)/stores/789');
+        expect(mockRouter.push).toHaveBeenCalledWith('/(passenger)/index');
       });
     });
 

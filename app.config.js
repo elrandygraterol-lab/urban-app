@@ -49,7 +49,12 @@ module.exports = ({ config }) => {
       },
     },
     plugins: [
-      'expo-router',
+      [
+        'expo-router',
+        {
+          asyncRoutes: true,
+        },
+      ],
       [
         'expo-build-properties',
         {

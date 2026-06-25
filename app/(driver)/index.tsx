@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,8 @@ import {
   AppState,
 } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
-import * as Location from 'expo-location';
+import { getLocation } from '@/utils/lazyLocation';
+import type { LocationSubscription } from 'expo-location';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/authStore';
@@ -39,6 +40,8 @@ import CenterLocationButton from '@/components/CenterLocationButton';
 // const WalkthroughCenterLocationButton = walkthroughable(CenterLocationButton);
 
 export default function DriverHomeScreen() {
+  const MemoizedMarker = React.memo(Marker);
+
   const { user, token } = useAuthStore();
   const {
     isAvailable,
@@ -66,7 +69,7 @@ export default function DriverHomeScreen() {
   const reconnectHandlerRef = useRef<(() => void) | null>(null);
   const disconnectLogHandlerRef = useRef<((reason: string) => void) | null>(null);
   const localListenersRegisteredRef = useRef(false);
-  const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
+  const locationSubscriptionRef = useRef<LocationSubscription | null>(null);
 
   useSocketReconnect();
 
@@ -75,6 +78,10 @@ export default function DriverHomeScreen() {
   const [loading, setLoading] = useState(true);
   const [, setSocketInstance] = useState<Socket | null>(null);
   const [, setIsSocketConnected] = useState(false);
+  const driverMarkerCoord = useMemo(
+    () => (location ? { latitude: location.latitude, longitude: location.longitude } : null),
+    [location?.latitude, location?.longitude]
+  );
 
   // Smart Tutorial state
   // const { start: startTour } = useCopilot();
@@ -167,8 +174,9 @@ export default function DriverHomeScreen() {
   };
 
   const startLocationUpdates = useCallback(async () => {
-    const subscription = await Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
+    const Loc = await getLocation();
+    const subscription = await Loc.watchPositionAsync(
+      { accuracy: Loc.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
       async newLocation => {
         const newCoords = {
           latitude: newLocation.coords.latitude,
@@ -196,7 +204,8 @@ export default function DriverHomeScreen() {
 
   const initializeLocation = useCallback(async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      const Loc = await getLocation();
+      const { status } = await Loc.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         showStatus(
           'warning',
@@ -207,8 +216,8 @@ export default function DriverHomeScreen() {
         return;
       }
 
-      const currentLocation = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
+      const currentLocation = await Loc.getCurrentPositionAsync({
+        accuracy: Loc.Accuracy.High,
         // timeout: 10000, // 10 second timeout (removed - not supported by LocationOptions)
       });
       const coords = {
@@ -721,17 +730,14 @@ export default function DriverHomeScreen() {
         toolbarEnabled={false}
         moveOnMarkerPress={false}
       >
-        <Marker
-          coordinate={{
-            latitude: location.latitude,
-            longitude: location.longitude,
-          }}
+        <MemoizedMarker
+          coordinate={driverMarkerCoord!}
           title="Mi ubicación"
           anchor={{ x: 0.5, y: 0.5 }}
           rotation={0}
         >
           <DriverTaxiIcon />
-        </Marker>
+        </MemoizedMarker>
       </MapView>
 
       {/* Center Location Button */}

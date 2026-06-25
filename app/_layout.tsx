@@ -23,6 +23,14 @@ import '@/services/logCapture';
 import { UnifiedNotificationProvider } from '@/context/UnifiedNotificationContext';
 import { UnifiedNotificationOverlay } from '@/components/UnifiedNotificationOverlay';
 
+/** Sólo monta los hooks de socket global cuando el usuario está autenticado.
+ *  Esto evita que useSound(), useExchangeRate() y el import de socket.io
+ *  se ejecuten durante la pantalla de login. */
+function GlobalSocketGuard({ user, isAuthenticated }: { user: any; isAuthenticated: boolean }) {
+  useGlobalSocketListeners({ user, isAuthenticated });
+  return null;
+}
+
 function AppContent() {
   useBadgeSync();
 
@@ -35,7 +43,8 @@ function AppContent() {
   const { expoPushToken, error: notificationError } = useNotifications();
 
   // Initialize global socket listeners for payment and cancellation events
-  useGlobalSocketListeners({ user, isAuthenticated });
+  // Only mounted after authentication — evita importar socket.io en login
+  const showSocketGuard = isAuthenticated && !!user;
 
   // Load stored authentication on app start
   useEffect(() => {
@@ -149,6 +158,23 @@ function AppContent() {
     }
   }, [isAuthenticated, user?.id, user?.role, segments, isNavigationReady, router]);
 
+  // Pre-load heavy screens after navigation settles (post-auth)
+  useEffect(() => {
+    if (!isNavigationReady || !isAuthenticated || !user) return;
+
+    const handle = InteractionManager.runAfterInteractions(() => {
+      logInfo('Preload', 'Starting background preload of heavy screens');
+      if (user.role === 'driver') {
+        import('@/app/(driver)/active-ride').catch(() => {});
+        import('@/app/(driver)/manage-ride').catch(() => {});
+      } else if (user.role === 'passenger') {
+        import('@/app/(passenger)/delegated-ride-tracking').catch(() => {});
+      }
+    });
+
+    return () => handle.cancel();
+  }, [isNavigationReady, isAuthenticated, user?.id, user?.role]);
+
   return (
     <>
       <Stack screenOptions={{ headerShown: false }}>
@@ -157,6 +183,7 @@ function AppContent() {
         <Stack.Screen name="(driver)" />
       </Stack>
       <UnifiedNotificationOverlay />
+      {showSocketGuard && <GlobalSocketGuard user={user} isAuthenticated={isAuthenticated} />}
       <ExpoStatusBar style="auto" />
     </>
   );

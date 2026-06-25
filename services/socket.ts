@@ -85,8 +85,8 @@ const runDiagnosticPing = async (): Promise<void> => {
   }
 };
 
-// Ejecutar diagnóstico inmediatamente (fire-and-forget, no bloquea)
-runDiagnosticPing();
+// Diagnostic ping moved inside connectSocket() to avoid import-time side effects
+// Only runs when socket connection is actually established
 
 const TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
@@ -437,6 +437,7 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
       } catch {}
       console.log('[SOCKET] ============================================');
       notifyConnectionChange(true);
+      runDiagnosticPing();
     });
 
     socket.on('disconnect', reason => {

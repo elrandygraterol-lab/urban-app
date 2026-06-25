@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Suspense, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,7 +20,8 @@ import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, wit
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import MapView, { Marker, Polyline } from 'react-native-maps';
-import * as Location from 'expo-location';
+import { getLocation } from '@/utils/lazyLocation';
+import type { LocationSubscription } from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import {
   DriverTaxiIcon,
@@ -59,17 +60,14 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useSocketReconnect } from '@/hooks/useSocketReconnect';
 import { useSound } from '@/hooks/useSound';
 import { useCancellationPolicy } from '@/hooks/useCancellationPolicy';
-import MobilePaymentModal from '@/components/MobilePaymentModal';
+import type { SharedRideInvitation } from '@/components/SharedRideInvitationModal';
 import { formatCurrency, Currency } from '@/utils/currency';
-// import { useSmartTutorial } from '@/hooks/useSmartTutorial';
-// import { setActiveTutorialScreen } from '@/utils/tutorialState';
-// import { useCopilot, walkthroughable, CopilotStep } from 'react-native-copilot';
-import AddressAutocomplete from '@/components/AddressAutocomplete';
 import CenterLocationButton from '@/components/CenterLocationButton';
 import { resolveFileUrl } from '@/services/fileUrl';
-import SharedRideInvitationModal, {
-  SharedRideInvitation,
-} from '@/components/SharedRideInvitationModal';
+
+const MobilePaymentModal = React.lazy(() => import('@/components/MobilePaymentModal'));
+const AddressAutocomplete = React.lazy(() => import('@/components/AddressAutocomplete'));
+const SharedRideInvitationModal = React.lazy(() => import('@/components/SharedRideInvitationModal'));
 
 // const WalkthroughView = walkthroughable(View);
 // const WalkthroughTouchableOpacity = walkthroughable(TouchableOpacity);
@@ -145,6 +143,9 @@ interface ActiveRide {
 }
 
 export default function PassengerHomeScreen() {
+  const MemoizedMarker = React.memo(Marker);
+  const MemoizedPolyline = React.memo(Polyline);
+
   const { user, token } = useAuthStore();
   const { playNotificationSound } = useSound();
   const mapRef = useRef<MapView>(null);
@@ -286,6 +287,35 @@ export default function PassengerHomeScreen() {
   ];
   const [isCancelling, setIsCancelling] = useState(false);
   const [, setCancellationFeeWarning] = useState<string | null>(null);
+
+  const driverCoord = useMemo(
+    () => (driverLocation ? { latitude: Number(driverLocation.latitude), longitude: Number(driverLocation.longitude) } : null),
+    [driverLocation?.latitude, driverLocation?.longitude]
+  );
+  const pickupCoord = useMemo(
+    () => (pickupLocation ? { latitude: Number(pickupLocation.latitude), longitude: Number(pickupLocation.longitude) } : null),
+    [pickupLocation?.latitude, pickupLocation?.longitude]
+  );
+  const currentCoord = useMemo(
+    () => (currentLocation ? { latitude: Number(currentLocation.latitude), longitude: Number(currentLocation.longitude) } : null),
+    [currentLocation?.latitude, currentLocation?.longitude]
+  );
+  const destinationCoord = useMemo(
+    () => (destinationLocation ? { latitude: Number(destinationLocation.latitude), longitude: Number(destinationLocation.longitude) } : null),
+    [destinationLocation?.latitude, destinationLocation?.longitude]
+  );
+  const secondPickupCoord = useMemo(
+    () => (secondPickupLocation ? { latitude: Number(secondPickupLocation.latitude), longitude: Number(secondPickupLocation.longitude) } : null),
+    [secondPickupLocation?.latitude, secondPickupLocation?.longitude]
+  );
+  const secondDestinationCoord = useMemo(
+    () => (secondDestinationLocation ? { latitude: Number(secondDestinationLocation.latitude), longitude: Number(secondDestinationLocation.longitude) } : null),
+    [secondDestinationLocation?.latitude, secondDestinationLocation?.longitude]
+  );
+  const slicedRouteCoords = useMemo(
+    () => (routeCoordinates.length >= 2 && nearestRouteIndex > 0 ? routeCoordinates.slice(nearestRouteIndex) : routeCoordinates),
+    [routeCoordinates, nearestRouteIndex]
+  );
 
   // Animation values for cancel modal
   const modalScale = useSharedValue(0);
@@ -625,7 +655,8 @@ export default function PassengerHomeScreen() {
 
     (async () => {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
+        const Loc = await getLocation();
+        const { status } = await Loc.requestForegroundPermissionsAsync();
 
         logInfo('PassengerHomeScreen', 'Location permission status', { status });
 
@@ -664,7 +695,7 @@ export default function PassengerHomeScreen() {
         // Step 1: Last known position (instant — avoids GPS cold-start delay)
         let lastKnownApplied = false;
         try {
-          const lastKnown = await Location.getLastKnownPositionAsync({
+          const lastKnown = await Loc.getLastKnownPositionAsync({
             maxAge: 3 * 60 * 1000, // prefer positions up to 3 min old
             requiredAccuracy: 20, // within 20 meters for precise initial position
           });
@@ -686,8 +717,8 @@ export default function PassengerHomeScreen() {
 
         // Step 2: Fresh GPS position (updates map even if last known was applied)
         try {
-          const fresh = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.BestForNavigation,
+          const fresh = await Loc.getCurrentPositionAsync({
+            accuracy: Loc.Accuracy.BestForNavigation,
           });
           logInfo('PassengerHomeScreen', 'Fresh GPS position obtained', {
             lat: fresh.coords.latitude,
@@ -706,7 +737,7 @@ export default function PassengerHomeScreen() {
             // Step 3: No recent last known — try any last known regardless of age/accuracy
             let anyLastKnown = false;
             try {
-              const staleKnown = await Location.getLastKnownPositionAsync();
+              const staleKnown = await Loc.getLastKnownPositionAsync();
               if (staleKnown) {
                 logWarning(
                   'PassengerHomeScreen',
@@ -772,7 +803,7 @@ export default function PassengerHomeScreen() {
                 label: 'Reintentar',
                 onPress: () => {
                   setIsLoadingLocation(true);
-                  Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation })
+                  Loc.getCurrentPositionAsync({ accuracy: Loc.Accuracy.BestForNavigation })
                     .then(loc =>
                       applyLocation({
                         latitude: loc.coords.latitude,
@@ -809,7 +840,8 @@ export default function PassengerHomeScreen() {
       if (nextState === 'active' && !currentLocation) {
         logInfo('PassengerHomeScreen', 'App active, retrying location...');
         setIsLoadingLocation(true);
-        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation })
+        getLocation().then(Loc => {
+          Loc.getCurrentPositionAsync({ accuracy: Loc.Accuracy.BestForNavigation })
           .then(async loc => {
             const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
             setCurrentLocation(coords);
@@ -826,6 +858,7 @@ export default function PassengerHomeScreen() {
             logInfo('PassengerHomeScreen', 'Location retry succeeded', coords);
           })
           .catch(() => setIsLoadingLocation(false));
+        });
       }
     });
     return () => subscription.remove();
@@ -1407,21 +1440,22 @@ export default function PassengerHomeScreen() {
       return;
     }
 
-    let locationSubscription: Location.LocationSubscription | null = null;
+    let locationSubscription: LocationSubscription | null = null;
 
     const startLocationTracking = async () => {
       try {
+        const Loc = await getLocation();
         // Request location permissions
-        const { status } = await Location.requestForegroundPermissionsAsync();
+        const { status } = await Loc.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
           console.warn('[PASSENGER] Location permission not granted for tracking');
           return;
         }
 
         // Start watching location
-        locationSubscription = await Location.watchPositionAsync(
+        locationSubscription = await Loc.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.BestForNavigation,
+            accuracy: Loc.Accuracy.BestForNavigation,
             timeInterval: 2000,
             distanceInterval: 3,
           },
@@ -1464,16 +1498,17 @@ export default function PassengerHomeScreen() {
 
   // Continuous passenger location tracking — keeps the map icon precise at all times
   useEffect(() => {
-    let locationSubscription: Location.LocationSubscription | null = null;
+    let locationSubscription: LocationSubscription | null = null;
 
     const startWatching = async () => {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
+        const Loc = await getLocation();
+        const { status } = await Loc.requestForegroundPermissionsAsync();
         if (status !== 'granted') return;
 
-        locationSubscription = await Location.watchPositionAsync(
+        locationSubscription = await Loc.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.BestForNavigation,
+            accuracy: Loc.Accuracy.BestForNavigation,
             timeInterval: 2000,
             distanceInterval: 1,
           },
@@ -3167,18 +3202,15 @@ export default function PassengerHomeScreen() {
             onRegionChangeComplete={() => setUserInteractedWithMap(true)}
           >
             {showDriverMarker && driverLocation && typeof driverLocation.latitude === 'number' && (
-              <Marker
-                coordinate={{
-                  latitude: Number(driverLocation.latitude),
-                  longitude: Number(driverLocation.longitude),
-                }}
+              <MemoizedMarker
+                coordinate={driverCoord!}
                 title="Conductor"
                 anchor={{ x: 0.5, y: 0.5 }}
                 flat={false}
                 rotation={0}
               >
                 <DriverTaxiIcon />
-              </Marker>
+              </MemoizedMarker>
             )}
 
             {/* Pickup marker — shown only during 'accepted' when far from passenger */}
@@ -3186,87 +3218,68 @@ export default function PassengerHomeScreen() {
               Math.abs(pickupLocation.latitude - currentLocation.latitude) > 0.0005 ||
               Math.abs(pickupLocation.longitude - currentLocation.longitude) > 0.0005
             ) && (
-              <Marker
-                coordinate={{
-                  latitude: Number(pickupLocation.latitude),
-                  longitude: Number(pickupLocation.longitude),
-                }}
+              <MemoizedMarker
+                coordinate={pickupCoord!}
                 title="Punto de recogida"
                 identifier="pickup"
                 anchor={{ x: 0.5, y: 0.5 }}
               >
                 <PickupIcon size={36} />
-              </Marker>
+              </MemoizedMarker>
             )}
 
             {/* Ubicacion actual del pasajero — se oculta solo cuando inicia el viaje */}
             {currentLocation && typeof currentLocation.latitude === 'number' && activeRide?.status !== 'in_progress' && (
-              <Marker
-                coordinate={{
-                  latitude: Number(currentLocation.latitude),
-                  longitude: Number(currentLocation.longitude),
-                }}
+              <MemoizedMarker
+                coordinate={currentCoord!}
                 title="Tu ubicacion"
                 identifier="passenger_location"
                 anchor={{ x: 0.5, y: 0.5 }}
               >
                 <PassengerIcon size={44} />
-              </Marker>
+              </MemoizedMarker>
             )}
 
             {/* Destino */}
             {destinationLocation && typeof destinationLocation.latitude === 'number' && (
-              <Marker
-                coordinate={{
-                  latitude: Number(destinationLocation.latitude),
-                  longitude: Number(destinationLocation.longitude),
-                }}
+              <MemoizedMarker
+                coordinate={destinationCoord!}
                 title="Destino"
                 identifier="destination"
                 anchor={{ x: 0.5, y: 0.5 }}
               >
                 <DropoffIcon size={44} />
-              </Marker>
+              </MemoizedMarker>
             )}
 
             {/* Second Pickup Marker */}
             {showSecondPickup && secondPickupLocation && typeof secondPickupLocation.latitude === 'number' && (
-              <Marker
-                coordinate={{
-                  latitude: Number(secondPickupLocation.latitude),
-                  longitude: Number(secondPickupLocation.longitude),
-                }}
+              <MemoizedMarker
+                coordinate={secondPickupCoord!}
                 title="Segundo punto de recogida"
                 identifier="pickup2"
                 anchor={{ x: 0.5, y: 0.5 }}
               >
                 <SecondPickupIcon />
-              </Marker>
+              </MemoizedMarker>
             )}
 
             {/* Second Destination Marker */}
             {showSecondDestination && secondDestinationLocation && typeof secondDestinationLocation.latitude === 'number' && (
-              <Marker
-                coordinate={{
-                  latitude: Number(secondDestinationLocation.latitude),
-                  longitude: Number(secondDestinationLocation.longitude),
-                }}
+              <MemoizedMarker
+                coordinate={secondDestinationCoord!}
                 title="Segundo destino"
                 identifier="destination2"
                 anchor={{ x: 0.5, y: 0.5 }}
               >
                 <SecondDropoffIcon />
-              </Marker>
+              </MemoizedMarker>
             )}
 
             {/* Route line — shown before ride request and during in_progress */}
             {(!activeRide || activeRide.status === 'pending' || activeRide.status === 'in_progress') && routeCoordinates.length > 1 && (
-              <Polyline
-                coordinates={
-                  routeCoordinates.length >= 2 && nearestRouteIndex > 0
-                    ? routeCoordinates.slice(nearestRouteIndex)
-                    : routeCoordinates
-                }
+              <MemoizedPolyline
+                coordinates={slicedRouteCoords}
                 strokeColor={
                   activeRide?.status === 'accepted' ? '#FF8C00' : '#22C55E'
                 }
@@ -3278,7 +3291,7 @@ export default function PassengerHomeScreen() {
 
             {/* Nearby Landmarks */}
             {nearbyLandmarks.map((landmark, index) => (
-              <Marker
+              <MemoizedMarker
                 key={landmark.id || `landmark-${index}`}
                 coordinate={{
                   latitude: landmark.latitude,
@@ -3309,7 +3322,7 @@ export default function PassengerHomeScreen() {
                     color="#8B5CF6"
                   />
                 </View>
-              </Marker>
+              </MemoizedMarker>
             ))}
           </MapView>
         </ErrorBoundary>
@@ -3713,25 +3726,27 @@ export default function PassengerHomeScreen() {
                       </TouchableOpacity>
                       <View style={styles.routeRowContent}>
                         {isEditingPickup ? (
-                          <AddressAutocomplete
-                            value={pickupAddress}
-                            onChangeText={setPickupAddress}
-                            onSelectPlace={place => {
-                              setPickupLocation({
-                                latitude: place.latitude,
-                                longitude: place.longitude,
-                              });
-                              setPickupAddress(place.name); // Show short name in input
-                              setPickupFullAddress(place.description || place.name); // Save full address internally
-                              setPickupLocationSource(place.source ?? null);
-                              setIsEditingPickup(false);
-                            }}
-                            placeholder="Punto de recogida"
-                            currentLocation={currentLocation ?? undefined}
-                            bare
-                            style={styles.routeAutocomplete}
-                            suggestionsStyle={styles.routeSuggestionsDropdown}
-                          />
+                          <Suspense fallback={<View style={styles.routeAutocomplete} />}>
+                            <AddressAutocomplete
+                              value={pickupAddress}
+                              onChangeText={setPickupAddress}
+                              onSelectPlace={place => {
+                                setPickupLocation({
+                                  latitude: place.latitude,
+                                  longitude: place.longitude,
+                                });
+                                setPickupAddress(place.name); // Show short name in input
+                                setPickupFullAddress(place.description || place.name); // Save full address internally
+                                setPickupLocationSource(place.source ?? null);
+                                setIsEditingPickup(false);
+                              }}
+                              placeholder="Punto de recogida"
+                              currentLocation={currentLocation ?? undefined}
+                              bare
+                              style={styles.routeAutocomplete}
+                              suggestionsStyle={styles.routeSuggestionsDropdown}
+                            />
+                          </Suspense>
                         ) : (
                           <TouchableOpacity
                             style={styles.routeTextButton}
@@ -3781,25 +3796,27 @@ export default function PassengerHomeScreen() {
                           </View>
                           <View style={styles.routeRowContent}>
                             {isEditingSecondPickup ? (
-                              <AddressAutocomplete
-                                value={secondPickupAddress}
-                                onChangeText={setSecondPickupAddress}
-                                onSelectPlace={place => {
-                                  setSecondPickupLocation({
-                                    latitude: place.latitude,
-                                    longitude: place.longitude,
-                                  });
-                                  setSecondPickupAddress(place.name);
-                                  setSecondPickupFullAddress(place.description || place.name);
-                                  setSecondPickupLocationSource(place.source ?? null);
-                                  setIsEditingSecondPickup(false);
-                                }}
-                                placeholder="2do punto de recogida"
-                                currentLocation={currentLocation ?? undefined}
-                                bare
-                                style={styles.routeAutocomplete}
-                                suggestionsStyle={styles.routeSuggestionsDropdown}
-                              />
+                              <Suspense fallback={<View style={styles.routeAutocomplete} />}>
+                                <AddressAutocomplete
+                                  value={secondPickupAddress}
+                                  onChangeText={setSecondPickupAddress}
+                                  onSelectPlace={place => {
+                                    setSecondPickupLocation({
+                                      latitude: place.latitude,
+                                      longitude: place.longitude,
+                                    });
+                                    setSecondPickupAddress(place.name);
+                                    setSecondPickupFullAddress(place.description || place.name);
+                                    setSecondPickupLocationSource(place.source ?? null);
+                                    setIsEditingSecondPickup(false);
+                                  }}
+                                  placeholder="2do punto de recogida"
+                                  currentLocation={currentLocation ?? undefined}
+                                  bare
+                                  style={styles.routeAutocomplete}
+                                  suggestionsStyle={styles.routeSuggestionsDropdown}
+                                />
+                              </Suspense>
                             ) : (
                               <TouchableOpacity
                                 style={styles.routeTextButton}
@@ -3876,24 +3893,26 @@ export default function PassengerHomeScreen() {
                     <View style={styles.routeRow}>
                       <Ionicons name="location" size={20} color="#22c55e" />
                       <View style={styles.routeRowContent}>
-                        <AddressAutocomplete
-                          value={destinationAddress}
-                          onChangeText={setDestinationAddress}
-                          onSelectPlace={place => {
-                            setDestinationLocation({
-                              latitude: place.latitude,
-                              longitude: place.longitude,
-                            });
-                            setDestinationAddress(place.name); // Show short name in input
-                            setDestinationFullAddress(place.description || place.name); // Save full address internally
-                            setDestinationLocationSource(place.source ?? null);
-                          }}
-                          placeholder="¿A dónde vas?"
-                          currentLocation={currentLocation ?? undefined}
-                          bare
-                          style={styles.routeAutocomplete}
-                          suggestionsStyle={styles.routeSuggestionsDropdown}
-                        />
+                        <Suspense fallback={<View style={styles.routeAutocomplete} />}>
+                          <AddressAutocomplete
+                            value={destinationAddress}
+                            onChangeText={setDestinationAddress}
+                            onSelectPlace={place => {
+                              setDestinationLocation({
+                                latitude: place.latitude,
+                                longitude: place.longitude,
+                              });
+                              setDestinationAddress(place.name); // Show short name in input
+                              setDestinationFullAddress(place.description || place.name); // Save full address internally
+                              setDestinationLocationSource(place.source ?? null);
+                            }}
+                            placeholder="¿A dónde vas?"
+                            currentLocation={currentLocation ?? undefined}
+                            bare
+                            style={styles.routeAutocomplete}
+                            suggestionsStyle={styles.routeSuggestionsDropdown}
+                          />
+                        </Suspense>
                       </View>
                       <View style={styles.routeActions}>
                         <TouchableOpacity
@@ -3925,25 +3944,27 @@ export default function PassengerHomeScreen() {
                           </View>
                           <View style={styles.routeRowContent}>
                             {isEditingSecondDestination ? (
-                              <AddressAutocomplete
-                                value={secondDestinationAddress}
-                                onChangeText={setSecondDestinationAddress}
-                                onSelectPlace={place => {
-                                  setSecondDestinationLocation({
-                                    latitude: place.latitude,
-                                    longitude: place.longitude,
-                                  });
-                                  setSecondDestinationAddress(place.name);
-                                  setSecondDestinationFullAddress(place.description || place.name);
-                                  setSecondDestinationLocationSource(place.source ?? null);
-                                  setIsEditingSecondDestination(false);
-                                }}
-                                placeholder="2do punto de destino"
-                                currentLocation={currentLocation ?? undefined}
-                                bare
-                                style={styles.routeAutocomplete}
-                                suggestionsStyle={styles.routeSuggestionsDropdown}
-                              />
+                              <Suspense fallback={<View style={styles.routeAutocomplete} />}>
+                                <AddressAutocomplete
+                                  value={secondDestinationAddress}
+                                  onChangeText={setSecondDestinationAddress}
+                                  onSelectPlace={place => {
+                                    setSecondDestinationLocation({
+                                      latitude: place.latitude,
+                                      longitude: place.longitude,
+                                    });
+                                    setSecondDestinationAddress(place.name);
+                                    setSecondDestinationFullAddress(place.description || place.name);
+                                    setSecondDestinationLocationSource(place.source ?? null);
+                                    setIsEditingSecondDestination(false);
+                                  }}
+                                  placeholder="2do punto de destino"
+                                  currentLocation={currentLocation ?? undefined}
+                                  bare
+                                  style={styles.routeAutocomplete}
+                                  suggestionsStyle={styles.routeSuggestionsDropdown}
+                                />
+                              </Suspense>
                             ) : (
                               <TouchableOpacity
                                 style={styles.routeTextButton}
@@ -4757,37 +4778,43 @@ export default function PassengerHomeScreen() {
         </Modal>
 
         {/* Mobile Payment Modal */}
-        <MobilePaymentModal
-          visible={showMobilePaymentModal}
-          amount={finalFare || estimatedFare || 0}
-          currency={fareCurrency}
-          exchangeRate={fareBreakdown?.exchangeRate}
-          rideId={activeRide?.id || ''}
-          passengerName={user?.name || ""}
-          platformMethod={selectedPlatformMethod}
-          onPaymentComplete={handleMobilePaymentComplete}
-          onCancel={handleMobilePaymentCancel}
-        />
+        <Suspense fallback={null}>
+          <MobilePaymentModal
+            visible={showMobilePaymentModal}
+            amount={finalFare || estimatedFare || 0}
+            currency={fareCurrency}
+            exchangeRate={fareBreakdown?.exchangeRate}
+            rideId={activeRide?.id || ''}
+            passengerName={user?.name || ""}
+            platformMethod={selectedPlatformMethod}
+            onPaymentComplete={handleMobilePaymentComplete}
+            onCancel={handleMobilePaymentCancel}
+          />
+        </Suspense>
 
         {/* Change Payment Method Modal — for switching from cash to pago_movil during ride (Req. 3.2) */}
-        <MobilePaymentModal
-          visible={showChangePaymentModal}
-          amount={estimatedFare || 0}
-          currency={fareCurrency}
-          exchangeRate={fareBreakdown?.exchangeRate}
-          rideId={activeRide?.id || ''}
-          onPaymentComplete={handleChangePaymentComplete}
-          onCancel={handleChangePaymentCancel}
-        />
+        <Suspense fallback={null}>
+          <MobilePaymentModal
+            visible={showChangePaymentModal}
+            amount={estimatedFare || 0}
+            currency={fareCurrency}
+            exchangeRate={fareBreakdown?.exchangeRate}
+            rideId={activeRide?.id || ''}
+            onPaymentComplete={handleChangePaymentComplete}
+            onCancel={handleChangePaymentCancel}
+          />
+        </Suspense>
 
         {/* Shared Ride Invitation Modal (Req. 7.3, 7.4) */}
-        <SharedRideInvitationModal
-          visible={showInvitationModal}
-          invitation={currentInvitation}
-          onAccept={handleInvitationAccept}
-          onReject={handleInvitationReject}
-          onClose={handleInvitationClose}
-        />
+        <Suspense fallback={null}>
+          <SharedRideInvitationModal
+            visible={showInvitationModal}
+            invitation={currentInvitation}
+            onAccept={handleInvitationAccept}
+            onReject={handleInvitationReject}
+            onClose={handleInvitationClose}
+          />
+        </Suspense>
 
         {/* Contact Driver Modal */}
         <Modal

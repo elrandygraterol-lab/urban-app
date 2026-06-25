@@ -14,6 +14,7 @@ export default function DriverLayout() {
           tabBarActiveTintColor: '#22c55e',
           tabBarInactiveTintColor: '#A9A9A9',
           headerShown: false,
+          lazy: true,
         }}
       >
         <Tabs.Screen

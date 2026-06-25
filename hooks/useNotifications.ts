@@ -410,18 +410,9 @@ export const useNotifications = () => {
         // ── STORE NOTIFICATIONS ──────────────────────────────────────────
         case 'store_approved':
         case 'store_rejected':
-          if (data.storeId) {
-            router.push(`/(tabs)/stores/${data.storeId}` as any);
-          } else {
-            router.push('/(tabs)/stores/my-stores' as any);
-          }
-          break;
-
         case 'new_review':
         case 'review_reply':
-          if (data.storeId) {
-            router.push(`/(tabs)/stores/${data.storeId}` as any);
-          }
+          router.push('/(passenger)/index' as any);
           break;
 
         // ── DRIVER NOTIFICATIONS ─────────────────────────────────────────
@@ -511,8 +502,8 @@ export const useNotifications = () => {
         // ── PROMOTIONS ───────────────────────────────────────────────────
         case 'promotions':
         case 'promotions_notification':
-          // Navigate to explore/home
-          router.push('/(tabs)/explore' as any);
+          // Navigate to passenger home
+          router.push('/(passenger)/index' as any);
           break;
 
         default:
@@ -522,7 +513,7 @@ export const useNotifications = () => {
           if (user?.role === 'driver') {
             router.push('/(driver)/index' as any);
           } else {
-            router.push('/(tabs)/index' as any);
+            router.push('/(passenger)/index' as any);
           }
       }
     }
