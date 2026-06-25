@@ -1258,16 +1258,8 @@ export default function PassengerHomeScreen() {
         4000
       );
 
-      // If payment is not yet completed, show payment modal first.
-      // Rating modal will be shown after payment is completed (handleClosePaymentModal).
-      if (!paymentCompleted) {
-        console.log('[PASSENGER] Opening payment modal after ride completion');
-        setShowPaymentModal(true);
-      } else {
-        // Payment already completed — show rating modal directly
-        console.log('[PASSENGER] Payment already completed — opening rating modal');
-        setShowRatingModal(true);
-      }
+      console.log('[PASSENGER] Ride completed — opening rating modal directly');
+      setShowRatingModal(true);
     };
 
     // Register event listeners
