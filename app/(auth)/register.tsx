@@ -797,34 +797,7 @@ export default function RegisterScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Divider */}
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>o continúa con</Text>
-            <View style={styles.dividerLine} />
-          </View>
 
-          {/* Social */}
-          <View style={styles.socialRow}>
-            <TouchableOpacity
-              style={styles.socialBtn}
-              onPress={() => showStatus('info', 'El registro con Google estará disponible próximamente.', 'En Desarrollo')}
-            >
-              <Ionicons name="logo-google" size={22} color="#4285f4" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.socialBtn}
-              onPress={() => showStatus('info', 'El registro con Apple estará disponible próximamente.', 'En Desarrollo')}
-            >
-              <Ionicons name="logo-apple" size={22} color="#000" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.socialBtn}
-              onPress={() => showStatus('info', 'El registro con Facebook estará disponible próximamente.', 'En Desarrollo')}
-            >
-              <Ionicons name="logo-facebook" size={22} color="#1877f2" />
-            </TouchableOpacity>
-          </View>
           </View>
           </View>
         </ScrollView>
@@ -1208,20 +1181,7 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontWeight: '500',
   },
-  socialRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  socialBtn: {
-    flex: 1,
-    height: 50,
-    backgroundColor: '#fff',
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+
 
   /* Role selector */
   roleLabel: {
