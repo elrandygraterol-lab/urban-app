@@ -1035,16 +1035,15 @@ export default function PassengerHomeScreen() {
       }
       prevDriverLocationRef.current = newDriverLocation;
 
-      // ========== MEJORA 1: Actualización Dinámica de Ruta ==========
-      // Durante 'accepted' y 'arrived': NO se traza ruta — el pasajero solo espera
-      // Durante 'in_progress': mostrar ruta del conductor → destino
-      if (
-        isDynamicRouteEnabled &&
-        activeRide?.status === 'in_progress' &&
-        destinationLocation &&
-        (Date.now() - lastRouteUpdate > 30000 || routeCoordinates.length === 0)
-      ) {
-        updateDynamicRoute(newDriverLocation, destinationLocation);
+      // ========== ACTUALIZACIÓN DINÁMICA DE RUTA ==========
+      // Durante 'accepted': ruta conductor → recogida (para ETA/distance precisos por OSRM)
+      // Durante 'in_progress': ruta conductor → destino
+      if (isDynamicRouteEnabled) {
+        if (activeRide?.status === 'accepted' && pickupLocation && (Date.now() - lastRouteUpdate > 30000 || routeCoordinates.length === 0)) {
+          updateDynamicRoute(newDriverLocation, pickupLocation);
+        } else if (activeRide?.status === 'in_progress' && destinationLocation && (Date.now() - lastRouteUpdate > 30000 || routeCoordinates.length === 0)) {
+          updateDynamicRoute(newDriverLocation, destinationLocation);
+        }
       }
 
       // ========== MEJORA 2: Calcular Progreso del Viaje ==========
@@ -1320,10 +1319,10 @@ export default function PassengerHomeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRide?.id, listenerVersion]); // Re-run when ride changes OR app returns to foreground
 
-  // Clear route when waiting for driver (accepted/arrived) — route only during in_progress
+  // Clear route when driver arrives — route was driver→pickup, no longer needed
   useEffect(() => {
     if (!activeRide) return;
-    if ((activeRide.status === 'accepted' || activeRide.status === 'arrived') && routeCoordinates.length > 0) {
+    if (activeRide.status === 'arrived' && routeCoordinates.length > 0) {
       setRouteCoordinates([]);
       setNearestRouteIndex(0);
       setDisplayDistance(null);
@@ -1334,10 +1333,12 @@ export default function PassengerHomeScreen() {
     if (!activeRide || !driverLocation || !isDynamicRouteEnabled) return;
     if (listenerVersion === 0) return;
 
-    if (activeRide.status === 'in_progress' && destinationLocation && routeCoordinates.length === 0) {
+    if (activeRide.status === 'accepted' && pickupLocation && routeCoordinates.length === 0) {
+      updateDynamicRoute(driverLocation, pickupLocation);
+    } else if (activeRide.status === 'in_progress' && destinationLocation && routeCoordinates.length === 0) {
       updateDynamicRoute(driverLocation, destinationLocation);
     }
-  }, [listenerVersion, driverLocation]); // Added driverLocation: fires when socket delivers first location after restore
+  }, [listenerVersion, driverLocation]);
 
   // Camera follows driver during the ride — same navigation experience as driver
   useEffect(() => {
@@ -3484,15 +3485,17 @@ export default function PassengerHomeScreen() {
                     </View>
                   </View>
 
-                  {/* ETA strip — dynamic based on ride phase */}
+                  {/* ETA strip — usa OSRM (preciso) cuando está disponible, cae a socket ETA */}
                   {activeRide && (activeRide.status === 'accepted' || activeRide.status === 'in_progress') && (
                     <View style={styles.rideEtaStrip}>
                       <Ionicons name="time-outline" size={14} color="#22c55e" />
                       <Text style={styles.rideEtaText}>
                         {activeRide.status === 'accepted'
-                          ? (activeRide.eta
-                              ? `${Math.round(activeRide.eta.estimatedMinutes)} min · ${activeRide.eta.distanceKm.toFixed(1)} km`
-                              : 'Calculando...')
+                          ? (displayDuration !== null && displayDistance !== null
+                              ? `${Math.round(displayDuration)} min · ${displayDistance.toFixed(1)} km`
+                              : activeRide.eta
+                                ? `${Math.round(activeRide.eta.estimatedMinutes)} min · ${activeRide.eta.distanceKm.toFixed(1)} km`
+                                : 'Calculando...')
                           : (displayDuration !== null && displayDistance !== null
                               ? `${Math.round(displayDuration)} min · ${displayDistance.toFixed(1)} km`
                               : 'Calculando...')
@@ -3792,7 +3795,7 @@ export default function PassengerHomeScreen() {
                       <>
                         <View style={styles.routeRow}>
                           <View style={styles.secondPickupIconContainer}>
-                            <SecondPickupIcon size={14} />
+                            <SecondPickupIcon size={26} />
                           </View>
                           <View style={styles.routeRowContent}>
                             {isEditingSecondPickup ? (
@@ -3940,7 +3943,7 @@ export default function PassengerHomeScreen() {
 
                         <View style={styles.routeRow}>
                           <View style={styles.secondDestinationIconContainer}>
-                            <SecondDropoffIcon size={14} />
+                            <SecondDropoffIcon size={26} />
                           </View>
                           <View style={styles.routeRowContent}>
                             {isEditingSecondDestination ? (
@@ -4042,7 +4045,7 @@ export default function PassengerHomeScreen() {
                         onPress={() => setShowSecondPickup(true)}
                         activeOpacity={0.7}
                       >
-                        <SecondPickupIcon size={14} color="#22c55e" />
+                        <SecondPickupIcon size={26} color="#22c55e" />
                         <Text style={styles.addPointButtonText}>+ Punto de Recogida</Text>
                       </TouchableOpacity>
                     )}
@@ -4053,7 +4056,7 @@ export default function PassengerHomeScreen() {
                         onPress={() => setShowSecondDestination(true)}
                         activeOpacity={0.7}
                       >
-                        <SecondDropoffIcon size={14} color="#22c55e" />
+                        <SecondDropoffIcon size={26} color="#22c55e" />
                         <Text style={styles.addPointButtonText}>+ Punto de Destino</Text>
                       </TouchableOpacity>
                     )}

@@ -1408,7 +1408,7 @@ export default function ActiveRideScreen() {
               description={ride.destinationAddress}
               anchor={{ x: 0.5, y: 1 }}
             >
-              <DropoffIcon size={24} />
+              <DropoffIcon size={40} />
             </Marker>
           )}
 

@@ -95,7 +95,7 @@ export default function PassengerProfileScreen() {
             name: userData.name || user.name,
             phone: userData.phone || user.phone,
             email: userData.email || user.email,
-            profilePhotoUrl: userData.profilePhotoUrl || user.profilePhotoUrl,
+            profilePhotoUrl: user.profilePhotoUrl || userData.profilePhotoUrl,
           });
         }
 
@@ -275,7 +275,7 @@ export default function PassengerProfileScreen() {
   const uploadPhoto = async (uri: string) => {
     try {
       const result = await userAPI.uploadPhoto(uri);
-      const profilePhotoUrl = result.data.profilePhotoUrl;
+      const profilePhotoUrl = result.profilePhotoUrl || result.data?.profilePhotoUrl;
       // Update local user state
       if (user) {
         useAuthStore.getState().setUser({ ...user, profilePhotoUrl });
@@ -322,7 +322,7 @@ export default function PassengerProfileScreen() {
           <TouchableOpacity onPress={handleChangePhoto} style={styles.avatarWrapper}>
             {resolveFileUrl(user?.profilePhotoUrl) ? (
               <Image
-                source={{ uri: resolveFileUrl(user?.profilePhotoUrl) }}
+                source={{ uri: `${resolveFileUrl(user?.profilePhotoUrl)}?t=${Date.now()}` }}
                 style={styles.avatarImage}
                 resizeMode="cover"
               />

@@ -105,7 +105,7 @@ export default function DriverProfileScreen() {
 
       const userData = userResponse.data.data;
 
-      // Update auth store with fresh data (including profilePhotoUrl)
+      // Update auth store with fresh data (keep local profilePhotoUrl as priority)
       const currentUser = useAuthStore.getState().user;
       if (currentUser) {
         useAuthStore.getState().setUser({
@@ -113,7 +113,7 @@ export default function DriverProfileScreen() {
           name: userData.name || currentUser.name,
           phone: userData.phone || currentUser.phone,
           email: userData.email || currentUser.email,
-          profilePhotoUrl: userData.profilePhotoUrl || currentUser.profilePhotoUrl,
+          profilePhotoUrl: currentUser.profilePhotoUrl || userData.profilePhotoUrl,
         });
       }
 
@@ -363,7 +363,7 @@ export default function DriverProfileScreen() {
   const uploadPhoto = async (uri: string) => {
     try {
       const result = await userAPI.uploadPhoto(uri);
-      const profilePhotoUrl = result.data.profilePhotoUrl;
+      const profilePhotoUrl = result.profilePhotoUrl || result.data?.profilePhotoUrl;
       // Update local user state
       if (user) {
         useAuthStore.getState().setUser({ ...user, profilePhotoUrl });
@@ -397,7 +397,7 @@ export default function DriverProfileScreen() {
           <TouchableOpacity onPress={handleChangePhoto} style={styles.profileAvatarWrapper}>
             {resolveFileUrl(user?.profilePhotoUrl) ? (
               <Image
-                source={{ uri: resolveFileUrl(user?.profilePhotoUrl) }}
+                source={{ uri: `${resolveFileUrl(user?.profilePhotoUrl)}?t=${Date.now()}` }}
                 style={styles.profileAvatar}
                 resizeMode="cover"
               />

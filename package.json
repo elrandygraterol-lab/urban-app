@@ -30,7 +30,8 @@
     "build:app": "eas build -p android --profile preview --clear-cache",
     "build:prod:android": "eas build --profile production --platform android",
     "build:prod:ios": "eas build --profile production --platform ios",
-    "verify:deployment": "node verify-deployment-config.js"
+    "verify:deployment": "node verify-deployment-config.js",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
