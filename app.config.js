@@ -14,9 +14,9 @@ module.exports = ({ config }) => {
       googleServicesFile: './GoogleService-Info.plist',
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
-          'UrbanTaxi necesita acceso a tu ubicación para mostrarte en el mapa y solicitar viajes.',
+          'UrbanTaxi necesita acceso a tu ubicación para mostrarte en el mapa, encontrar conductores cercanos, calcular tarifas y rutas.',
         NSLocationAlwaysAndWhenInUseUsageDescription:
-          'UrbanTaxi necesita acceso a tu ubicación para mostrarte en el mapa y solicitar viajes, incluso en segundo plano para compartir tu ubicación con el pasajero.',
+          'UrbanTaxi necesita acceso a tu ubicación incluso en segundo plano para compartir tu posición en tiempo real con el conductor durante el viaje y con el pasajero cuando conducas, garantizando un servicio seguro y preciso.',
         UIBackgroundModes: ['location', 'fetch', 'remote-notification'],
       },
       config: {
@@ -59,6 +59,9 @@ module.exports = ({ config }) => {
         'expo-build-properties',
         {
           android: {
+            compileSdkVersion: 35,
+            targetSdkVersion: 35,
+            minSdkVersion: 24,
             usesCleartextTraffic: true,
           },
         },
@@ -82,9 +85,9 @@ module.exports = ({ config }) => {
         'expo-location',
         {
           locationAlwaysAndWhenInUsePermission:
-            'UrbanTaxi necesita acceso a tu ubicación para mostrarte en el mapa y solicitar viajes, incluso en segundo plano.',
+            'UrbanTaxi necesita acceso a tu ubicación incluso en segundo plano para compartir tu posición en tiempo real con el conductor durante el viaje y con el pasajero cuando conducas, garantizando un servicio seguro y preciso.',
           locationWhenInUsePermission:
-            'UrbanTaxi necesita acceso a tu ubicación para mostrarte en el mapa y solicitar viajes.',
+            'UrbanTaxi necesita acceso a tu ubicación para mostrarte en el mapa, encontrar conductores cercanos, calcular tarifas y rutas.',
           isAndroidBackgroundLocationEnabled: true,
         },
       ],
@@ -98,6 +101,7 @@ module.exports = ({ config }) => {
       ],
       '@react-native-firebase/app',
       'expo-audio',
+      './plugins/withRemoveRecordAudioPermission',
     ],
     experiments: {
       typedRoutes: true,

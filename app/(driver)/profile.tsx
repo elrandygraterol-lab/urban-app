@@ -54,7 +54,7 @@ export default function DriverProfileScreen() {
     useDriverStore();
   const { language, setLanguage } = useLanguage();
   const t = translations[language].profile;
-  const { showToast, showStatus, showActionSheet } = useUnifiedNotifications();
+  const { showToast, showStatus, showActionSheet, dismissStatus } = useUnifiedNotifications();
 
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -298,10 +298,13 @@ export default function DriverProfileScreen() {
           label: t.deleteSecondConfirmButton,
           onPress: async () => {
             try {
+              dismissStatus();
               await userAPI.deleteAccount();
-              await logout();
               showToast(t.deleteSuccess, 'success');
-              router.replace('/(auth)/login');
+              setTimeout(async () => {
+                await logout();
+                router.replace('/(auth)/login');
+              }, 800);
             } catch (error) {
               console.error('Error deleting account:', error);
               showToast(t.deleteError, 'error');

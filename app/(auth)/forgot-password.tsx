@@ -44,16 +44,16 @@ export default function ForgotPasswordScreen() {
       await authAPI.forgotPassword(email.trim());
       showStatus(
         'success',
-        'Se ha enviado un enlace de recuperación a tu email. Por favor revisa tu bandeja de entrada.',
+        'Se ha enviado un código de verificación a tu email. Por favor revisa tu bandeja de entrada.',
         'Éxito',
         undefined,
-        { label: 'OK', onPress: () => router.push('/(auth)/login' as any) }
+        { label: 'OK', onPress: () => router.replace({ pathname: '/(auth)/reset-password' as any, params: { email: email.trim() } }) }
       );
     } catch (error: any) {
       const errorMessage =
         error?.response?.data?.error?.message ||
         error?.message ||
-        'No se pudo enviar el email de recuperación. Por favor intenta de nuevo.';
+        'No se pudo enviar el código de verificación. Por favor intenta de nuevo.';
       showToast(errorMessage, 'error');
     } finally {
       setIsLoading(false);

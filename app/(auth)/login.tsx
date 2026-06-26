@@ -574,7 +574,6 @@ const styles = StyleSheet.create({
     color: '#22c55e',
     fontWeight: '600',
   },
-
   /* Primary Button */
   primaryBtn: {
     height: 48,

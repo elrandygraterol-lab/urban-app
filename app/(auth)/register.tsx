@@ -711,6 +711,18 @@ export default function RegisterScreen() {
               </Text>
             </TouchableOpacity>
             {termsError ? <Text style={styles.termsError}>{termsError}</Text> : null}
+            <View style={styles.termsLinksContainer}>
+              <Text style={styles.termsLinksLabel}>Enlaces:</Text>
+              <Text style={styles.termsUrl} onPress={() => Linking.openURL('https://administracionurbantaxis.com/terminos')}>
+                administracionurbantaxis.com/terminos
+              </Text>
+              <Text style={styles.termsUrl} onPress={() => Linking.openURL('https://administracionurbantaxis.com/privacidad')}>
+                administracionurbantaxis.com/privacidad
+              </Text>
+              <Text style={styles.termsContact}>
+                Contacto: <Text style={styles.termsContactBold}>urbantaxisapp@gmail.com</Text>
+              </Text>
+            </View>
           </View>
 
           {/* Terms & Privacy Modal */}
@@ -1033,6 +1045,33 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     marginLeft: 30,
     marginTop: 2,
+  },
+  termsLinksContainer: {
+    marginTop: 8,
+    marginLeft: 30,
+    paddingLeft: 4,
+  },
+  termsLinksLabel: {
+    fontSize: 12,
+    color: '#9ca3af',
+    fontWeight: '600',
+    marginBottom: 3,
+  },
+  termsUrl: {
+    fontSize: 12,
+    color: '#3b82f6',
+    fontWeight: '500',
+    lineHeight: 20,
+    textDecorationLine: 'underline',
+  },
+  termsContact: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  termsContactBold: {
+    fontWeight: '600',
+    color: '#475569',
   },
   termsText: {
     fontSize: 13,

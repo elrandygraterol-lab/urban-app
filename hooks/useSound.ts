@@ -1,7 +1,6 @@
 /**
  * useSound Hook
  * Hook personalizado para reproducir sonidos en la aplicación
- * Usa expo-audio (reemplaza expo-av deprecado en SDK 54)
  */
 
 import { useEffect, useCallback } from 'react';
@@ -14,7 +13,6 @@ export const useSound = () => {
 
   useEffect(() => {
     return () => {
-      // Cleanup: release the player on unmount
       try {
         player.remove();
       } catch {
@@ -25,11 +23,9 @@ export const useSound = () => {
 
   const playNotificationSound = useCallback(async () => {
     try {
-      // Prevent rapid successive plays that can cause OOM (expo-audio bug)
       if (player.playing) return;
       player.seekTo(0);
       player.play();
-      console.log('[SOUND] ✅ Notification sound played');
     } catch (error) {
       console.error('[SOUND] Error playing notification sound:', error);
     }

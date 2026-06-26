@@ -478,7 +478,6 @@ const StatusBanner: React.FC<{
               }
               const actionFn = status.action?.onPress;
               if (actionFn) actionFn();
-              onDismiss();
             }}
           >
             <Text style={styles.statusActionText}>{status.action.label}</Text>

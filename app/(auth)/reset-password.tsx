@@ -11,7 +11,7 @@ import {
   ScrollView,
   Image,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { authAPI } from '@/services/api';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
@@ -19,105 +19,69 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ email?: string }>();
   const { showToast, showStatus } = useUnifiedNotifications();
-  const [token, setToken] = useState('');
+  const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Inline validation errors
-  const [tokenError, setTokenError] = useState('');
+  const [codeError, setCodeError] = useState('');
   const [newPasswordError, setNewPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
-  const validateTokenField = (value: string) => {
-    setToken(value);
-    if (value.trim().length === 0) {
-      setTokenError('El token de recuperación es requerido');
-    } else {
-      setTokenError('');
-    }
-  };
-
-  const validateNewPasswordField = (value: string) => {
-    setNewPassword(value);
-    if (value.length === 0) {
-      setNewPasswordError('La nueva contraseña es requerida');
-    } else if (value.length < 8) {
-      setNewPasswordError('La contraseña debe tener al menos 8 caracteres');
-    } else if (!/[A-Z]/.test(value)) {
-      setNewPasswordError('Debe contener al menos una mayúscula');
-    } else if (!/[a-z]/.test(value)) {
-      setNewPasswordError('Debe contener al menos una minúscula');
-    } else if (!/[0-9]/.test(value)) {
-      setNewPasswordError('Debe contener al menos un número');
-    } else {
-      setNewPasswordError('');
-    }
-
-    // Re-validate confirm password if it already has a value
-    if (confirmPassword) {
-      if (confirmPassword !== value) {
-        setConfirmPasswordError('Las contraseñas no coinciden');
-      } else {
-        setConfirmPasswordError('');
-      }
-    }
-  };
-
-  const validateConfirmPasswordField = (value: string) => {
-    setConfirmPassword(value);
-    if (value.length === 0) {
-      setConfirmPasswordError('Confirma tu nueva contraseña');
-    } else if (value !== newPassword) {
-      setConfirmPasswordError('Las contraseñas no coinciden');
-    } else {
-      setConfirmPasswordError('');
-    }
-  };
-
   const handleResetPassword = async () => {
-    // Trigger validation on all fields
-    const trimmedToken = token.trim();
-    if (!trimmedToken) {
-      setTokenError('El token de recuperación es requerido');
+    const email = params.email?.trim();
+    const trimmedCode = code.trim();
+
+    let hasError = false;
+
+    if (!trimmedCode || trimmedCode.length !== 6) {
+      setCodeError('Ingresa el código de 6 dígitos');
+      hasError = true;
+    } else {
+      setCodeError('');
     }
 
     if (!newPassword) {
       setNewPasswordError('La nueva contraseña es requerida');
+      hasError = true;
     } else if (newPassword.length < 8) {
       setNewPasswordError('La contraseña debe tener al menos 8 caracteres');
+      hasError = true;
     } else if (!/[A-Z]/.test(newPassword)) {
       setNewPasswordError('Debe contener al menos una mayúscula');
+      hasError = true;
     } else if (!/[a-z]/.test(newPassword)) {
       setNewPasswordError('Debe contener al menos una minúscula');
+      hasError = true;
     } else if (!/[0-9]/.test(newPassword)) {
       setNewPasswordError('Debe contener al menos un número');
+      hasError = true;
+    } else {
+      setNewPasswordError('');
     }
 
     if (!confirmPassword) {
       setConfirmPasswordError('Confirma tu nueva contraseña');
+      hasError = true;
     } else if (confirmPassword !== newPassword) {
       setConfirmPasswordError('Las contraseñas no coinciden');
+      hasError = true;
+    } else {
+      setConfirmPasswordError('');
     }
 
-    // Abort if there are errors
-    if (
-      !trimmedToken ||
-      !newPassword ||
-      newPassword.length < 8 ||
-      !/[A-Z]/.test(newPassword) ||
-      !/[a-z]/.test(newPassword) ||
-      !/[0-9]/.test(newPassword) ||
-      !confirmPassword ||
-      confirmPassword !== newPassword
-    ) {
+    if (hasError) return;
+
+    if (!email) {
+      showToast('Email no encontrado. Por favor solicita un nuevo código.', 'error');
       return;
     }
 
     setIsLoading(true);
     try {
-      await authAPI.resetPassword(trimmedToken, newPassword);
+      await authAPI.resetPassword(trimmedCode, email, newPassword);
       showStatus(
         'success',
         'Tu contraseña ha sido actualizada correctamente.',
@@ -181,25 +145,41 @@ export default function ResetPasswordScreen() {
               {/* Header */}
               <View style={styles.formHeader}>
                 <Text style={styles.formTitle}>Restablecer contraseña</Text>
-                <Text style={styles.formSubtitle}>Ingresa el token y tu nueva contraseña</Text>
+                <Text style={styles.formSubtitle}>
+                  Ingresa el código de 6 dígitos que enviamos a tu email y tu nueva contraseña
+                </Text>
               </View>
-              {/* Token */}
+
+              {/* Email (read-only) */}
+              {params.email ? (
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.inputLabel}>Email</Text>
+                  <View style={[styles.inputBox, styles.inputBoxDisabled]}>
+                    <Ionicons name="mail-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
+                    <Text style={styles.inputDisabledText}>{params.email}</Text>
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Verification code */}
               <View style={styles.inputWrapper}>
-                <Text style={styles.inputLabel}>Token de recuperación</Text>
+                <Text style={styles.inputLabel}>Código de verificación</Text>
                 <View style={styles.inputBox}>
                   <Ionicons name="key-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Ingresa tu token"
+                    placeholder="000000"
                     placeholderTextColor="#cbd5e1"
-                    value={token}
-                    onChangeText={validateTokenField}
+                    value={code}
+                    onChangeText={(v) => { setCode(v); setCodeError(''); }}
+                    keyboardType="number-pad"
+                    maxLength={6}
                     autoCapitalize="none"
                     autoCorrect={false}
                     editable={!isLoading}
                   />
                 </View>
-                {tokenError ? <Text style={styles.fieldError}>{tokenError}</Text> : null}
+                {codeError ? <Text style={styles.fieldError}>{codeError}</Text> : null}
               </View>
 
               {/* New password */}
@@ -212,7 +192,7 @@ export default function ResetPasswordScreen() {
                     placeholder="Mínimo 8 caracteres"
                     placeholderTextColor="#cbd5e1"
                     value={newPassword}
-                    onChangeText={validateNewPasswordField}
+                    onChangeText={(v) => { setNewPassword(v); setNewPasswordError(''); }}
                     secureTextEntry
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -232,7 +212,7 @@ export default function ResetPasswordScreen() {
                     placeholder="Repite tu contraseña"
                     placeholderTextColor="#cbd5e1"
                     value={confirmPassword}
-                    onChangeText={validateConfirmPasswordField}
+                    onChangeText={(v) => { setConfirmPassword(v); setConfirmPasswordError(''); }}
                     secureTextEntry
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -465,6 +445,14 @@ const styles = StyleSheet.create({
     height: '100%',
     fontSize: 15,
     color: '#0f172a',
+  },
+  inputBoxDisabled: {
+    backgroundColor: '#e2e8f0',
+  },
+  inputDisabledText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#64748b',
   },
   fieldError: {
     color: '#ef4444',

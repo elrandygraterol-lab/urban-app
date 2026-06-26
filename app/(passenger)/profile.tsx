@@ -41,7 +41,7 @@ export default function PassengerProfileScreen() {
   const { language, setLanguage } = useLanguage();
   const t = translations[language].profile;
   const { isActive: needsTutorial } = useSmartTutorial('passenger_profile');
-  const { showToast, showStatus, showActionSheet } = useUnifiedNotifications();
+  const { showToast, showStatus, showActionSheet, dismissStatus } = useUnifiedNotifications();
 
   useEffect(() => {
     if (needsTutorial) {
@@ -210,10 +210,13 @@ export default function PassengerProfileScreen() {
           label: t.deleteSecondConfirmButton,
           onPress: async () => {
             try {
+              dismissStatus();
               await userAPI.deleteAccount();
-              await logout();
               showToast(t.deleteSuccess, 'success');
-              router.replace('/(auth)/login');
+              setTimeout(async () => {
+                await logout();
+                router.replace('/(auth)/login');
+              }, 800);
             } catch (error) {
               console.error('Error deleting account:', error);
               showToast(t.deleteError, 'error');
