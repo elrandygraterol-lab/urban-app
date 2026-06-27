@@ -196,6 +196,7 @@ export default function PassengerProfileScreen() {
     showStatus('info', t.logoutConfirmMessage, t.logoutConfirmTitle, undefined, {
       label: t.logoutConfirmButton,
       onPress: async () => {
+        dismissStatus();
         await logout();
         router.replace('/(auth)/login');
       },

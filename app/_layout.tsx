@@ -177,7 +177,7 @@ function AppContent() {
 
   return (
     <>
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack initialRouteName="(auth)" screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(passenger)" />
         <Stack.Screen name="(driver)" />

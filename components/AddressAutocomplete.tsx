@@ -3,13 +3,13 @@ import {
   View,
   Text,
   TextInput,
-  FlatList,
   TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
   ViewStyle,
   Dimensions,
   Keyboard,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { searchPlaces } from '@/services/mapsService';
@@ -176,38 +176,6 @@ export default function AddressAutocomplete({
     }, 250);
   };
 
-  const renderSuggestionItem = ({ item }: { item: Place }) => (
-    <TouchableOpacity
-      style={styles.suggestionItem}
-      onPress={() => handleSelectPlace(item)}
-      activeOpacity={0.7}
-      // Evitar que el toque cierre el teclado
-      onPressIn={() => {
-        // Prevenir que el input pierda el foco
-        if (inputRef.current && isInputFocused) {
-          inputRef.current.focus();
-        }
-      }}
-    >
-      <Ionicons
-        name="location-outline"
-        size={18}
-        color={Colors.mediumGray}
-        style={styles.suggestionIcon}
-      />
-      <View style={styles.suggestionTextContainer}>
-        <Text style={styles.suggestionName} numberOfLines={1} ellipsizeMode="tail">
-          {item.name}
-        </Text>
-        {item.description ? (
-          <Text style={styles.suggestionDescription} numberOfLines={2} ellipsizeMode="tail">
-            {item.description}
-          </Text>
-        ) : null}
-      </View>
-    </TouchableOpacity>
-  );
-
   return (
     <View ref={containerRef} style={[styles.container, style]} onLayout={measureContainer}>
       {/* Input field */}
@@ -245,17 +213,44 @@ export default function AddressAutocomplete({
       {/* Inline suggestions — same for bare and non-bare modes */}
       {showSuggestions && suggestions.length > 0 && (
         <View style={[styles.suggestionsContainer, { maxHeight: maxDropdownHeight }]}>
-          <FlatList
-            data={suggestions}
-            keyExtractor={item => item.id}
-            renderItem={renderSuggestionItem}
+          <ScrollView
             keyboardShouldPersistTaps="always"
-            keyboardDismissMode="none"
             scrollEnabled={suggestions.length > MAX_VISIBLE_SUGGESTIONS}
-            nestedScrollEnabled={true}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
             showsVerticalScrollIndicator={suggestions.length > MAX_VISIBLE_SUGGESTIONS}
-          />
+          >
+            {suggestions.map((item, index) => (
+              <React.Fragment key={item.id}>
+                {index > 0 && <View style={styles.separator} />}
+                <TouchableOpacity
+                  style={styles.suggestionItem}
+                  onPress={() => handleSelectPlace(item)}
+                  activeOpacity={0.7}
+                  onPressIn={() => {
+                    if (inputRef.current && isInputFocused) {
+                      inputRef.current.focus();
+                    }
+                  }}
+                >
+                  <Ionicons
+                    name="location-outline"
+                    size={18}
+                    color={Colors.mediumGray}
+                    style={styles.suggestionIcon}
+                  />
+                  <View style={styles.suggestionTextContainer}>
+                    <Text style={styles.suggestionName} numberOfLines={1} ellipsizeMode="tail">
+                      {item.name}
+                    </Text>
+                    {item.description ? (
+                      <Text style={styles.suggestionDescription} numberOfLines={2} ellipsizeMode="tail">
+                        {item.description}
+                      </Text>
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
+              </React.Fragment>
+            ))}
+          </ScrollView>
         </View>
       )}
     </View>

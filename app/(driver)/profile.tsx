@@ -284,6 +284,7 @@ export default function DriverProfileScreen() {
     showStatus('warning', t.logoutConfirmMessage, t.logoutConfirmTitle, undefined, {
       label: t.logoutConfirmButton,
       onPress: async () => {
+        dismissStatus();
         await logout();
         router.replace('/(auth)/login');
       },
