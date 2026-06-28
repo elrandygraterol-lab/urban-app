@@ -41,12 +41,16 @@ verificados por nuestro equipo.
      de teléfono del pagador y número de cédula de identidad. Esta verificación
      confirma que el pago fue procesado exitosamente sin que la plataforma tenga
      acceso a credenciales bancarias, números de tarjeta o claves del usuario.
-   - Conductores: Para recibir sus ganancias, los conductores proporcionan sus
-     datos bancarios (banco, tipo de cuenta, número de cuenta, cédula del titular)
-     los cuales son utilizados exclusivamente para procesar transferencias
-     bancarias desde el panel administrativo de UrbanTaxi hacia la cuenta del
-     conductor. Estas transferencias se ejecutan a través del BVC únicamente
-     cuando el administrador de la plataforma las autoriza manualmente.
+    - Conductores: Para recibir sus ganancias, los conductores proporcionan sus
+      datos bancarios (banco, tipo de cuenta, número de cuenta, cédula del titular)
+      los cuales son utilizados exclusivamente para procesar transferencias
+      bancarias desde el panel administrativo de UrbanTaxi hacia la cuenta del
+      conductor. Estas transferencias se ejecutan a través del BVC únicamente
+      cuando el administrador de la plataforma las autoriza manualmente.
+      Importante: La verificación de pagos Pago Móvil y las transferencias
+      bancarias a conductores están actualmente en modo de simulación (mock)
+      para pruebas de flujo. La integración real con la API del BVC se activará
+      en la versión final de la plataforma.
 
 2.5 Datos del dispositivo y uso: Modelo del dispositivo, sistema operativo,
 identificadores únicos, idioma/configuración regional, token de notificaciones

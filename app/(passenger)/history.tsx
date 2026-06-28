@@ -33,6 +33,10 @@ interface RideHistoryItem extends Ride {
     rating: number;
     comment?: string;
   } | null;
+  conductorRating?: {
+    rating: number;
+    comment?: string;
+  } | null;
 }
 
 const PAGE_SIZE = 15;
@@ -266,14 +270,22 @@ export default function PassengerHistoryScreen() {
           </View>
         )}
         <View style={styles.cardFooterRight}>
-          {ride.rating ? (
-            <View style={styles.myRating}>
-              {renderRatingStars(ride.rating.rating)}
-            </View>
-          ) : ride.driver ? (
+          {ride.driver && (
             <View style={styles.driverRating}>
               <Ionicons name="star" size={11} color="#f59e0b" />
               <Text style={styles.driverRatingText}>{(ride.driver.rating ?? 0).toFixed(1)}</Text>
+            </View>
+          )}
+          {ride.conductorRating && (
+            <View style={styles.conductorRatingBadge}>
+              <Text style={styles.conductorRatingBadgeText}>
+                C: {ride.conductorRating.rating.toFixed(1)}
+              </Text>
+            </View>
+          )}
+          {ride.rating ? (
+            <View style={styles.myRating}>
+              {renderRatingStars(ride.rating.rating)}
             </View>
           ) : null}
           {ride.status === 'cancelled' && (
@@ -420,6 +432,28 @@ export default function PassengerHistoryScreen() {
                   </View>
                   {selectedRide.rating.comment ? (
                     <Text style={styles.detailRatingComment}>"{selectedRide.rating.comment}"</Text>
+                  ) : null}
+                </View>
+              )}
+
+              {selectedRide.conductorRating && (
+                <View style={styles.detailCard}>
+                  <View style={styles.detailRow}>
+                    <Ionicons name="person" size={15} color="#3b82f6" />
+                    <Text style={styles.detailRowLabel}>Calificación del Conductor</Text>
+                  </View>
+                  <View style={styles.detailConductorRatingStars}>
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <Ionicons
+                        key={star}
+                        name={star <= selectedRide.conductorRating!.rating ? 'star' : 'star-outline'}
+                        size={22}
+                        color={star <= selectedRide.conductorRating!.rating ? '#f59e0b' : '#d1d5db'}
+                      />
+                    ))}
+                  </View>
+                  {selectedRide.conductorRating.comment ? (
+                    <Text style={styles.detailRatingComment}>"{selectedRide.conductorRating.comment}"</Text>
                   ) : null}
                 </View>
               )}
@@ -858,6 +892,19 @@ const styles = StyleSheet.create({
     marginLeft: 2,
     fontWeight: '600',
   },
+  conductorRatingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  conductorRatingBadgeText: {
+    fontSize: 11,
+    color: '#1e40af',
+    fontWeight: '600',
+  },
   cancelledBadge: {
     backgroundColor: '#fef2f2',
     paddingHorizontal: 8,
@@ -1082,6 +1129,12 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
   detailMyRating: {
+    flexDirection: 'row',
+    gap: 4,
+    marginLeft: 21,
+    marginBottom: 6,
+  },
+  detailConductorRatingStars: {
     flexDirection: 'row',
     gap: 4,
     marginLeft: 21,

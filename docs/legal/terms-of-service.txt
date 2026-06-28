@@ -93,19 +93,30 @@ tiene acceso a credenciales bancarias, números de tarjeta ni claves del pasajer
 5.3 Pagos a Conductores (Dispersión de Créditos): Los conductores proporcionan
 sus datos bancarios (banco, tipo de cuenta, número de cuenta, cédula del titular)
 en su perfil. Las ganancias acumuladas en la billetera digital del conductor
-son transferidas a su cuenta bancaria exclusivamente cuando un administrador de
-la plataforma procesa manualmente el pago. Estas transferencias se ejecutan a
+son transferidas a su cuenta bancaria cuando un administrador de la plataforma
+procesa el pago, con una periodicidad semanal o mensual según lo definido en
+la contratación y los acuerdos establecidos. Estas transferencias se ejecutan a
 través del servicio de dispersión de créditos del BVC. La plataforma monitorea
 el estado de cada transferencia hasta su confirmación o rechazo. Las ganancias
 están sujetas a la comisión de la plataforma, la cual se deduce automáticamente
 al completar cada viaje.
+Importante: Tanto la verificación de Pago Móvil como las transferencias a
+conductores están actualmente en modo de simulación (mock) para pruebas de
+flujo. La integración real con la API del BVC se activará en la versión final.
 
 5.4 Comisión de la Plataforma: Por cada viaje completado, la plataforma retiene
 una comisión sobre la tarifa cobrada. El porcentaje exacto es configurado por
 la administración y puede variar. Las ganancias netas (tarifa menos comisión)
 se acreditan a la billetera digital del conductor.
 
-5.5 Responsabilidad de Pago: El pasajero es responsable de realizar el pago
+5.5 Estado actual de la simulación: Tanto la verificación de los pagos
+realizados mediante Pago Móvil como las transferencias bancarias a conductores
+se encuentran actualmente en modo de simulación (mock) para pruebas de flujo.
+Durante esta fase, la plataforma simula estos procesos para validar la
+experiencia del usuario. En la versión final, todo se ejecutará a través de la
+API real del Banco Venezolano de Crédito (BVC).
+
+5.6 Responsabilidad de Pago: El pasajero es responsable de realizar el pago
 completo de la tarifa acordada. La plataforma no es responsable de pagos no
 realizados entre usuarios, aunque puede suspender cuentas de usuarios con
 pagos pendientes o fraudulentos. El BVC y los bancos emisores son responsables

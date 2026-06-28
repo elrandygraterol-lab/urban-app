@@ -285,7 +285,7 @@ function DriverEarningsScreenContent() {
 
             {/* Secondary currency */}
             {bcvRate > 0 && (
-              <Text style={styles.cardSecondaryBalance}>
+              <Text style={styles.cardSecondaryBalance} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
                 {formatCurrency(balanceOtherCurrency, otherCurrency)} {otherCurrency}
               </Text>
             )}
@@ -636,22 +636,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
     color: colors.darkGray,
   },
   balanceCard: {
-    marginHorizontal: 20,
-    marginTop: 12,
-    marginBottom: 24,
-    borderRadius: 20,
-    padding: 22,
-    paddingBottom: 18,
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 16,
+    borderRadius: 16,
+    padding: 16,
+    paddingBottom: 14,
     shadowColor: '#059669',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
@@ -688,9 +688,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardChip: {
-    width: 42,
-    height: 32,
-    borderRadius: 6,
+    width: 34,
+    height: 26,
+    borderRadius: 5,
     backgroundColor: 'rgba(212, 175, 55, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -700,32 +700,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   brandCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     opacity: 0.85,
   },
   cardBalanceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginTop: 4,
+    marginTop: 2,
+    flexShrink: 1,
   },
   cardBalanceValue: {
-    fontSize: 32,
+    fontSize: 26,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 1.5,
+    letterSpacing: 1,
     fontVariant: ['tabular-nums'],
   },
   cardBalanceCurrency: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '700',
     color: 'rgba(255, 255, 255, 0.5)',
     marginLeft: 8,
     letterSpacing: 2,
   },
   cardSecondaryBalance: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: 'rgba(255, 255, 255, 0.45)',
     marginTop: 2,
@@ -735,19 +736,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    marginTop: 4,
+    marginTop: 2,
   },
   cardLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     color: 'rgba(255, 255, 255, 0.5)',
-    letterSpacing: 3,
+    letterSpacing: 2,
   },
   cardNoEarnings: {
-    fontSize: 10,
+    fontSize: 9,
     color: 'rgba(255, 255, 255, 0.3)',
     fontStyle: 'italic',
-    marginTop: 2,
+    marginTop: 1,
   },
   cardBcvBadge: {
     alignItems: 'flex-end',
@@ -759,7 +760,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   cardBcvValue: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     color: 'rgba(255, 255, 255, 0.55)',
     marginTop: 1,
@@ -767,15 +768,15 @@ const styles = StyleSheet.create({
   summaryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: 20,
-    marginBottom: 16,
-    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    gap: 8,
   },
   summaryCard: {
     width: '48%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 10,
+    padding: 10,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
@@ -786,14 +787,14 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   summaryValue: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
     color: colors.darkGray,
     marginTop: 4,
     textAlign: 'center',
   },
   summaryValueSecondary: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '600',
     color: colors.mediumGray,
     textAlign: 'center',
@@ -812,8 +813,8 @@ const styles = StyleSheet.create({
   filterRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginHorizontal: 20,
-    marginBottom: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
     gap: 6,
   },
   filterChip: {
@@ -841,7 +842,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     marginBottom: 8,
   },
   historyTitle: {

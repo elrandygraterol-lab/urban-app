@@ -355,6 +355,7 @@ export default function PassengerHomeScreen() {
 
   // Restaurar viaje activo al montar, cuando el token esta listo, y al volver a primer plano
   const restoreAttemptedRef = useRef(false);
+  const ratingShownForRideRef = useRef<string | null>(null);
   useEffect(() => {
     if (!token) return;
 
@@ -419,16 +420,52 @@ export default function PassengerHomeScreen() {
         } else {
           // No active rides found — if we had one, it was cancelled or completed while in background
           if (isMounted && activeRide) {
-            console.log('[PASSENGER] Active ride no longer exists — clearing state');
-            setActiveRide(null);
-            setDriverLocation(null);
-            setIsSearchingDriver(false);
-            setPaymentCompleted(false);
-            setShowMobilePaymentModal(false);
-            setShowPaymentModal(false);
-            setShowRatingModal(false);
-            setRouteCoordinates([]);
-            prevDriverLocationRef.current = null;
+            // If ride was already completed locally (socket processed event in background),
+            // preserve state so the rating modal stays visible when user returns
+            if (activeRide.status === 'completed') {
+              console.log('[PASSENGER] Ride completed while in background — preserving state for rating');
+              return;
+            }
+
+            // Socket was disconnected while ride ended — fetch final status
+            let finalStatus: string | null = null;
+            try {
+              const fullResponse = await rideAPI.getRide(activeRide.id);
+              const fullData = fullResponse.data?.data || fullResponse.data;
+              finalStatus = fullData?.status;
+
+              if (fullData?.status === 'completed' && isMounted) {
+                console.log('[PASSENGER] Ride was completed while in background (socket disconnected)');
+                setActiveRide((prev: any) => prev ? { ...prev, status: 'completed' } : null);
+                if (fullData.finalFare) setFinalFare(fullData.finalFare);
+                playNotificationSound();
+                setShowRatingModal(true);
+                return;
+              }
+
+              if ((fullData?.status === 'cancelled' || fullData?.status === 'expired') && isMounted) {
+                const who = fullData.cancelledBy;
+                const msg = who === 'driver'
+                  ? 'El conductor canceló el viaje mientras estabas fuera de la app.'
+                  : 'Tu viaje fue cancelado mientras estabas fuera de la app.';
+                showStatus('ride_cancelled', msg, 'Viaje Cancelado');
+              }
+            } catch {
+              console.log('[PASSENGER] Could not fetch ride details — ride may have been removed');
+            }
+
+            if (isMounted) {
+              console.log('[PASSENGER] Active ride no longer exists — clearing state', finalStatus ? `(status: ${finalStatus})` : '');
+              setActiveRide(null);
+              setDriverLocation(null);
+              setIsSearchingDriver(false);
+              setPaymentCompleted(false);
+              setShowMobilePaymentModal(false);
+              setShowPaymentModal(false);
+              setShowRatingModal(false);
+              setRouteCoordinates([]);
+              prevDriverLocationRef.current = null;
+            }
           }
         }
       } catch (err) {
@@ -1261,9 +1298,16 @@ export default function PassengerHomeScreen() {
       console.log('[PASSENGER] ========================================');
       console.log('[PASSENGER] ✅ RIDE COMPLETED EVENT RECEIVED');
       console.log('[PASSENGER]    Ride ID:', data.rideId);
-      console.log('[PASSENGER]    Current Active Ride ID:', activeRide.id);
+      console.log('[PASSENGER]    Current Active Ride ID:', activeRide?.id);
       console.log('[PASSENGER]    Final Fare:', data.finalFare);
       console.log('[PASSENGER] ========================================');
+
+      // Guard: skip if rating was already shown for this ride
+      if (ratingShownForRideRef.current === data.rideId) {
+        console.log('[PASSENGER] Rating already shown for this ride — skipping duplicate');
+        return;
+      }
+      ratingShownForRideRef.current = data.rideId;
 
       // Store final fare
       setFinalFare(data.finalFare);
@@ -1734,10 +1778,8 @@ export default function PassengerHomeScreen() {
           setDisplayDuration(null);
           return;
         }
-        const newRouteCoords: RouteCoordinates[] = [
-          ...routeData.coordinates,
-          destination,
-        ];
+        // OSRM already includes the destination as the last coordinate
+        const newRouteCoords: RouteCoordinates[] = routeData.coordinates;
 
         setRouteCoordinates(newRouteCoords);
         setLastRouteUpdate(Date.now());
@@ -3084,6 +3126,7 @@ export default function PassengerHomeScreen() {
     setDriverRating(0);
     setDriverComment('');
     setFinalFare(null);
+    ratingShownForRideRef.current = null;
 
     // Reset ride state completely - return to initial map view
     setActiveRide(null);
@@ -3277,8 +3320,8 @@ export default function PassengerHomeScreen() {
               </MemoizedMarker>
             )}
 
-            {/* Route line — shown before ride request and during in_progress */}
-            {(!activeRide || activeRide.status === 'pending' || activeRide.status === 'in_progress') && routeCoordinates.length > 1 && (
+            {/* Route line — shown before ride request, driver approaching, and during trip */}
+            {(!activeRide || activeRide.status === 'pending' || activeRide.status === 'accepted' || activeRide.status === 'in_progress') && routeCoordinates.length > 1 && (
               <MemoizedPolyline
                 coordinates={slicedRouteCoords}
                 strokeColor={
@@ -6560,7 +6603,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '500',
   },
-  processPaymentButton: {
+   processPaymentButton: {
     backgroundColor: '#22c55e',
     borderRadius: 16,
     paddingVertical: 16,
@@ -6568,6 +6611,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
+    marginBottom: 8,
     shadowColor: '#22c55e',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,

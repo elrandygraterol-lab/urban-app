@@ -440,6 +440,23 @@ export default function ActiveRideScreen() {
       // Update ref immediately so initializeLocation() can use it without waiting for re-render
       rideRef.current = rideData;
 
+      // If ride was completed while in background (recovery, not first mount), trigger completion flow
+      if (!isFirstFetchRef.current && rideData?.status === 'completed') {
+        console.log('[ACTIVE_RIDE] ⚠️ Ride was completed while app was in background — showing rating');
+        playNotificationSound();
+        const fareValue = rideData.finalFare ?? rideData.estimatedFare ?? 0;
+        if (fareValue > 0) {
+          setFinalFare(fareValue);
+        }
+        if (!isManualFlow) {
+          setShowRatingModal(true);
+        } else {
+          setIsAvailable(true);
+          setTimeout(() => router.replace('/(driver)'), 800);
+        }
+        return;
+      }
+
       // Guard: if first fetch after mount returns completed, the data is stale
       if (isFirstFetchRef.current && rideData?.status === 'completed') {
         const correctedStatus = isManualFlow ? 'accepted' : 'in_progress';
@@ -665,8 +682,8 @@ export default function ActiveRideScreen() {
       const routeData = await getRoute(origin, destination);
 
       if (routeData.coordinates && routeData.coordinates.length > 0) {
-        // Append the exact destination point so the route ends at the marker position
-        const routeCoords = [...routeData.coordinates, destination];
+        // OSRM already includes the destination as the last coordinate
+        const routeCoords = routeData.coordinates;
         setRouteCoordinates(routeCoords);
         routePolylineRef.current = routeCoords; // Keep for deviation checks
         setRouteDistance(routeData.distance);
@@ -1147,8 +1164,8 @@ export default function ActiveRideScreen() {
               longitude: nextPoint.longitude,
             });
             if (routeData.coordinates && routeData.coordinates.length > 0) {
-              const destPoint = { latitude: nextPoint.latitude, longitude: nextPoint.longitude };
-              const routeCoords = [...routeData.coordinates, destPoint];
+              // OSRM already includes the destination as the last coordinate
+              const routeCoords = routeData.coordinates;
               setRouteCoordinates(routeCoords);
               routePolylineRef.current = routeCoords;
               setRouteDistance(routeData.distance);
@@ -1504,17 +1521,17 @@ export default function ActiveRideScreen() {
         <View
           style={{
             position: 'absolute',
-            top: 110,
+            top: insets.top + 86,
             alignSelf: 'center',
             backgroundColor: isImminent ? '#1a56db' : 'rgba(15, 23, 42, 0.85)',
-            borderRadius: 10,
-            paddingVertical: 8,
-            paddingHorizontal: 12,
+            borderRadius: 8,
+            paddingVertical: 4,
+            paddingHorizontal: 8,
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 8,
+            gap: 4,
             zIndex: 90,
-            marginHorizontal: 16,
+            marginHorizontal: 12,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.25,
@@ -1524,20 +1541,20 @@ export default function ActiveRideScreen() {
         >
           <View
             style={{
-              width: 30,
-              height: 30,
-              borderRadius: 15,
+              width: 24,
+              height: 24,
+              borderRadius: 12,
               backgroundColor: isImminent ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)',
               justifyContent: 'center',
               alignItems: 'center',
             }}
           >
-            <Ionicons name={getManeuverIcon(currentStep.maneuver?.type)} size={16} color="#fff" />
+            <Ionicons name={getManeuverIcon(currentStep.maneuver?.type)} size={12} color="#fff" />
           </View>
           <Text
             style={{
               color: '#fff',
-              fontSize: 13,
+              fontSize: 11,
               fontWeight: '600',
               flexShrink: 1,
             }}
@@ -1549,9 +1566,9 @@ export default function ActiveRideScreen() {
             <Text
               style={{
                 color: isImminent ? '#fbbf24' : 'rgba(255,255,255,0.8)',
-                fontSize: 12,
+                fontSize: 10,
                 fontWeight: '700',
-                minWidth: 36,
+                minWidth: 30,
                 textAlign: 'right',
               }}
             >

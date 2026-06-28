@@ -215,8 +215,8 @@ export default function AddressAutocomplete({
         <View style={[styles.suggestionsContainer, { maxHeight: maxDropdownHeight }]}>
           <ScrollView
             keyboardShouldPersistTaps="always"
-            scrollEnabled={suggestions.length > MAX_VISIBLE_SUGGESTIONS}
-            showsVerticalScrollIndicator={suggestions.length > MAX_VISIBLE_SUGGESTIONS}
+            scrollEnabled={suggestions.length > 0}
+            showsVerticalScrollIndicator={suggestions.length > 0}
           >
             {suggestions.map((item, index) => (
               <React.Fragment key={item.id}>

@@ -936,7 +936,7 @@ export default function MobilePaymentModal({
           </ScrollView>
 
           {/* ── Actions ── */}
-          <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom + 8, 24) }]}>
             <TouchableOpacity style={styles.btnCancel} onPress={handleCancel} disabled={isProcessing || isAutoCancelling}>
               <Text style={styles.btnCancelText}>Cancelar</Text>
             </TouchableOpacity>
@@ -966,6 +966,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
+    paddingBottom: 12,
   },
   container: {
     backgroundColor: '#fff',

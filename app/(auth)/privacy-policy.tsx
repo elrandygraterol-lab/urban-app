@@ -90,6 +90,15 @@ export default function PrivacyPolicyScreen() {
           {'\n'}• Procesadores de pago (datos de transacción)
           {'\n'}• Servicios de mapas y navegación (coordenadas GPS)
           {'\n'}• Autoridades legales (cuando la ley lo requiera)
+          {'\n\n'}
+          <Bold>Nota sobre verificación de Pago Móvil y transferencias:</Bold> 
+          Actualmente, tanto la verificación de pagos por Pago Móvil como 
+          las transferencias bancarias a conductores operan en modo de 
+          simulación (mock) para pruebas de flujo. Toda la experiencia del 
+          usuario funciona igual que en la versión final, pero la conexión 
+          real con el Banco Venezolano de Crédito (BVC) se activará cuando 
+          el banco apruebe las credenciales de producción para la versión 
+          final del servicio.
         </Section>
 
         <Section title="5. Almacenamiento y Seguridad">

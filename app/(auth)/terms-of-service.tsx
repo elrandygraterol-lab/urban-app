@@ -91,8 +91,16 @@ export default function TermsOfServiceScreen() {
           o mediante Pago Móvil. El pago debe realizarse según lo acordado antes de 
           iniciar el viaje.
           {'\n\n'}
-          <Bold>5.2 Conductores:</Bold> Recibirás tus ganancias a través de Pago Móvil 
-          o transferencia bancaria según los datos que proporciones en tu perfil. Las 
+          <Bold>5.2 Simulación de verificación:</Bold> Tanto la verificación de 
+          pagos por Pago Móvil como las transferencias bancarias a conductores 
+          se encuentran actualmente en modo de simulación (mock) para pruebas 
+          de flujo. La integración real con el Banco Venezolano de Crédito (BVC) 
+          se activará en la versión final del servicio.
+          {'\n\n'}
+          <Bold>5.3 Conductores:</Bold> Recibirás tus ganancias a través de Pago Móvil 
+          o transferencia bancaria según los datos que proporciones en tu perfil. El 
+          administrador del sistema procesará los pagos de forma semanal o mensual, 
+          según lo definido en la contratación y los acuerdos establecidos. Las 
           ganancias están sujetas a la comisión de la plataforma.
         </Section>
 
