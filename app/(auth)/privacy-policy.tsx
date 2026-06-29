@@ -32,13 +32,13 @@ export default function PrivacyPolicyScreen() {
         <Text style={styles.lastUpdated}>Última actualización: 20 de junio de 2026</Text>
 
         <Section title="1. Introducción">
-          UrbanTaxi ("nosotros", "nuestro" o "la aplicación") es una plataforma de movilidad 
+          UrbanTaxi SJ ("nosotros", "nuestro" o "la aplicación") es una plataforma de movilidad 
           urbana que conecta pasajeros con conductores para servicios de transporte. Esta 
           Política de Privacidad describe cómo recopilamos, usamos, almacenamos y protegemos 
           tu información personal cuando utilizas nuestra aplicación móvil y servicios 
           relacionados.
           {'\n\n'}
-          Al registrarte y utilizar UrbanTaxi, aceptas las prácticas descritas en esta 
+          Al registrarte y utilizar UrbanTaxi SJ, aceptas las prácticas descritas en esta 
           política. Si no estás de acuerdo, por favor no utilices la aplicación.
         </Section>
 
@@ -112,22 +112,31 @@ export default function PrivacyPolicyScreen() {
 
         <Section title="6. Retención de Datos">
           Conservamos tu información personal mientras tu cuenta esté activa y durante 
-          un período adicional razonable para:
+          un período adicional según el tipo de dato:
           {'\n\n'}
-          • Cumplir con obligaciones legales y fiscales
-          {'\n'}• Resolver disputas
-          {'\n'}• Hacer cumplir nuestros términos
+          <Bold>Datos que se eliminan al cerrar la cuenta:</Bold>
+          {'\n'}• Perfil (nombre, correo, teléfono, foto) — eliminación inmediata
+          {'\n'}• Información de pago guardada — eliminación inmediata
+          {'\n'}• Ubicación GPS y rutas — eliminación inmediata
+          {'\n'}• Documentos de conductor — eliminación inmediata
+          {'\n'}• Historial de viajes — eliminación a los 30 días
           {'\n\n'}
-          Los datos de ubicación de viajes completados se anonimizan después de 90 días.
+          <Bold>Datos que se conservan por obligación legal:</Bold>
+          {'\n'}• Registros de facturación (transacciones completadas) — 5 años (Ley de Impuesto venezolana)
+          {'\n'}• Registros de soporte y comunicaciones — 2 años
+          {'\n\n'}
+          <Bold>Datos anonimizados:</Bold>
+          {'\n'}• Calificaciones recibidas y emitidas — se anonimizan (sin asociación a tu identidad)
+          {'\n'}• Datos de ubicación de viajes completados — se anonimizan después de 90 días
         </Section>
 
         <Section title="7. Tus Derechos">
-          Como usuario de UrbanTaxi, tienes derecho a:
+          Como usuario de UrbanTaxi SJ, tienes derecho a:
           {'\n\n'}
           • <Bold>Acceder</Bold> a tus datos personales que almacenamos
           {'\n'}• <Bold>Rectificar</Bold> información inexacta o incompleta
           {'\n'}• <Bold>Eliminar</Bold> tu cuenta y datos asociados (opción disponible 
-          en tu perfil)
+          en tu perfil o en https://administracionurbantaxis.com/eliminar-cuenta)
           {'\n'}• <Bold>Exportar</Bold> tus datos en un formato portable
           {'\n'}• <Bold>Oponerte</Bold> al procesamiento de tus datos
           {'\n\n'}
@@ -136,14 +145,25 @@ export default function PrivacyPolicyScreen() {
         </Section>
 
         <Section title="8. Eliminación de Cuenta">
-          Puedes eliminar tu cuenta y todos tus datos asociados en cualquier momento 
-          desde la sección "Cuenta" en tu perfil de usuario. El proceso requiere una 
-          doble confirmación para evitar eliminaciones accidentales.
+          Puedes eliminar tu cuenta y todos tus datos asociados en cualquier momento de las siguientes formas:
           {'\n\n'}
-          Al eliminar tu cuenta:
-          {'\n'}• Se eliminarán permanentemente tus datos personales
-          {'\n'}• Los registros de viajes se anonimizarán
-          {'\n'}• Los datos de transacciones se conservarán por obligaciones fiscales
+          <Bold>Desde la app:</Bold> Ve a Perfil → Eliminar cuenta. El proceso requiere doble confirmación.
+          {'\n\n'}
+          <Bold>Desde la web:</Bold> Ingresa a https://administracionurbantaxis.com/eliminar-cuenta y completa el formulario.
+          {'\n\n'}
+          <Bold>Por correo:</Bold> Envía un email a soporte@urbantaxi.com con asunto "Eliminación de cuenta".
+          {'\n\n'}
+          <Bold>Al eliminar tu cuenta:</Bold>
+          {'\n'}• Datos personales (perfil, email, teléfono, foto) — eliminación inmediata
+          {'\n'}• Información de pago guardada — eliminación inmediata
+          {'\n'}• Ubicación GPS y rutas — eliminación inmediata
+          {'\n'}• Documentos de conductor — eliminación inmediata
+          {'\n'}• Historial de viajes — eliminación a los 30 días
+          {'\n'}• Calificaciones — anonimizadas (sin asociación a tu identidad)
+          {'\n'}• Registros de facturación — conservados por 5 años (obligación fiscal)
+          {'\n'}• Registros de soporte — conservados por 2 años
+          {'\n\n'}
+          Recibirás un correo de confirmación cuando el proceso se complete.
         </Section>
 
         <Section title="9. Permisos del Dispositivo">
@@ -162,7 +182,7 @@ export default function PrivacyPolicyScreen() {
         </Section>
 
         <Section title="10. Menores de Edad">
-          UrbanTaxi no está dirigido a menores de 18 años. No recopilamos 
+          UrbanTaxi SJ no está dirigido a menores de 18 años. No recopilamos 
           intencionadamente información de menores. Si descubres que un menor ha 
           proporcionado datos personales, contáctanos para eliminarlos.
         </Section>
@@ -187,7 +207,7 @@ export default function PrivacyPolicyScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            © 2026 UrbanTaxi. Todos los derechos reservados.
+            © 2026 UrbanTaxi SJ. Todos los derechos reservados.
           </Text>
         </View>
       </ScrollView>

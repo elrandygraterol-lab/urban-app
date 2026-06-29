@@ -183,7 +183,7 @@ export const useNotifications = () => {
     if (Platform.OS === 'android') {
       // Default channel for general notifications
       await Notifications.setNotificationChannelAsync('default', {
-        name: 'UrbanTaxi',
+        name: 'UrbanTaxi SJ',
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#22c55e',

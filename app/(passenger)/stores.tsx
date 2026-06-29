@@ -37,7 +37,7 @@ export default function StoresPlaceholderScreen() {
             <Text style={styles.comingSoonBadgeText}>PRÓXIMAMENTE</Text>
           </View>
 
-          <Text style={styles.title}>Tiendas en UrbanTaxi</Text>
+          <Text style={styles.title}>Tiendas en UrbanTaxi SJ</Text>
           <Text style={styles.subtitle}>
             Estamos trabajando para que puedas solicitar productos de tiendas locales
             directamente desde la aplicación.

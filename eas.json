@@ -34,7 +34,8 @@
       },
       "env": {
         "NODE_ENV": "staging",
-        "EXPO_PUBLIC_API_URL": "https://administracionurbantaxis.com"
+        "EXPO_PUBLIC_API_URL": "https://administracionurbantaxis.com",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyDu-vsndSIMluuvLfmGf_sAhQiNDliznrU"
       }
     },
     "production": {
@@ -46,11 +47,18 @@
       },
       "env": {
         "NODE_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "https://administracionurbantaxis.com"
+        "EXPO_PUBLIC_API_URL": "https://administracionurbantaxis.com",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyDu-vsndSIMluuvLfmGf_sAhQiNDliznrU",
+        "EXPO_NO_DOTENV": "1"
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./play-store-key.json",
+        "track": "production"
+      }
+    }
   }
 }

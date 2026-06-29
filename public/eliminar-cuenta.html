@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UrbanTaxi SJ — Solicitud de Eliminación de Cuenta</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f3f4f6;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      padding: 40px;
+      max-width: 640px;
+      margin: 40px auto;
+    }
+    h1 {
+      font-size: 24px;
+      color: #111827;
+      margin-bottom: 16px;
+    }
+    h2 {
+      font-size: 18px;
+      color: #111827;
+      margin-top: 28px;
+      margin-bottom: 10px;
+    }
+    h3 {
+      font-size: 15px;
+      color: #374151;
+      margin-top: 20px;
+      margin-bottom: 8px;
+    }
+    p, li {
+      font-size: 14px;
+      line-height: 1.7;
+      color: #4b5563;
+    }
+    ul, ol {
+      padding-left: 20px;
+      margin-bottom: 16px;
+    }
+    li { margin-bottom: 4px; }
+    hr {
+      border: none;
+      border-top: 1px solid #e5e7eb;
+      margin: 28px 0;
+    }
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+      margin-bottom: 20px;
+      font-family: inherit;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: #22c55e;
+      box-shadow: 0 0 0 3px rgba(34,197,94,0.1);
+    }
+    textarea { resize: vertical; min-height: 100px; }
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #22c55e;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #16a34a; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .success {
+      display: none;
+      text-align: center;
+      padding: 40px 0;
+    }
+    .success h2 { color: #16a34a; margin-bottom: 12px; }
+    .success p { color: #6b7280; font-size: 14px; }
+    .error {
+      color: #ef4444;
+      font-size: 13px;
+      margin-top: -16px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    .info-box {
+      background: #fef3c7;
+      border: 1px solid #f59e0b;
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 13px;
+      color: #92400e;
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+    .table th, .table td {
+      border: 1px solid #e5e7eb;
+      padding: 10px 12px;
+      text-align: left;
+    }
+    .table th {
+      background: #f9fafb;
+      font-weight: 600;
+      color: #374151;
+    }
+    .table td { color: #4b5563; }
+    .badge-deleted { color: #16a34a; font-weight: 600; }
+    .badge-retained { color: #d97706; font-weight: 600; }
+    .note {
+      background: #f0fdf4;
+      border: 1px solid #22c55e;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 13px;
+      color: #166534;
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Eliminación de Cuenta — UrbanTaxi SJ</h1>
+
+    <div class="note">
+      <strong>Importante:</strong> Esta página es para solicitar la eliminación de tu cuenta de UrbanTaxi SJ
+      (package name: <code>com.urbantaxi.app</code>). Si tienes más de una cuenta, debes solicitar la
+      eliminación de cada una por separado.
+    </div>
+
+    <h2>Pasos para solicitar la eliminación</h2>
+    <ol>
+      <li><strong>Completa el formulario</strong> más abajo con el correo electrónico, nombre y teléfono registrados en tu cuenta.</li>
+      <li><strong>Recibirás un correo de confirmación</strong> en un plazo máximo de 5 días hábiles solicitando verificar tu identidad.</li>
+      <li><strong>Responde al correo</strong> confirmando que deseas proceder con la eliminación.</li>
+      <li><strong>Tu cuenta será eliminada</strong> en un plazo de 7 días hábiles después de tu confirmación.</li>
+      <li><strong>Recibirás un correo de confirmación final</strong> una vez completada la eliminación.</li>
+    </ol>
+
+    <hr>
+
+    <h2>Datos que se eliminan vs. se conservan</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Tipo de dato</th>
+          <th>Acción</th>
+          <th>Periodo de retención</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Perfil (nombre, correo, teléfono, foto)</td>
+          <td class="badge-deleted">Eliminado permanentemente</td>
+          <td>Inmediato</td>
+        </tr>
+        <tr>
+          <td>Historial de viajes</td>
+          <td class="badge-deleted">Eliminado</td>
+          <td>30 días después de la solicitud</td>
+        </tr>
+        <tr>
+          <td>Información de pago (métodos guardados)</td>
+          <td class="badge-deleted">Eliminado</td>
+          <td>Inmediato</td>
+        </tr>
+        <tr>
+          <td>Ubicación GPS y rutas</td>
+          <td class="badge-deleted">Eliminado</td>
+          <td>Inmediato</td>
+        </tr>
+        <tr>
+          <td>Documentos de conductor (licencia, certificado médico)</td>
+          <td class="badge-deleted">Eliminado</td>
+          <td>Inmediato</td>
+        </tr>
+        <tr>
+          <td>Calificaciones (recibidas y emitidas)</td>
+          <td class="badge-retained">Anonimizado</td>
+          <td>Se conservan sin asociación a tu identidad</td>
+        </tr>
+        <tr>
+          <td>Registros de facturación (transacciones completadas)</td>
+          <td class="badge-retained">Conservado por obligación legal</td>
+          <td>5 años (según legislación fiscal venezolana)</td>
+        </tr>
+        <tr>
+          <td>Registros de soporte y comunicaciones</td>
+          <td class="badge-retained">Conservado</td>
+          <td>2 años después del cierre del ticket</td>
+        </tr>
+        <tr>
+          <td>Tokens de autenticación y sesiones</td>
+          <td class="badge-deleted">Revocado e invalidado</td>
+          <td>Inmediato</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="info-box">
+      ⚠️ La eliminación es irreversible. Una vez completada, no podrás recuperar tu cuenta ni los datos
+      eliminados. Si solo deseas desactivar temporalmente tu cuenta, puedes cerrar sesión y no usar la app;
+      tus datos se conservarán.
+    </div>
+
+    <hr>
+
+    <h2>Formulario de solicitud</h2>
+    <p style="margin-bottom: 20px;">Completa los campos para iniciar el proceso de eliminación.</p>
+
+    <form id="deleteForm">
+      <label for="email">Correo electrónico registrado *</label>
+      <input type="email" id="email" required placeholder="tucorreo@ejemplo.com">
+
+      <label for="name">Nombre completo registrado *</label>
+      <input type="text" id="name" required placeholder="Tu nombre">
+
+      <label for="phone">Teléfono registrado *</label>
+      <input type="tel" id="phone" required placeholder="+58 412 123 4567">
+
+      <label for="reason">Motivo de la eliminación (opcional)</label>
+      <select id="reason">
+        <option value="">Selecciona una opción</option>
+        <option value="no_uso">Ya no uso el servicio</option>
+        <option value="privacidad">Preocupación por mi privacidad</option>
+        <option value="duplicada">Tengo otra cuenta</option>
+        <option value="insatisfecho">No estoy satisfecho con el servicio</option>
+        <option value="otro">Otro</option>
+      </select>
+
+      <label for="comments">Comentarios adicionales</label>
+      <textarea id="comments" placeholder="Danos más contexto sobre tu solicitud..."></textarea>
+
+      <div class="error" id="errorMsg"></div>
+      <button type="submit" id="submitBtn">Enviar solicitud</button>
+    </form>
+
+    <div class="success" id="successBlock">
+      <h2>Solicitud enviada</h2>
+      <p>Hemos recibido tu solicitud de eliminación de cuenta. Te enviaremos un correo a la dirección proporcionada en un plazo máximo de 5 días hábiles para confirmar tu identidad y proceder con la eliminación.</p>
+      <p style="margin-top: 12px; font-size: 13px; color: #9ca3af;">Recibirás un correo de confirmación final cuando el proceso se complete.</p>
+    </div>
+
+    <hr>
+
+    <h2>Métodos alternativos</h2>
+    <p>Si no puedes usar este formulario, también puedes:</p>
+    <ul>
+      <li><strong>Desde la app:</strong> Ve a Perfil → Eliminar cuenta y sigue los pasos de confirmación.</li>
+      <li><strong>Correo electrónico:</strong> Envía un correo a <a href="mailto:soporte@urbantaxi.com">soporte@urbantaxi.com</a> con el asunto "Eliminación de cuenta" e incluye tu nombre completo, correo registrado y teléfono.</li>
+    </ul>
+
+    <hr>
+
+    <h2>Política de Privacidad</h2>
+    <p>Consulta nuestra <a href="https://administracionurbantaxis.com/privacidad">Política de Privacidad</a> para más información sobre cómo manejamos tus datos.</p>
+  </div>
+
+  <script>
+    const form = document.getElementById('deleteForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const errorMsg = document.getElementById('errorMsg');
+    const successBlock = document.getElementById('successBlock');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorMsg.style.display = 'none';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Enviando...';
+
+      const payload = {
+        email: document.getElementById('email').value.trim(),
+        name: document.getElementById('name').value.trim(),
+        phone: document.getElementById('phone').value.trim(),
+        reason: document.getElementById('reason').value,
+        comments: document.getElementById('comments').value.trim(),
+      };
+
+      try {
+        const res = await fetch('/api/account-deletion-requests', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Error ${res.status}`);
+        }
+
+        form.style.display = 'none';
+        successBlock.style.display = 'block';
+      } catch (err) {
+        errorMsg.textContent = err.message || 'Error al enviar la solicitud. Intenta de nuevo más tarde.';
+        errorMsg.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Enviar solicitud';
+      }
+    });
+  </script>
+</body>
+</html>

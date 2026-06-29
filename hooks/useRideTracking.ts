@@ -47,7 +47,7 @@ export function useRideTracking(rideId: string | null, rideStatus: string) {
           timeInterval: 5000,
           distanceInterval: 10,
           foregroundService: {
-            notificationTitle: 'UrbanTaxi',
+            notificationTitle: 'UrbanTaxi SJ',
             notificationBody: 'Compartiendo tu ubicación con el pasajero',
             notificationColor: '#22c55e',
           },

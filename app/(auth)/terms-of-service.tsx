@@ -32,13 +32,13 @@ export default function TermsOfServiceScreen() {
         <Text style={styles.lastUpdated}>Última actualización: 20 de junio de 2026</Text>
 
         <Section title="1. Aceptación de los Términos">
-          Al descargar, instalar o utilizar la aplicación UrbanTaxi ("la Aplicación"), 
+          Al descargar, instalar o utilizar la aplicación UrbanTaxi SJ ("la Aplicación"), 
           aceptas estar sujeto a estos Términos de Servicio ("Términos"). Si no estás 
           de acuerdo con estos Términos, no debes utilizar la Aplicación.
           {'\n\n'}
-          UrbanTaxi es una plataforma tecnológica que conecta a pasajeros que solicitan 
+          UrbanTaxi SJ es una plataforma tecnológica que conecta a pasajeros que solicitan 
           servicios de transporte con conductores independientes que ofrecen dichos 
-          servicios. UrbanTaxi NO es una empresa de transporte y no emplea conductores.
+          servicios. UrbanTaxi SJ NO es una empresa de transporte y no emplea conductores.
         </Section>
 
         <Section title="2. Elegibilidad">
@@ -114,7 +114,7 @@ export default function TermsOfServiceScreen() {
           {'\n'}• No manipular el sistema de tarifas o calificaciones
           {'\n'}• Reportar cualquier incidente o comportamiento inapropiado
           {'\n\n'}
-          UrbanTaxi se reserva el derecho de suspender o cancelar cuentas que violen 
+          UrbanTaxi SJ se reserva el derecho de suspender o cancelar cuentas que violen 
           estas normas de conducta.
         </Section>
 
@@ -147,7 +147,7 @@ export default function TermsOfServiceScreen() {
         </Section>
 
         <Section title="8. Limitación de Responsabilidad">
-          UrbanTaxi actúa como plataforma de conexión entre pasajeros y conductores 
+          UrbanTaxi SJ actúa como plataforma de conexión entre pasajeros y conductores 
           independientes. No somos responsables de:
           {'\n\n'}
           • La conducta de pasajeros o conductores
@@ -162,12 +162,12 @@ export default function TermsOfServiceScreen() {
 
         <Section title="9. Propiedad Intelectual">
           La Aplicación, su diseño, código fuente, marca, logotipo y contenido son 
-          propiedad de UrbanTaxi. No puedes copiar, modificar, distribuir o crear 
+          propiedad de UrbanTaxi SJ. No puedes copiar, modificar, distribuir o crear 
           obras derivadas sin autorización expresa.
         </Section>
 
         <Section title="10. Terminación">
-          Puedes dejar de usar la Aplicación en cualquier momento. UrbanTaxi puede 
+          Puedes dejar de usar la Aplicación en cualquier momento. UrbanTaxi SJ puede 
           suspender o cerrar tu cuenta si violas estos Términos, con o sin previo 
           aviso. La eliminación de cuenta eliminará tus datos personales según 
           nuestra Política de Privacidad.
@@ -195,7 +195,7 @@ export default function TermsOfServiceScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            © 2026 UrbanTaxi. Todos los derechos reservados.
+            © 2026 UrbanTaxi SJ. Todos los derechos reservados.
           </Text>
         </View>
       </ScrollView>

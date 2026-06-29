@@ -1,7 +1,7 @@
 module.exports = ({ config }) => {
   return {
     ...config,
-    name: 'UrbanTaxis',
+    name: 'UrbanTaxi SJ',
     slug: 'app-taxis',
     version: '1.0.0',
     orientation: 'portrait',
@@ -10,27 +10,26 @@ module.exports = ({ config }) => {
     userInterfaceStyle: 'automatic',
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'com.urbantaxi.passenger',
+      bundleIdentifier: 'com.urbantaxi.app',
       googleServicesFile: './GoogleService-Info.plist',
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
-          'UrbanTaxi necesita acceso a tu ubicación para mostrarte en el mapa, encontrar conductores cercanos, calcular tarifas y rutas.',
+          'UrbanTaxi SJ necesita acceso a tu ubicación para mostrarte en el mapa, encontrar conductores cercanos, calcular tarifas y rutas.',
         NSLocationAlwaysAndWhenInUseUsageDescription:
-          'UrbanTaxi necesita acceso a tu ubicación incluso en segundo plano para compartir tu posición en tiempo real con el conductor durante el viaje y con el pasajero cuando conducas, garantizando un servicio seguro y preciso.',
+          'UrbanTaxi SJ necesita acceso a tu ubicación incluso en segundo plano para compartir tu posición en tiempo real con el conductor durante el viaje y con el pasajero cuando conducas, garantizando un servicio seguro y preciso.',
         UIBackgroundModes: ['location', 'fetch', 'remote-notification'],
       },
       config: {
-        googleMapsApiKey: 'AIzaSyDu-vsndSIMluuvLfmGf_sAhQiNDliznrU',
+        googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
       },
     },
     android: {
-      package: 'com.urbantaxi.passenger',
+      package: 'com.urbantaxi.app',
       googleServicesFile: './google-services.json',
       adaptiveIcon: {
         backgroundColor: '#E6F4FE',
         foregroundImage: './assets/images/android-icon-foreground.png',
         backgroundImage: './assets/images/android-icon-background.png',
-        monochromeImage: './assets/images/android-icon-monochrome.png',
       },
       permissions: [
         'ACCESS_COARSE_LOCATION',
@@ -44,7 +43,7 @@ module.exports = ({ config }) => {
       ],
       config: {
         googleMaps: {
-          apiKey: 'AIzaSyDu-vsndSIMluuvLfmGf_sAhQiNDliznrU',
+          apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
         },
       },
     },
@@ -62,7 +61,7 @@ module.exports = ({ config }) => {
             compileSdkVersion: 35,
             targetSdkVersion: 35,
             minSdkVersion: 24,
-            usesCleartextTraffic: true,
+            usesCleartextTraffic: process.env.NODE_ENV !== 'production',
           },
         },
       ],
@@ -85,9 +84,9 @@ module.exports = ({ config }) => {
         'expo-location',
         {
           locationAlwaysAndWhenInUsePermission:
-            'UrbanTaxi necesita acceso a tu ubicación incluso en segundo plano para compartir tu posición en tiempo real con el conductor durante el viaje y con el pasajero cuando conducas, garantizando un servicio seguro y preciso.',
+            'UrbanTaxi SJ necesita acceso a tu ubicación incluso en segundo plano para compartir tu posición en tiempo real con el conductor durante el viaje y con el pasajero cuando conducas, garantizando un servicio seguro y preciso.',
           locationWhenInUsePermission:
-            'UrbanTaxi necesita acceso a tu ubicación para mostrarte en el mapa, encontrar conductores cercanos, calcular tarifas y rutas.',
+            'UrbanTaxi SJ necesita acceso a tu ubicación para mostrarte en el mapa, encontrar conductores cercanos, calcular tarifas y rutas.',
           isAndroidBackgroundLocationEnabled: true,
         },
       ],
@@ -96,7 +95,7 @@ module.exports = ({ config }) => {
         {
           icon: './assets/images/icon.png',
           color: '#22c55e',
-          androidCollapsedTitle: 'UrbanTaxi',
+          androidCollapsedTitle: 'UrbanTaxi SJ',
         },
       ],
       '@react-native-firebase/app',

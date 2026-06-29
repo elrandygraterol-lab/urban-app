@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,15 +10,17 @@ import {
   ActivityIndicator,
   StatusBar,
   Image,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing } from '../../constants/theme';
 import { useAuthStore } from '../../store/authStore';
 import { useLanguage } from '../../hooks/useLanguage';
 import { translations } from '../../i18n/translations';
 import { userAPI, notificationAPI, passengerAPI } from '../../services/api';
+
 import * as ImagePicker from 'expo-image-picker';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import { useSmartTutorial } from '@/hooks/useSmartTutorial';
@@ -75,62 +77,62 @@ export default function PassengerProfileScreen() {
   const [isPaymentSectionExpanded, setIsPaymentSectionExpanded] = useState(false);
   const [isSavingPayment, setIsSavingPayment] = useState(false);
 
-  useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        setIsLoading(true);
-        const userResponse = await userAPI.getMe();
+  const loadUserData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const userResponse = await userAPI.getMe();
 
-        if (!userResponse || !userResponse.data || !userResponse.data.data) {
-          console.warn('User API returned invalid response:', userResponse);
-          showToast(t.loadError, 'error');
-          return;
-        }
-
-        const userData = userResponse.data.data;
-
-        if (user) {
-          useAuthStore.getState().setUser({
-            ...user,
-            name: userData.name || user.name,
-            phone: userData.phone || user.phone,
-            email: userData.email || user.email,
-            profilePhotoUrl: user.profilePhotoUrl || userData.profilePhotoUrl,
-          });
-        }
-
-        setName(userData.name || '');
-        setPhone(userData.phone || '');
-        setEmail(userData.email || '');
-
-        try {
-          const prefsResponse = await notificationAPI.getPreferences();
-          if (prefsResponse.data && prefsResponse.data.preferences) {
-            setNotificationPrefs(prefsResponse.data.preferences);
-          }
-        } catch {
-          console.log('No notification preferences found, using defaults');
-        }
-
-        try {
-          const payResponse = await passengerAPI.getPaymentInfo();
-          if (payResponse.data?.data) {
-            setPaymentInfo(payResponse.data.data);
-          }
-        } catch {
-          console.log('No payment info found for passenger');
-        }
-      } catch (error) {
-        console.error('Error loading user data:', error);
+      if (!userResponse || !userResponse.data || !userResponse.data.data) {
+        console.warn('User API returned invalid response:', userResponse);
         showToast(t.loadError, 'error');
-      } finally {
-        setIsLoading(false);
+        return;
       }
-    };
 
+      const userData = userResponse.data.data;
+      const currentUser = useAuthStore.getState().user;
+
+      if (currentUser) {
+        useAuthStore.getState().setUser({
+          ...currentUser,
+          name: userData.name || currentUser.name,
+          phone: userData.phone || currentUser.phone,
+          email: userData.email || currentUser.email,
+          profilePhotoUrl: userData.profilePhotoUrl || currentUser.profilePhotoUrl,
+        });
+      }
+
+      setName(userData.name || '');
+      setPhone(userData.phone || '');
+      setEmail(userData.email || '');
+
+      try {
+        const prefsResponse = await notificationAPI.getPreferences();
+        if (prefsResponse.data && prefsResponse.data.preferences) {
+          setNotificationPrefs(prefsResponse.data.preferences);
+        }
+      } catch {
+        console.log('No notification preferences found, using defaults');
+      }
+
+      try {
+        const payResponse = await passengerAPI.getPaymentInfo();
+        if (payResponse.data?.data) {
+          setPaymentInfo(payResponse.data.data);
+        }
+      } catch {
+        console.log('No payment info found, using defaults');
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      showToast(t.loadError, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast, t]);
+
+  useFocusEffect(useCallback(() => {
     loadUserData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadUserData]));
 
   const handleSaveProfile = async () => {
     try {
@@ -228,6 +230,10 @@ export default function PassengerProfileScreen() {
     });
   };
 
+  const handleWebDeleteRequest = () => {
+    Linking.openURL('https://administracionurbantaxis.com/eliminar-cuenta');
+  };
+
   const handleChangePhoto = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -280,7 +286,6 @@ export default function PassengerProfileScreen() {
     try {
       const result = await userAPI.uploadPhoto(uri);
       const profilePhotoUrl = result.profilePhotoUrl || result.data?.profilePhotoUrl;
-      // Update local user state
       if (user) {
         useAuthStore.getState().setUser({ ...user, profilePhotoUrl });
       }
@@ -669,6 +674,16 @@ export default function PassengerProfileScreen() {
                   <Ionicons name="trash-outline" size={20} color={Colors.error} />
                 </View>
                 <Text style={[styles.rowLabel, { color: Colors.error }]}>{t.deleteAccount}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.rowItem} onPress={handleWebDeleteRequest}>
+              <View style={styles.rowLeft}>
+                <View style={[styles.iconBox, { backgroundColor: '#fef2f2' }]}>
+                  <Ionicons name="globe-outline" size={20} color={Colors.error} />
+                </View>
+                <Text style={[styles.rowLabel, { color: Colors.error }]}>Solicitar por web</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
             </TouchableOpacity>

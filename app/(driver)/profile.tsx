@@ -10,9 +10,10 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors, Spacing } from '../../constants/theme';
@@ -28,6 +29,7 @@ import {
   reconnectSocket,
   getSocketDiagnostics,
 } from '@/services/socket';
+
 import { resolveFileUrl } from '@/services/fileUrl';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 
@@ -105,7 +107,7 @@ export default function DriverProfileScreen() {
 
       const userData = userResponse.data.data;
 
-      // Update auth store with fresh data (keep local profilePhotoUrl as priority)
+      // Update auth store with fresh data (API response takes priority)
       const currentUser = useAuthStore.getState().user;
       if (currentUser) {
         useAuthStore.getState().setUser({
@@ -113,7 +115,7 @@ export default function DriverProfileScreen() {
           name: userData.name || currentUser.name,
           phone: userData.phone || currentUser.phone,
           email: userData.email || currentUser.email,
-          profilePhotoUrl: currentUser.profilePhotoUrl || userData.profilePhotoUrl,
+          profilePhotoUrl: userData.profilePhotoUrl || currentUser.profilePhotoUrl,
         });
       }
 
@@ -161,9 +163,11 @@ export default function DriverProfileScreen() {
     }
   }, [showToast, setIsAvailable, t]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     loadUserData();
+  }, [loadUserData]));
 
+  useEffect(() => {
     // Usar addConnectionListener en lugar de getSocket() directo
     // Esto funciona aunque el socket aún no se haya inicializado
     const connectionListener = (connected: boolean) => {
@@ -211,7 +215,7 @@ export default function DriverProfileScreen() {
     return () => {
       removeConnectionListener(connectionListener);
     };
-  }, [loadUserData, setIsAvailable]);
+  }, [setIsAvailable]);
 
   const handleSaveProfile = async () => {
     try {
@@ -316,6 +320,10 @@ export default function DriverProfileScreen() {
     });
   };
 
+  const handleWebDeleteRequest = () => {
+    Linking.openURL('https://administracionurbantaxis.com/eliminar-cuenta');
+  };
+
   const handleChangePhoto = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -368,7 +376,6 @@ export default function DriverProfileScreen() {
     try {
       const result = await userAPI.uploadPhoto(uri);
       const profilePhotoUrl = result.profilePhotoUrl || result.data?.profilePhotoUrl;
-      // Update local user state
       if (user) {
         useAuthStore.getState().setUser({ ...user, profilePhotoUrl });
       }
@@ -892,6 +899,18 @@ export default function DriverProfileScreen() {
                 <Ionicons name="trash-outline" size={20} color={Colors.error} />
               </View>
               <Text style={[styles.settingRowTitle, styles.textDanger]}>{t.deleteAccount}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity style={styles.settingRow} onPress={handleWebDeleteRequest}>
+            <View style={styles.settingRowLeft}>
+              <View style={[styles.settingDot, styles.dotDanger]}>
+                <Ionicons name="globe-outline" size={20} color={Colors.error} />
+              </View>
+              <Text style={[styles.settingRowTitle, styles.textDanger]}>Solicitar por web</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
           </TouchableOpacity>
