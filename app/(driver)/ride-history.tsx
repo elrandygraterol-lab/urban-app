@@ -542,6 +542,10 @@ export default function DriverRideHistoryScreen() {
         ListEmptyComponent={renderEmpty}
         showsVerticalScrollIndicator={false}
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+        removeClippedSubviews={Platform.OS === 'android'}
+        maxToRenderPerBatch={10}
+        windowSize={10}
+        initialNumToRender={10}
       />
 
       {renderFiltersModal()}

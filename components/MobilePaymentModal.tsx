@@ -252,6 +252,10 @@ function BankSelector({
                   contentContainerStyle={styles.bankDropdownListContent}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
+                  removeClippedSubviews={Platform.OS === 'android'}
+                  maxToRenderPerBatch={15}
+                  windowSize={5}
+                  initialNumToRender={15}
                   ListEmptyComponent={
                     <View style={styles.bankEmpty}>
                       <Ionicons name="search-outline" size={32} color="#d1d5db" />

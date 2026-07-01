@@ -113,7 +113,7 @@ module.exports = ({ config }) => {
       fallbackToCacheTimeout: 0,
     },
     privacyPolicyUrl: 'https://administracionurbantaxis.com/privacidad',
-    assetBundlePatterns: ['**/*'],
+    assetBundlePatterns: ['assets/**/*'],
     extra: {
       router: {},
       eas: {

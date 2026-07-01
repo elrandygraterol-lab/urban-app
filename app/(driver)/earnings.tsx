@@ -24,6 +24,7 @@ import {
   TouchableOpacity,
   AppState,
   StyleSheet,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors as colors } from '@/constants/theme';
@@ -250,6 +251,10 @@ function DriverEarningsScreenContent() {
       onEndReached={hasMore ? loadMoreTransactions : undefined}
       onEndReachedThreshold={0.3}
       showsVerticalScrollIndicator={false}
+      removeClippedSubviews={Platform.OS === 'android'}
+      maxToRenderPerBatch={10}
+      windowSize={10}
+      initialNumToRender={10}
       ListHeaderComponent={
         <>
           {/* Header */}

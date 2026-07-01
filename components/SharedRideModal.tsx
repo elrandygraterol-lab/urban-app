@@ -433,6 +433,10 @@ export default function SharedRideModal({
         contentContainerStyle={results.length === 0 ? styles.listEmptyContent : styles.listContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews={Platform.OS === 'android'}
+        maxToRenderPerBatch={10}
+        windowSize={10}
+        initialNumToRender={10}
       />
     </>
   );
