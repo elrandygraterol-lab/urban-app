@@ -22,6 +22,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
+import { compressImage } from '@/utils/imageUtils';
 
 type UserRole = 'passenger' | 'driver' | 'owner';
 type VehicleType = 'taxi' | 'moto_taxi';
@@ -36,7 +37,7 @@ interface DocumentFile {
 export default function RegisterScreen() {
   const router = useRouter();
   const { register, isLoading } = useAuthStore();
-  const { showToast, showStatus, showActionSheet } = useUnifiedNotifications();
+  const { showToast, showStatus, showActionSheet, dismissStatus } = useUnifiedNotifications();
 
   // Common fields
   const [role, setRole] = useState<UserRole>('passenger');
@@ -193,8 +194,9 @@ export default function RegisterScreen() {
           });
           if (!result.canceled && result.assets?.[0]) {
             const asset = result.assets[0];
+            const compressedUri = await compressImage(asset.uri, { type: 'photo' });
             setProfilePhoto({
-              uri: asset.uri,
+              uri: compressedUri,
               name: 'profile_photo.jpg',
               type: 'image/jpeg',
               size: asset.fileSize || 0,
@@ -213,8 +215,9 @@ export default function RegisterScreen() {
           });
           if (!result.canceled && result.assets?.[0]) {
             const asset = result.assets[0];
+            const compressedUri = await compressImage(asset.uri, { type: 'photo' });
             setProfilePhoto({
-              uri: asset.uri,
+              uri: compressedUri,
               name: 'profile_photo.jpg',
               type: 'image/jpeg',
               size: asset.fileSize || 0,
@@ -244,8 +247,9 @@ export default function RegisterScreen() {
           });
           if (!result.canceled && result.assets?.[0]) {
             const asset = result.assets[0];
+            const compressedUri = await compressImage(asset.uri, { type: 'photo' });
             setter({
-              uri: asset.uri,
+              uri: compressedUri,
               name: 'document.jpg',
               type: 'image/jpeg',
               size: asset.fileSize || 0,
@@ -264,8 +268,9 @@ export default function RegisterScreen() {
           });
           if (!result.canceled && result.assets?.[0]) {
             const asset = result.assets[0];
+            const compressedUri = await compressImage(asset.uri, { type: 'photo' });
             setter({
-              uri: asset.uri,
+              uri: compressedUri,
               name: 'document.jpg',
               type: 'image/jpeg',
               size: asset.fileSize || 0,
@@ -350,7 +355,7 @@ export default function RegisterScreen() {
             'La app necesita acceso a tu ubicación para calcular rutas y mostrar conductores cercanos.',
             'Permiso de ubicación requerido',
             undefined,
-            { label: 'Abrir Configuración', onPress: () => Linking.openSettings() }
+            { label: 'Abrir Configuración', onPress: () => { Linking.openSettings(); dismissStatus(); } }
           );
         }
       }
@@ -376,7 +381,7 @@ export default function RegisterScreen() {
         'Tu cuenta ha sido creada correctamente. Ahora puedes iniciar sesión.',
         'Registro exitoso',
         undefined,
-        { label: 'Ir a Login', onPress: () => router.replace('/(auth)/login' as any) }
+        { label: 'Ir a Login', onPress: () => { router.replace('/(auth)/login' as any); dismissStatus(); } }
       );
     } catch (error: any) {
       console.error('[REGISTER_SCREEN] Registration error:', error);

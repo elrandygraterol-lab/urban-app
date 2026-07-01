@@ -157,6 +157,7 @@ export default function ActiveRideScreen() {
 
   // Rating modal states
   const [showRatingModal, setShowRatingModal] = useState(false);
+  const ratingShownForRideRef = useRef<string | null>(null);
   const [passengerRating, setPassengerRating] = useState(0);
   const [passengerComment, setPassengerComment] = useState('');
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
@@ -797,6 +798,13 @@ export default function ActiveRideScreen() {
         console.log('[ACTIVE_RIDE] ⚠️ Completed ride does not match current ride, ignoring');
         return;
       }
+
+      // Guard: skip if rating was already shown for this ride
+      if (ratingShownForRideRef.current === data.rideId) {
+        console.log('[ACTIVE_RIDE] Rating already shown for this ride — skipping duplicate');
+        return;
+      }
+      ratingShownForRideRef.current = data.rideId;
 
       const currentStatus = rideRef.current?.status;
 

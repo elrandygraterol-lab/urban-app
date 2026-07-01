@@ -152,7 +152,7 @@ export default function PassengerHomeScreen() {
 
   // Enable automatic socket reconnection on app state changes
   useSocketReconnect();
-  const { showToast, showStatus } = useUnifiedNotifications();
+  const { showToast, showStatus, dismissStatus } = useUnifiedNotifications();
 
   logInfo('PassengerHomeScreen', 'Component mounted', {
     userId: user?.id,
@@ -436,6 +436,12 @@ export default function PassengerHomeScreen() {
 
               if (fullData?.status === 'completed' && isMounted) {
                 console.log('[PASSENGER] Ride was completed while in background (socket disconnected)');
+                // Guard: skip if rating was already shown for this ride
+                if (ratingShownForRideRef.current === fullData.id) {
+                  console.log('[PASSENGER] Rating already shown for this ride — skipping duplicate restore');
+                  return;
+                }
+                ratingShownForRideRef.current = fullData.id;
                 setActiveRide((prev: any) => prev ? { ...prev, status: 'completed' } : null);
                 if (fullData.finalFare) setFinalFare(fullData.finalFare);
                 playNotificationSound();
@@ -837,17 +843,66 @@ export default function PassengerHomeScreen() {
               });
 
               showStatus('warning', message, title, undefined, {
-                label: 'Reintentar',
-                onPress: () => {
+                label: isGpsOff ? 'Abrir Configuración' : 'Reintentar',
+                onPress: async () => {
+                  dismissStatus();
+                  if (isGpsOff) {
+                    Linking.openSettings();
+                    return;
+                  }
                   setIsLoadingLocation(true);
-                  Loc.getCurrentPositionAsync({ accuracy: Loc.Accuracy.BestForNavigation })
-                    .then(loc =>
-                      applyLocation({
-                        latitude: loc.coords.latitude,
-                        longitude: loc.coords.longitude,
-                      })
-                    )
-                    .catch(() => setIsLoadingLocation(false));
+                  try {
+                    const retryLoc = await getLocation();
+                    const { status: permStatus } = await retryLoc.requestForegroundPermissionsAsync();
+                    if (permStatus !== 'granted') {
+                      showStatus(
+                        'error',
+                        'Esta app necesita acceso a tu ubicación para funcionar. Por favor activa el permiso en Configuración.',
+                        'Permiso de ubicación requerido',
+                        undefined,
+                        { label: 'Abrir Configuración', onPress: () => { dismissStatus(); Linking.openSettings(); } }
+                      );
+                      setIsLoadingLocation(false);
+                      return;
+                    }
+                    const fresh = await retryLoc.getCurrentPositionAsync({ accuracy: retryLoc.Accuracy.BestForNavigation });
+                    await applyLocation({ latitude: fresh.coords.latitude, longitude: fresh.coords.longitude });
+                  } catch (retryErr: any) {
+                    setIsLoadingLocation(false);
+                    const errMsg: string = retryErr?.message ?? String(retryErr);
+                    const retryIsGpsOff =
+                      errMsg.includes('location is unavailable') ||
+                      errMsg.includes('location services') ||
+                      errMsg.includes('Location provider') ||
+                      errMsg.includes('GPS');
+                    const retryMessage = retryIsGpsOff
+                      ? 'El GPS está desactivado o sin señal. Activa la ubicación en Configuración e intenta de nuevo.'
+                      : 'Error al obtener la ubicación.\n\nPor favor intenta de nuevo.';
+                    showStatus('warning', retryMessage, 'No se pudo obtener tu ubicación', undefined, {
+                      label: retryIsGpsOff ? 'Abrir Configuración' : 'Reintentar',
+                      onPress: async () => {
+                        dismissStatus();
+                        if (retryIsGpsOff) {
+                          Linking.openSettings();
+                          return;
+                        }
+                        setIsLoadingLocation(true);
+                        try {
+                          const L = await getLocation();
+                          const p = await L.requestForegroundPermissionsAsync();
+                          if (p.status !== 'granted') {
+                            setIsLoadingLocation(false);
+                            return;
+                          }
+                          const f = await L.getCurrentPositionAsync({ accuracy: L.Accuracy.BestForNavigation });
+                          await applyLocation({ latitude: f.coords.latitude, longitude: f.coords.longitude });
+                        } catch {
+                          setIsLoadingLocation(false);
+                          showStatus('warning', 'No se pudo obtener la ubicación. Reinicia la app e intenta de nuevo.', 'Error de Ubicación');
+                        }
+                      },
+                    });
+                  }
                 },
               });
 
@@ -873,29 +928,64 @@ export default function PassengerHomeScreen() {
   useEffect(() => {
     if (!user || user.role !== 'passenger') return;
 
-    const subscription = AppState.addEventListener('change', nextState => {
-      if (nextState === 'active' && !currentLocation) {
-        logInfo('PassengerHomeScreen', 'App active, retrying location...');
-        setIsLoadingLocation(true);
-        getLocation().then(Loc => {
-          Loc.getCurrentPositionAsync({ accuracy: Loc.Accuracy.BestForNavigation })
-          .then(async loc => {
-            const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-            setCurrentLocation(coords);
-            setPickupLocation(coords);
-            setIsLoadingLocation(false);
-            try {
-              const addr = await reverseGeocode(coords.latitude, coords.longitude);
-              setPickupAddress(
-                addr.address || `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`
-              );
-            } catch {
-              setPickupAddress(`${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`);
+    const retryLocation = async () => {
+      if (currentLocation) return;
+      logInfo('PassengerHomeScreen', 'App active, retrying location...');
+      setIsLoadingLocation(true);
+      try {
+        const Loc = await getLocation();
+        const { status } = await Loc.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          showStatus(
+            'error',
+            'Esta app necesita acceso a tu ubicación para funcionar. Por favor activa el permiso en Configuración.',
+            'Permiso de ubicación requerido',
+            undefined,
+            { label: 'Abrir Configuración', onPress: () => { dismissStatus(); Linking.openSettings(); } }
+          );
+          setIsLoadingLocation(false);
+          return;
+        }
+        const fresh = await Loc.getCurrentPositionAsync({ accuracy: Loc.Accuracy.BestForNavigation });
+        const coords = { latitude: fresh.coords.latitude, longitude: fresh.coords.longitude };
+        setCurrentLocation(coords);
+        setPickupLocation(coords);
+        setIsLoadingLocation(false);
+        try {
+          const addr = await reverseGeocode(coords.latitude, coords.longitude);
+          setPickupAddress(addr.address || `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`);
+        } catch {
+          setPickupAddress(`${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`);
+        }
+        logInfo('PassengerHomeScreen', 'Location retry succeeded', coords);
+      } catch (err: any) {
+        setIsLoadingLocation(false);
+        const errMsg: string = err?.message ?? String(err);
+        const isGpsOff =
+          errMsg.includes('location is unavailable') ||
+          errMsg.includes('location services') ||
+          errMsg.includes('Location provider') ||
+          errMsg.includes('GPS');
+        const retryMessage = isGpsOff
+          ? 'El GPS está desactivado o sin señal. Activa la ubicación en Configuración e intenta de nuevo.'
+          : 'Error al obtener la ubicación.\n\nPor favor intenta de nuevo.';
+        showStatus('warning', retryMessage, 'No se pudo obtener tu ubicación', undefined, {
+          label: isGpsOff ? 'Abrir Configuración' : 'Reintentar',
+          onPress: () => {
+            dismissStatus();
+            if (isGpsOff) {
+              Linking.openSettings();
+              return;
             }
-            logInfo('PassengerHomeScreen', 'Location retry succeeded', coords);
-          })
-          .catch(() => setIsLoadingLocation(false));
+            retryLocation();
+          },
         });
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', nextState => {
+      if (nextState === 'active') {
+        retryLocation();
       }
     });
     return () => subscription.remove();
@@ -1301,6 +1391,12 @@ export default function PassengerHomeScreen() {
       console.log('[PASSENGER]    Current Active Ride ID:', activeRide?.id);
       console.log('[PASSENGER]    Final Fare:', data.finalFare);
       console.log('[PASSENGER] ========================================');
+
+      // Guard: only process for current active ride
+      if (data.rideId !== activeRide?.id) {
+        console.log('[PASSENGER] Ride completed for different ride, ignoring');
+        return;
+      }
 
       // Guard: skip if rating was already shown for this ride
       if (ratingShownForRideRef.current === data.rideId) {
@@ -2300,7 +2396,7 @@ export default function PassengerHomeScreen() {
           'Esta dirección aún no está registrada en nuestro mapa. Pronto será agregada.\n\nPor favor, selecciona manualmente la ubicación en el mapa.',
           'Dirección no encontrada',
           undefined,
-          { label: 'Seleccionar en mapa', onPress: () => handleEnableMapSelection('destination') }
+          { label: 'Seleccionar en mapa', onPress: () => { handleEnableMapSelection('destination'); dismissStatus(); } }
         );
         return;
       }
@@ -2319,7 +2415,7 @@ export default function PassengerHomeScreen() {
         'No se pudo encontrar esa dirección. Intenta buscarla manualmente en el mapa.',
         'Dirección no encontrada',
         undefined,
-        { label: 'Seleccionar en mapa', onPress: () => handleEnableMapSelection('destination') }
+        { label: 'Seleccionar en mapa', onPress: () => { handleEnableMapSelection('destination'); dismissStatus(); } }
       );
     }
   };
@@ -2354,7 +2450,7 @@ export default function PassengerHomeScreen() {
           'Esta dirección aún no está registrada en nuestro mapa. Pronto será agregada.\n\nPor favor, selecciona manualmente la ubicación en el mapa.',
           'Dirección no encontrada',
           undefined,
-          { label: 'Seleccionar en mapa', onPress: () => handleEnableMapSelection('pickup') }
+          { label: 'Seleccionar en mapa', onPress: () => { handleEnableMapSelection('pickup'); dismissStatus(); } }
         );
         return;
       }
@@ -2385,7 +2481,7 @@ export default function PassengerHomeScreen() {
           'Esta dirección aún no está registrada en nuestro mapa. Pronto será agregada.\n\nPor favor, selecciona manualmente la ubicación en el mapa.',
           'Dirección no encontrada',
           undefined,
-          { label: 'Seleccionar en mapa', onPress: () => handleEnableMapSelection('pickup') }
+          { label: 'Seleccionar en mapa', onPress: () => { handleEnableMapSelection('pickup'); dismissStatus(); } }
         );
       } else {
         logError('PassengerHomeScreen', error, { context: 'Geocoding pickup' });
@@ -2506,6 +2602,7 @@ export default function PassengerHomeScreen() {
           setMapSelectionMode('none');
           setTempMarkerLocation(null);
           setIsPanelCollapsed(false);
+          dismissStatus();
         },
       });
     } catch (error) {
@@ -2543,6 +2640,7 @@ export default function PassengerHomeScreen() {
             setMapSelectionMode('none');
             setTempMarkerLocation(null);
             setIsPanelCollapsed(false);
+            dismissStatus();
           },
         }
       );
@@ -3117,7 +3215,7 @@ export default function PassengerHomeScreen() {
       '¿Estás seguro que deseas omitir la valoración del conductor?',
       'Omitir Valoración',
       undefined,
-      { label: 'Omitir', onPress: handleCloseRatingModal }
+      { label: 'Omitir', onPress: () => { handleCloseRatingModal(); dismissStatus(); } }
     );
   };
 
@@ -3126,7 +3224,6 @@ export default function PassengerHomeScreen() {
     setDriverRating(0);
     setDriverComment('');
     setFinalFare(null);
-    ratingShownForRideRef.current = null;
 
     // Reset ride state completely - return to initial map view
     setActiveRide(null);

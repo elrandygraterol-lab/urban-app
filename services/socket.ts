@@ -383,10 +383,9 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
 
     // Forzar solo polling porque LiteSpeed detrás del proxy no reenvía
     // el upgrade a WebSocket correctamente. HTTP polling funciona sin problema.
-    const socketTransports: Array<'websocket' | 'polling'> = ['polling'];
+    const socketTransports: Array<'websocket' | 'polling'> = ['websocket', 'polling'];
 
     console.log('[SOCKET]    Transports:', JSON.stringify(socketTransports));
-    console.log('[SOCKET]    Force polling-only mode (LiteSpeed proxy workaround)');
 
     // Create socket connection — with INFINITE reconnection
     console.log('[SOCKET] 🔌 Step 4: Creating Socket.IO instance...');
@@ -397,10 +396,10 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
       },
       transports: socketTransports,
       reconnection: true,
-      reconnectionAttempts: 10,         // Limit retries to save battery
-      reconnectionDelay: 2000,
-      reconnectionDelayMax: 15000,     // Max 15s between retries
-      timeout: 20000,                  // 20s timeout (reduced from 60s)
+      reconnectionAttempts: Infinity,     // Unlimited retries for driver tracking
+      reconnectionDelay: 1000,            // Start retrying after 1s
+      reconnectionDelayMax: 30000,        // Max 30s between retries
+      timeout: 20000,
       upgrade: false,
       forceNew: true,
       rememberUpgrade: false,

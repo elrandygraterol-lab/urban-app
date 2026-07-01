@@ -84,7 +84,7 @@ export default function DelegatedRideTrackingScreen() {
   const { user, token } = useAuthStore();
   const mapRef = useRef<MapView>(null);
   const insets = useSafeAreaInsets();
-  const { showToast, showStatus } = useUnifiedNotifications();
+  const { showToast, showStatus, dismissStatus } = useUnifiedNotifications();
 
   // Enable automatic socket reconnection
   useSocketReconnect();
@@ -278,7 +278,7 @@ export default function DelegatedRideTrackingScreen() {
         `El viaje de ${rideData?.beneficiaryName} ha sido completado exitosamente.`,
         '✅ Viaje Completado',
         undefined,
-        { label: 'Ver Historial', onPress: () => router.push('/(passenger)/history') }
+        { label: 'Ver Historial', onPress: () => { router.push('/(passenger)/history'); dismissStatus(); } }
       );
     });
 
@@ -293,7 +293,7 @@ export default function DelegatedRideTrackingScreen() {
         `El viaje de ${rideData?.beneficiaryName} ha sido cancelado.\n\nMotivo: ${data.cancellationReason}`,
         '❌ Viaje Cancelado',
         undefined,
-        { label: 'Entendido', onPress: () => router.back() }
+        { label: 'Entendido', onPress: () => { router.back(); dismissStatus(); } }
       );
     });
 

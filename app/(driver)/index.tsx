@@ -53,7 +53,7 @@ export default function DriverHomeScreen() {
     transactions,
   } = useDriverStore();
   const { playNotificationSound } = useSound();
-  const { showToast, showError, showStatus, showRideRequest } = useUnifiedNotifications();
+  const { showToast, showError, showStatus, showRideRequest, dismissStatus } = useUnifiedNotifications();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
@@ -289,7 +289,7 @@ export default function DriverHomeScreen() {
           'No se pudo obtener tu ubicación. Se está usando una ubicación de prueba.\n\nVerifica que los servicios de ubicación estén habilitados, tengas buena señal GPS y estés en un lugar con visibilidad al cielo.',
           'Tiempo de Espera Agotado',
           undefined,
-          { label: 'Reintentar', onPress: () => initializeLocation() }
+          { label: 'Reintentar', onPress: () => { initializeLocation(); dismissStatus(); } }
         );
 
         // Send fallback location to server
@@ -312,7 +312,7 @@ export default function DriverHomeScreen() {
           'No se pudo obtener tu ubicación. Se está usando una ubicación de prueba.\n\nPara usar tu ubicación real, verifica que los servicios de ubicación estén habilitados.',
           'Error de Ubicación',
           undefined,
-          { label: 'Reintentar', onPress: () => initializeLocation() }
+          { label: 'Reintentar', onPress: () => { initializeLocation(); dismissStatus(); } }
         );
 
         // Send fallback location to server

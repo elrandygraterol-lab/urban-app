@@ -26,6 +26,7 @@ import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import { useSmartTutorial } from '@/hooks/useSmartTutorial';
 import { setActiveTutorialScreen } from '@/utils/tutorialState';
 import { resolveFileUrl } from '@/services/fileUrl';
+import { compressImage } from '@/utils/imageUtils';
 
 // const WalkthroughView = walkthroughable(View);
 
@@ -284,7 +285,8 @@ export default function PassengerProfileScreen() {
 
   const uploadPhoto = async (uri: string) => {
     try {
-      const result = await userAPI.uploadPhoto(uri);
+      const compressedUri = await compressImage(uri, { type: 'photo' });
+      const result = await userAPI.uploadPhoto(compressedUri);
       const profilePhotoUrl = result.profilePhotoUrl || result.data?.profilePhotoUrl;
       if (user) {
         useAuthStore.getState().setUser({ ...user, profilePhotoUrl });

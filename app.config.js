@@ -24,6 +24,7 @@ module.exports = ({ config }) => {
       },
     },
     android: {
+      versionCode: 3,
       package: 'com.urbantaxi.app',
       googleServicesFile: './google-services.json',
       adaptiveIcon: {
@@ -34,12 +35,10 @@ module.exports = ({ config }) => {
       permissions: [
         'ACCESS_COARSE_LOCATION',
         'ACCESS_FINE_LOCATION',
-        'ACCESS_BACKGROUND_LOCATION',
         'FOREGROUND_SERVICE',
         'FOREGROUND_SERVICE_LOCATION',
         'android.permission.ACCESS_COARSE_LOCATION',
         'android.permission.ACCESS_FINE_LOCATION',
-        'android.permission.ACCESS_BACKGROUND_LOCATION',
       ],
       config: {
         googleMaps: {

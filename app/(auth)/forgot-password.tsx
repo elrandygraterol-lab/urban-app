@@ -19,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const { showToast, showStatus } = useUnifiedNotifications();
+  const { showToast, showStatus, dismissStatus } = useUnifiedNotifications();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -47,7 +47,7 @@ export default function ForgotPasswordScreen() {
         'Se ha enviado un código de verificación a tu email. Por favor revisa tu bandeja de entrada.',
         'Éxito',
         undefined,
-        { label: 'OK', onPress: () => router.replace({ pathname: '/(auth)/reset-password' as any, params: { email: email.trim() } }) }
+        { label: 'OK', onPress: () => { router.replace({ pathname: '/(auth)/reset-password' as any, params: { email: email.trim() } }); dismissStatus(); } }
       );
     } catch (error: any) {
       const errorMessage =

@@ -31,6 +31,7 @@ import {
 } from '@/services/socket';
 
 import { resolveFileUrl } from '@/services/fileUrl';
+import { compressImage } from '@/utils/imageUtils';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 
 interface NotificationPreferences {
@@ -374,7 +375,8 @@ export default function DriverProfileScreen() {
 
   const uploadPhoto = async (uri: string) => {
     try {
-      const result = await userAPI.uploadPhoto(uri);
+      const compressedUri = await compressImage(uri, { type: 'photo' });
+      const result = await userAPI.uploadPhoto(compressedUri);
       const profilePhotoUrl = result.profilePhotoUrl || result.data?.profilePhotoUrl;
       if (user) {
         useAuthStore.getState().setUser({ ...user, profilePhotoUrl });

@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore';
 import api from '@/services/api';
 import { Colors as colors } from '@/constants/theme';
 import { uploadDocumentToCloudinary } from '@/services/cloudinary';
+import { compressImage } from '@/utils/imageUtils';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 
 interface Document {
@@ -66,9 +67,11 @@ export default function DocumentsScreen() {
     try {
       setUploading(true);
 
+      const compressedUri = await compressImage(uri, { type: 'photo' });
+
       // Upload to Cloudinary
       const cloudinaryResponse = await uploadDocumentToCloudinary(
-        uri,
+        compressedUri,
         documentType,
         user?.id || ''
       );

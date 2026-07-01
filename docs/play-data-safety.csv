@@ -1,0 +1,18 @@
+categoria,se_recoge,se_comparte,temporal,necesario,razones_recogida,razones_comparte
+"Ubicación precisa",SI,NO,NO,SI,"Funcionalidad, Prevención de fraudes",
+"Nombre",SI,NO,NO,SI,"Funcionalidad, Gestión de cuentas, Prevención de fraudes",
+"Correo electrónico",SI,NO,NO,SI,"Funcionalidad, Gestión de cuentas, Prevención de fraudes",
+"IDs de usuario",SI,NO,NO,SI,"Funcionalidad, Gestión de cuentas, Prevención de fraudes",
+"Dirección",SI,NO,NO,SI,Funcionalidad,
+"Número de teléfono",SI,NO,NO,SI,"Funcionalidad, Gestión de cuentas, Prevención de fraudes",
+"Historial de compras",SI,NO,NO,SI,"Funcionalidad, Gestión de cuentas, Análisis, Prevención de fraudes",
+"Información para pagos",SI,NO,NO,OPCIONAL,"Funcionalidad, Gestión de cuentas, Prevención de fraudes",
+"Fotos",SI,NO,NO,OPCIONAL,"Funcionalidad, Gestión de cuentas",
+"Archivos y documentos",SI,NO,NO,SI,"Funcionalidad, Gestión de cuentas, Prevención de fraudes",
+"Interacciones con la aplicación",SI,NO,NO,SI,"Funcionalidad, Análisis",
+"Historial de búsquedas",SI,"SI (OSM)",NO,SI,Funcionalidad,Funcionalidad
+"Otro contenido generado por el usuario",SI,NO,NO,SI,"Funcionalidad, Análisis",
+"Registros de fallos",SI,"SI (Sentry)",NO,OPCIONAL,Análisis,Análisis
+"Diagnósticos",SI,NO,NO,OPCIONAL,Análisis,
+"Otros datos de rendimiento",SI,"SI (Sentry)",NO,OPCIONAL,Análisis,Análisis
+"IDs de dispositivo",SI,"SI (Firebase)",NO,OPCIONAL,"Funcionalidad, Comunicaciones",Funcionalidad

@@ -311,7 +311,7 @@ export default function MobilePaymentModal({
   onCancel,
 }: MobilePaymentModalProps) {
   const insets = useSafeAreaInsets();
-  const { showToast, showStatus } = useUnifiedNotifications();
+  const { showToast, showStatus, dismissStatus } = useUnifiedNotifications();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mobile');
   const [selectedBank, setSelectedBank] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -593,7 +593,7 @@ export default function MobilePaymentModal({
           msg,
           'Error de Pago',
           undefined,
-          { label: 'Reintentar', onPress: handleSubmitPayment },
+          { label: 'Reintentar', onPress: () => { handleSubmitPayment(); dismissStatus(); } },
           12000
         );
       } else {

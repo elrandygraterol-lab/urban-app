@@ -14,6 +14,7 @@ import { driverAPI } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { Colors as COLORS } from '@/constants/theme';
 import { uploadDocumentToCloudinary } from '@/services/cloudinary';
+import { compressImage } from '@/utils/imageUtils';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 
 type DocumentType =
@@ -108,7 +109,8 @@ export default function DocumentsUploadScreen() {
       setDocuments(newDocuments);
 
       // Upload to Cloudinary
-      const cloudinaryResponse = await uploadDocumentToCloudinary(doc.uri, doc.type, user!.id);
+      const compressedUri = await compressImage(doc.uri, { type: 'photo' });
+      const cloudinaryResponse = await uploadDocumentToCloudinary(compressedUri, doc.type, user!.id);
 
       // Send to backend with Cloudinary URL
       const formData = new FormData();

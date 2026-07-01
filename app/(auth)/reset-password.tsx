@@ -20,7 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function ResetPasswordScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ email?: string }>();
-  const { showToast, showStatus } = useUnifiedNotifications();
+  const { showToast, showStatus, dismissStatus } = useUnifiedNotifications();
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -87,7 +87,7 @@ export default function ResetPasswordScreen() {
         'Tu contraseña ha sido actualizada correctamente.',
         'Contraseña actualizada',
         undefined,
-        { label: 'Ir a Login', onPress: () => router.replace('/(auth)/login' as any) }
+        { label: 'Ir a Login', onPress: () => { router.replace('/(auth)/login' as any); dismissStatus(); } }
       );
     } catch (error: any) {
       const errorMessage =
