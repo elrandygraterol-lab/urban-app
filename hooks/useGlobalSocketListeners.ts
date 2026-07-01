@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useCallback, useRef } from 'react';
-import { getSocket, connectSocket } from '@/services/socket';
+import { getSocket, connectSocket, addConnectionListener, removeConnectionListener } from '@/services/socket';
 import { useSound } from './useSound';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import { useExchangeRate } from './useExchangeRate';
@@ -30,6 +30,8 @@ export const useGlobalSocketListeners = ({
   const connectHandlerRef = useRef<(() => void) | null>(null);
   const disconnectHandlerRef = useRef<((reason: string) => void) | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const registerListenersRef = useRef<((s: any) => void) | null>(null);
+  const setupDisconnectHandlerRef = useRef<((s: any) => void) | null>(null);
 
   // Handler for ride:request_created event (GLOBAL - works on any screen)
   const handleRideRequest = useCallback(
@@ -427,6 +429,10 @@ export const useGlobalSocketListeners = ({
       console.log('[GLOBAL_SOCKET] ============================================');
     };
 
+    // Store registerListeners in ref so the connection listener can call it
+    registerListenersRef.current = registerListeners;
+    setupDisconnectHandlerRef.current = setupDisconnectHandler;
+
     // Initialize socket connection if not already connected
     let socket = getSocket();
     console.log('[GLOBAL_SOCKET] getSocket() returned:', !!socket, 'connected:', socket?.connected);
@@ -616,6 +622,28 @@ export const useGlobalSocketListeners = ({
       console.log('[GLOBAL_SOCKET] ========== CLEANUP COMPLETE ==========');
     }
   }, [isAuthenticated, user?.id, user?.role, handlePaymentCompleted, handleRideCancelled, handleRideRequest]);
+
+  // Re-register listeners when socket is fully recreated (e.g., after reconnectSocket destroy+create)
+  useEffect(() => {
+    const handleConnectionChange = (connected: boolean) => {
+      if (!connected) return;
+      const currentSocket = getSocket();
+      if (!currentSocket) return;
+      console.log('[GLOBAL_SOCKET] 🔄 Connection listener: socket connected/recreated, re-registering listeners');
+      if (registerListenersRef.current) {
+        registerListenersRef.current(currentSocket);
+      }
+      if (setupDisconnectHandlerRef.current) {
+        setupDisconnectHandlerRef.current(currentSocket);
+      }
+    };
+
+    addConnectionListener(handleConnectionChange);
+
+    return () => {
+      removeConnectionListener(handleConnectionChange);
+    };
+  }, []);
 
   // No return value needed - this hook only manages side effects
 };

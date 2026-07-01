@@ -1407,7 +1407,6 @@ export default function ActiveRideScreen() {
               anchor={{ x: 0.5, y: 0.5 }}
               flat={false}
               rotation={0}
-              tracksViewChanges={true}
             >
               <DriverTaxiIcon />
             </Marker>

@@ -519,8 +519,12 @@ export default function PassengerHomeScreen() {
       setActiveRide(null);
       setIsSearchingDriver(false);
       setDriverLocation(null);
-    } catch {
+    } catch (error) {
+      console.error('[PASSENGER] Auto-cancel failed:', error);
       showToast('No se pudo cancelar la búsqueda automáticamente.', 'error');
+      setActiveRide(null);
+      setIsSearchingDriver(false);
+      setDriverLocation(null);
     } finally {
       setSearchDuration(0);
     }

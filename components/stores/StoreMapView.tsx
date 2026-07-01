@@ -244,8 +244,8 @@ export const StoreMapView: React.FC<StoreMapViewProps> = ({ stores, loading, onR
             identifier={store.store_id.toString()}
             onPress={() => handleMarkerPress(store)}
           >
-            <View style={styles.markerContainer}>
-              <View style={styles.marker}>
+            <View style={styles.markerShadow}>
+              <View style={styles.markerCircle}>
                 <Ionicons name="storefront" size={20} color={Colors.white} />
               </View>
             </View>
@@ -308,10 +308,11 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  markerContainer: {
+  markerShadow: {
     alignItems: 'center',
+    ...Shadows.md,
   },
-  marker: {
+  markerCircle: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -320,7 +321,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: Colors.white,
-    ...Shadows.md,
+    overflow: 'hidden',
   },
   loadingOverlay: {
     position: 'absolute',
