@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
+import axios from 'axios';
 
 export type UserRole = 'passenger' | 'driver' | 'owner' | null;
 
@@ -309,8 +310,42 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const userJson = await SecureStore.getItemAsync(USER_KEY);
 
       if (token && userJson) {
-        const user = JSON.parse(userJson);
-        set({ token, user, isAuthenticated: true });
+        // Check if token is expired (client-side JWT decode)
+        let validToken = token;
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          const expiresAt = (payload.exp || 0) * 1000;
+          if (Date.now() >= expiresAt) {
+            // Token expired — try to refresh
+            const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+            if (refreshToken) {
+              try {
+                const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+                const res = await axios.post(`${apiUrl}/api/auth/refresh`, { refreshToken }, { timeout: 10000 });
+                if (res.data?.data?.accessToken) {
+                  validToken = res.data.data.accessToken;
+                  await SecureStore.setItemAsync(TOKEN_KEY, validToken);
+                  if (res.data.data.refreshToken) {
+                    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, res.data.data.refreshToken);
+                  }
+                } else {
+                  validToken = '';
+                }
+              } catch {
+                validToken = '';
+              }
+            } else {
+              validToken = '';
+            }
+          }
+        } catch {
+          validToken = '';
+        }
+
+        if (validToken) {
+          const user = JSON.parse(userJson);
+          set({ token: validToken, user, isAuthenticated: true });
+        }
       }
     } catch (error) {
       console.error('Error loading stored auth:', error);

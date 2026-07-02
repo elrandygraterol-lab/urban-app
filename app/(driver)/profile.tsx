@@ -425,7 +425,7 @@ export default function DriverProfileScreen() {
           </TouchableOpacity>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{user?.name || ''}</Text>
-            <Text style={styles.profileRole}>Conductor</Text>
+            <Text style={styles.profileRole}>{user?.role === 'driver' ? 'Conductor' : user?.role === 'passenger' ? 'Pasajero' : 'Propietario'}</Text>
             {user?.rating !== undefined && (
               <View style={styles.profileRating}>
                 <Ionicons name="star" size={14} color="#f59e0b" />

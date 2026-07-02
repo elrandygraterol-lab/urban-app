@@ -103,6 +103,11 @@ api.interceptors.response.use(
         await SecureStore.deleteItemAsync(TOKEN_KEY);
         await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
         await SecureStore.deleteItemAsync(USER_KEY);
+        // Sync Zustand auth state so navigation guard redirects to login
+        try {
+          const { useAuthStore } = require('@/store/authStore');
+          useAuthStore.getState().logout();
+        } catch {}
         console.log('Token expired or invalid');
         return Promise.reject(refreshError);
       } finally {

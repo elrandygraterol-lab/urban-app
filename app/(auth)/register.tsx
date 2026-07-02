@@ -378,11 +378,15 @@ export default function RegisterScreen() {
 
       showStatus(
         'success',
-        'Tu cuenta ha sido creada correctamente. Ahora puedes iniciar sesión.',
+        'Tu cuenta ha sido creada correctamente. Serás redirigido al inicio de sesión.',
         'Registro exitoso',
         undefined,
-        { label: 'Ir a Login', onPress: () => { router.replace('/(auth)/login' as any); dismissStatus(); } }
+        undefined,
+        3000
       );
+      setTimeout(() => {
+        router.replace('/(auth)/login' as any);
+      }, 3000);
     } catch (error: any) {
       console.error('[REGISTER_SCREEN] Registration error:', error);
       const msg = error?.response?.data?.error?.message || error?.message || '';
@@ -716,18 +720,6 @@ export default function RegisterScreen() {
               </Text>
             </TouchableOpacity>
             {termsError ? <Text style={styles.termsError}>{termsError}</Text> : null}
-            <View style={styles.termsLinksContainer}>
-              <Text style={styles.termsLinksLabel}>Enlaces:</Text>
-              <Text style={styles.termsUrl} onPress={() => Linking.openURL('https://administracionurbantaxis.com/terminos')}>
-                administracionurbantaxis.com/terminos
-              </Text>
-              <Text style={styles.termsUrl} onPress={() => Linking.openURL('https://administracionurbantaxis.com/privacidad')}>
-                administracionurbantaxis.com/privacidad
-              </Text>
-              <Text style={styles.termsContact}>
-                Contacto: <Text style={styles.termsContactBold}>urbantaxisapp@gmail.com</Text>
-              </Text>
-            </View>
           </View>
 
           {/* Terms & Privacy Modal */}
@@ -761,6 +753,17 @@ export default function RegisterScreen() {
                 <View style={styles.termsDivider} />
                 <Text style={styles.termsModalHeading}>POLÍTICA DE PRIVACIDAD</Text>
                 <Text style={styles.termsModalText}>{PRIVACY_TEXT}</Text>
+                <View style={styles.termsDivider} />
+                <Text style={styles.termsModalHeading}>ENLACES</Text>
+                <Text style={styles.termsUrl} onPress={() => Linking.openURL('https://administracionurbantaxis.com/terminos')}>
+                  administracionurbantaxis.com/terminos
+                </Text>
+                <Text style={styles.termsUrl} onPress={() => Linking.openURL('https://administracionurbantaxis.com/privacidad')}>
+                  administracionurbantaxis.com/privacidad
+                </Text>
+                <Text style={styles.termsContact}>
+                  Contacto: <Text style={styles.termsContactBold}>urbantaxisapp@gmail.com</Text>
+                </Text>
               </ScrollView>
               <View style={styles.termsModalFooter}>
                 <TouchableOpacity

@@ -12,7 +12,7 @@
  * Design: Professional, glass-morphism, animated, follows app theme.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -210,6 +210,7 @@ const RideRequestCard: React.FC<{
   const progressAnim = useRef(new Animated.Value(1)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  const [isProcessingRide, setIsProcessingRide] = useState(false);
   const { convertToUsd, convertToBs } = useExchangeRate();
 
   useEffect(() => {
@@ -380,7 +381,12 @@ const RideRequestCard: React.FC<{
       <View style={styles.rideCardActions}>
         <TouchableOpacity
           style={styles.rideRejectBtn}
-          onPress={() => onReject(data.id)}
+          onPress={() => {
+            if (isProcessingRide) return;
+            setIsProcessingRide(true);
+            onReject(data.id);
+          }}
+          disabled={isProcessingRide}
           activeOpacity={0.8}
         >
           <Ionicons name="close" size={16} color="#dc2626" />
@@ -388,7 +394,12 @@ const RideRequestCard: React.FC<{
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.rideAcceptBtn}
-          onPress={() => onAccept(data.id)}
+          onPress={() => {
+            if (isProcessingRide) return;
+            setIsProcessingRide(true);
+            onAccept(data.id);
+          }}
+          disabled={isProcessingRide}
           activeOpacity={0.8}
         >
           <Ionicons name="checkmark" size={16} color="#fff" />

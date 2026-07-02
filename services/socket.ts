@@ -47,7 +47,7 @@ console.log('[SOCKET]    Parsed host:', SOCKET_BASE_URL);
 console.log('[SOCKET]    Parsed path:', SOCKET_PATH);
 console.log('[SOCKET]    Full socket URL:', SOCKET_BASE_URL + SOCKET_PATH);
 console.log('[SOCKET]    Is localtunnel:', SOCKET_URL.includes('.loca.lt'));
-    console.log('[SOCKET]    Transport mode: polling only (LiteSpeed proxy workaround)');
+    console.log('[SOCKET]    Transport mode: polling → WebSocket upgrade enabled');
 console.log('[SOCKET] 📋 ===== END MODULE INIT =====');
 
 // Hacer un ping de diagnóstico al backend para confirmar conectividad
@@ -381,8 +381,7 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
     lastError = null;
     shouldAutoReconnect = true;
 
-    // Forzar solo polling porque LiteSpeed detrás del proxy no reenvía
-    // el upgrade a WebSocket correctamente. HTTP polling funciona sin problema.
+    // WebSocket disponible vía proxy LiteSpeed — polling + upgrade a WebSocket
     const socketTransports: Array<'websocket' | 'polling'> = ['websocket', 'polling'];
 
     console.log('[SOCKET]    Transports:', JSON.stringify(socketTransports));
@@ -400,9 +399,7 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
       reconnectionDelay: 1000,            // Start retrying after 1s
       reconnectionDelayMax: 30000,        // Max 30s between retries
       timeout: 20000,
-      upgrade: false,
       forceNew: true,
-      rememberUpgrade: false,
     });
 
     console.log('[SOCKET] ✅ Step 4: Socket.IO instance created');
@@ -438,6 +435,14 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
       notifyConnectionChange(true);
       runDiagnosticPing();
     });
+
+    // Track transport upgrade (polling → WebSocket)
+    try {
+      (socket as any).io?.engine?.on?.('upgrade', (transport: any) => {
+        lastTransport = transport.name ?? 'websocket';
+        console.log('[SOCKET] 🚀 Transport upgraded to:', lastTransport);
+      });
+    } catch {}
 
     socket.on('disconnect', reason => {
       console.log('[SOCKET] ❌ ===== DISCONNECTED =====');

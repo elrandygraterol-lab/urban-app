@@ -87,7 +87,7 @@ interface Step {
   name: string;
   distance: number; // km al siguiente punto de maniobra
   duration: number; // minutos
-  maneuver?: { type: string };
+  maneuver?: { type: string; modifier?: string };
   location?: { latitude: number; longitude: number };
 }
 
@@ -108,7 +108,7 @@ export default function ActiveRideScreen() {
   const distanceScaleRef = useRef<number | null>(null);
   const durationScaleRef = useRef<number | null>(null);
   // Track programmatic camera moves so onRegionChangeComplete doesn't flag them as user interaction
-  const isProgrammaticMoveRef = useRef(false);
+  const programmaticMoveCountRef = useRef(0);
 
   const [ride, setRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(true);
@@ -368,7 +368,7 @@ export default function ActiveRideScreen() {
         ride.status === 'arrived' ||
         ride.status === 'in_progress'
       ) {
-        isProgrammaticMoveRef.current = true;
+        programmaticMoveCountRef.current += 1;
         animateNavigationCamera(mapRef, location, routeBearing || heading || 0, {
           duration: 1000,
           zoom: 18,
@@ -444,6 +444,11 @@ export default function ActiveRideScreen() {
       // If ride was completed while in background (recovery, not first mount), trigger completion flow
       if (!isFirstFetchRef.current && rideData?.status === 'completed') {
         console.log('[ACTIVE_RIDE] ⚠️ Ride was completed while app was in background — showing rating');
+        // Guard: skip if rating was already shown for this ride
+        if (ratingShownForRideRef.current === rideId) {
+          console.log('[ACTIVE_RIDE] Rating already shown for this ride — skipping duplicate');
+          return;
+        }
         playNotificationSound();
         const fareValue = rideData.finalFare ?? rideData.estimatedFare ?? 0;
         if (fareValue > 0) {
@@ -713,7 +718,7 @@ export default function ActiveRideScreen() {
 
         // Only fit map to route on initial setup, not on updates
         if (isInitialMapSetup && mapRef.current && routeCoords.length > 0) {
-          isProgrammaticMoveRef.current = true;
+          programmaticMoveCountRef.current += 1;
           mapRef.current.fitToCoordinates(routeCoords, {
             edgePadding: { top: 100, right: 50, bottom: 300, left: 50 },
             animated: true,
@@ -1025,6 +1030,8 @@ export default function ActiveRideScreen() {
   };
 
   const updateRideStatus = async (newStatus: string) => {
+    if (isUpdatingStatus) return;
+    setIsUpdatingStatus(true);
     try {
       const endpoint =
         newStatus === 'arrived'
@@ -1050,6 +1057,7 @@ export default function ActiveRideScreen() {
 
         // Show rating modal only for non-manual rides
         if (!isManualFlow) {
+          ratingShownForRideRef.current = rideId;
           setShowRatingModal(true);
         } else {
           console.log('[ACTIVE_RIDE] Manual ride completed — navigating home');
@@ -1066,11 +1074,13 @@ export default function ActiveRideScreen() {
       // Route will be updated automatically by useEffect when status changes
     } catch (error) {
       console.error(`Failed to update ride status to ${newStatus}:`, error);
-      // Don't show technical error to user, just log it
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [showCancelReasonModal, setShowCancelReasonModal] = useState(false);
   const [cancelReason, setCancelReason] = useState<string>('');
 
@@ -1271,37 +1281,85 @@ export default function ActiveRideScreen() {
     setTimeout(() => router.replace('/(driver)'), 800);
   };
 
-  // Navigation Banner — show when navigating (accepted or in_progress) and near a maneuver
+  // Navigation Banner — show when approaching a real maneuver (not just "continue straight")
   const currentStep = routeSteps.length > 0 ? routeSteps[nearestStepIndex] : null;
   const distanceToManeuver =
     currentStep?.location && location ? haversineDistance(location, currentStep.location) : null;
   const isImminent = distanceToManeuver !== null && distanceToManeuver < 50;
-  // Only show banner if within 500m of a maneuver point with an actual instruction
+  const hasRealManeuver =
+    currentStep?.maneuver?.type &&
+    currentStep.maneuver.type !== 'continue' &&
+    currentStep.maneuver.type !== 'new name';
+  // Only show banner if within 200m of a real maneuver point
   const showNavBanner =
     (ride?.status === 'accepted' || ride?.status === 'arrived' || ride?.status === 'in_progress') &&
     currentStep &&
     distanceToManeuver !== null &&
-    distanceToManeuver <= 500 &&
+    distanceToManeuver <= 200 &&
+    hasRealManeuver &&
     currentStep.instruction &&
     currentStep.instruction.length > 0;
 
-  const getManeuverIcon = (type?: string): any => {
-    switch (type) {
+  const getManeuverIcon = (maneuver?: { type: string; modifier?: string }): any => {
+    if (!maneuver) return 'arrow-up';
+    const { type, modifier } = maneuver;
+    // OSRM uses type='turn' + modifier='left'/'right', NOT type='turn-left'
+    const key = modifier ? `${type}-${modifier}` : type;
+    switch (key) {
       case 'depart':
         return 'navigate-outline';
-      case 'turn-left':
-        return 'arrow-back';
-      case 'turn-right':
-        return 'arrow-forward';
-      case 'turn-sharp-left':
-        return 'return-up-back';
-      case 'turn-sharp-right':
-        return 'return-up-forward';
-      case 'uturn-left':
-      case 'uturn-right':
-        return 'refresh';
       case 'arrive':
         return 'flag';
+      case 'turn-left':
+      case 'turn-slight left':
+      case 'new name-left':
+      case 'new name-slight left':
+      case 'continue-left':
+      case 'continue-slight left':
+        return 'arrow-back';
+      case 'turn-right':
+      case 'turn-slight right':
+      case 'new name-right':
+      case 'new name-slight right':
+      case 'continue-right':
+      case 'continue-slight right':
+        return 'arrow-forward';
+      case 'turn-sharp left':
+      case 'new name-sharp left':
+        return 'return-up-back';
+      case 'turn-sharp right':
+      case 'new name-sharp right':
+        return 'return-up-forward';
+      case 'turn-uturn':
+      case 'new name-uturn':
+        return 'refresh';
+      case 'rotary-left':
+      case 'roundabout-left':
+        return 'arrow-back';
+      case 'rotary-right':
+      case 'roundabout-right':
+        return 'arrow-forward';
+      case 'rotary-uturn':
+      case 'roundabout-uturn':
+        return 'refresh';
+      case 'fork-left':
+      case 'end of road-left':
+        return 'arrow-back';
+      case 'fork-right':
+      case 'end of road-right':
+        return 'arrow-forward';
+      case 'merge-left':
+      case 'merge-slight left':
+        return 'arrow-back';
+      case 'merge-right':
+      case 'merge-slight right':
+        return 'arrow-forward';
+      case 'off ramp-left':
+      case 'off ramp-slight left':
+        return 'arrow-back';
+      case 'off ramp-right':
+      case 'off ramp-slight right':
+        return 'arrow-forward';
       default:
         return 'arrow-up';
     }
@@ -1390,12 +1448,11 @@ export default function ActiveRideScreen() {
           showsMyLocationButton={false}
           onPanDrag={() => setUserInteractedWithMap(true)}
           onRegionChangeComplete={() => {
-            // Only flag as user interaction if the change was NOT programmatic
-            // (camera animations from animateNavigationCamera/fitToCoordinates set the ref flag)
-            if (!isProgrammaticMoveRef.current) {
+            if (programmaticMoveCountRef.current > 0) {
+              programmaticMoveCountRef.current -= 1;
+            } else {
               setUserInteractedWithMap(true);
             }
-            isProgrammaticMoveRef.current = false;
           }}
         >
           {/* Driver's current location */}
@@ -1556,7 +1613,7 @@ export default function ActiveRideScreen() {
               alignItems: 'center',
             }}
           >
-            <Ionicons name={getManeuverIcon(currentStep.maneuver?.type)} size={12} color="#fff" />
+            <Ionicons name={getManeuverIcon(currentStep.maneuver)} size={12} color="#fff" />
           </View>
           <Text
             style={{
@@ -1569,19 +1626,6 @@ export default function ActiveRideScreen() {
           >
             {currentStep.instruction}
           </Text>
-          {distanceToManeuver !== null && (
-            <Text
-              style={{
-                color: isImminent ? '#fbbf24' : 'rgba(255,255,255,0.8)',
-                fontSize: 10,
-                fontWeight: '700',
-                minWidth: 30,
-                textAlign: 'right',
-              }}
-            >
-              {formatDistance(distanceToManeuver)}
-            </Text>
-          )}
         </View>
       )}
 
@@ -1591,7 +1635,7 @@ export default function ActiveRideScreen() {
           onPress={() => {
             setUserInteractedWithMap(false);
             if (location) {
-              isProgrammaticMoveRef.current = true;
+              programmaticMoveCountRef.current += 1;
               animateNavigationCamera(mapRef, location, routeBearing || heading, {
                 duration: 500,
                 zoom: 17,
@@ -2136,6 +2180,7 @@ export default function ActiveRideScreen() {
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
                 <TouchableOpacity
                   onPress={() => updateRideStatus('arrived')}
+                  disabled={isUpdatingStatus}
                   style={{
                     flex: 2,
                     backgroundColor: colors.primary,
@@ -2205,7 +2250,7 @@ export default function ActiveRideScreen() {
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TouchableOpacity
                     onPress={() => updateRideStatus('in_progress')}
-                    disabled={!isPaymentConfirmed}
+                    disabled={!isPaymentConfirmed || isUpdatingStatus}
                     style={{
                       flex: 2,
                       backgroundColor: isPaymentConfirmed ? colors.primary : '#D1D5DB',
@@ -2257,6 +2302,7 @@ export default function ActiveRideScreen() {
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <TouchableOpacity
                   onPress={() => updateRideStatus('completed')}
+                  disabled={isUpdatingStatus}
                   style={{
                     flex: 1,
                     backgroundColor: colors.primary,

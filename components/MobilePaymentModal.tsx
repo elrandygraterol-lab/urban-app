@@ -13,6 +13,7 @@ import {
   Dimensions,
   FlatList,
   Pressable,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
@@ -617,6 +618,7 @@ export default function MobilePaymentModal({
       {
         label: 'Sí, Cancelar',
         onPress: async () => {
+          dismissStatus();
           setIsAutoCancelling(true);
           try {
             await rideAPI.cancelRide(rideId, { reason: 'passenger_cancelled' });
@@ -648,6 +650,7 @@ export default function MobilePaymentModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleCancel}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <View style={styles.overlay}>
         <Animated.View
           style={[
@@ -961,6 +964,7 @@ export default function MobilePaymentModal({
           </View>
         </Animated.View>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

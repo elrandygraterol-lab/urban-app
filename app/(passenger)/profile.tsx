@@ -120,8 +120,8 @@ export default function PassengerProfileScreen() {
         if (payResponse.data?.data) {
           setPaymentInfo(payResponse.data.data);
         }
-      } catch {
-        console.log('No payment info found, using defaults');
+      } catch (error) {
+        console.error('Could not load payment info:', error);
       }
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -347,7 +347,7 @@ export default function PassengerProfileScreen() {
             </View>
           </TouchableOpacity>
           <Text style={styles.avatarName}>{user?.name || ''}</Text>
-          <Text style={styles.avatarRole}>Pasajero</Text>
+          <Text style={styles.avatarRole}>{user?.role === 'passenger' ? 'Pasajero' : user?.role === 'driver' ? 'Conductor' : 'Propietario'}</Text>
         </View>
 
         {/* Personal Information */}

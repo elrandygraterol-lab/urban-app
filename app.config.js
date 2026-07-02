@@ -24,7 +24,7 @@ module.exports = ({ config }) => {
       },
     },
     android: {
-      versionCode: 3,
+      versionCode: 4,
       package: 'com.urbantaxi.app',
       googleServicesFile: './google-services.json',
       adaptiveIcon: {

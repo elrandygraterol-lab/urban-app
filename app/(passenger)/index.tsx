@@ -2567,88 +2567,39 @@ export default function PassengerHomeScreen() {
     setTempMarkerLocation(coordinate);
     console.log('[MAP_LONG_PRESS] Temp marker set!');
 
+    // Helper: apply the selected location directly — no confirmation needed
+    const applySelectedLocation = (loc: LocationCoords, address: string) => {
+      const shortAddress = extractShortAddress(address);
+      if (mapSelectionMode === 'pickup') {
+        setPickupLocation(loc);
+        setPickupAddress(shortAddress);
+      } else if (mapSelectionMode === 'destination') {
+        setDestinationLocation(loc);
+        setDestinationAddress(shortAddress);
+      } else if (mapSelectionMode === 'second_pickup') {
+        setSecondPickupLocation(loc);
+        setSecondPickupAddress(shortAddress);
+        setSecondPickupLocationSource('custom');
+      } else if (mapSelectionMode === 'second_destination') {
+        setSecondDestinationLocation(loc);
+        setSecondDestinationAddress(shortAddress);
+        setSecondDestinationLocationSource('custom');
+      }
+    };
+
     try {
-      // Reverse geocode the selected coordinates
-      console.log('[MAP_LONG_PRESS] Starting reverse geocode...');
       const locationData = await reverseGeocode(coordinate.latitude, coordinate.longitude);
-
-      console.log('[MAP_LONG_PRESS] Reverse geocode result:', locationData);
-
-      const address =
-        locationData.address ||
-        `${coordinate.latitude.toFixed(6)}, ${coordinate.longitude.toFixed(6)}`;
-
-      console.log('[MAP_LONG_PRESS] Address to show:', address);
-
-      // Confirm selection with user
-      showStatus('info', `¿Usar esta ubicación?\n\n${address}`, 'Confirmar Ubicación', undefined, {
-        label: 'Confirmar',
-        onPress: () => {
-          console.log('[MAP_LONG_PRESS] User confirmed selection');
-          const shortAddress = extractShortAddress(address);
-           if (mapSelectionMode === 'pickup') {
-             setPickupLocation(coordinate);
-             setPickupAddress(shortAddress);
-           } else if (mapSelectionMode === 'destination') {
-             setDestinationLocation(coordinate);
-             setDestinationAddress(shortAddress);
-           } else if (mapSelectionMode === 'second_pickup') {
-             setSecondPickupLocation(coordinate);
-             setSecondPickupAddress(shortAddress);
-             setSecondPickupLocationSource('custom');
-           } else if (mapSelectionMode === 'second_destination') {
-            setSecondDestinationLocation(coordinate);
-            setSecondDestinationAddress(shortAddress);
-            setSecondDestinationLocationSource('custom');
-          }
-
-          // Reset selection mode
-          setMapSelectionMode('none');
-          setTempMarkerLocation(null);
-          setIsPanelCollapsed(false);
-          dismissStatus();
-        },
-      });
-    } catch (error) {
-      console.error('[MAP_LONG_PRESS] Reverse geocoding error:', error);
-
-      // Fallback to coordinates if reverse geocoding fails
+      const address = locationData.address || `${coordinate.latitude.toFixed(6)}, ${coordinate.longitude.toFixed(6)}`;
+      console.log('[MAP_LONG_PRESS] Address:', address);
+      applySelectedLocation(coordinate, address);
+    } catch {
       const address = `${coordinate.latitude.toFixed(6)}, ${coordinate.longitude.toFixed(6)}`;
-
-      showStatus(
-        'info',
-        `No se pudo obtener la dirección exacta.\n¿Usar estas coordenadas?\n\n${address}`,
-        'Confirmar Ubicación',
-        undefined,
-        {
-          label: 'Confirmar',
-          onPress: () => {
-            const shortAddress = extractShortAddress(address);
-            if (mapSelectionMode === 'pickup') {
-              setPickupLocation(coordinate);
-              setPickupAddress(shortAddress);
-            } else if (mapSelectionMode === 'destination') {
-              setDestinationLocation(coordinate);
-              setDestinationAddress(shortAddress);
-            } else if (mapSelectionMode === 'second_pickup') {
-              setSecondPickupLocation(coordinate);
-              setSecondPickupAddress(shortAddress);
-              setSecondPickupLocationSource('custom');
-            } else if (mapSelectionMode === 'second_destination') {
-              setSecondDestinationLocation(coordinate);
-              setSecondDestinationAddress(shortAddress);
-              setSecondDestinationLocationSource('custom');
-            }
-
-            // Reset selection mode
-            setMapSelectionMode('none');
-            setTempMarkerLocation(null);
-            setIsPanelCollapsed(false);
-            dismissStatus();
-          },
-        }
-      );
+      applySelectedLocation(coordinate, address);
     }
+
+    setMapSelectionMode('none');
+    setTempMarkerLocation(null);
+    setIsPanelCollapsed(false);
   };
 
   const handleCancelMapSelection = () => {
@@ -2862,6 +2813,8 @@ export default function PassengerHomeScreen() {
       return;
     }
 
+    if (isCancelling) return;
+    setIsCancelling(true);
     try {
       console.log('Cancelling ride:', activeRide.id);
       await rideAPI.cancelRide(activeRide.id, { reason: 'passenger_cancelled' });
@@ -2891,6 +2844,8 @@ export default function PassengerHomeScreen() {
       } else {
         showToast('No se pudo cancelar la búsqueda. Por favor, intenta nuevamente.', 'error');
       }
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -3122,7 +3077,6 @@ export default function PassengerHomeScreen() {
 
   const handleMobilePaymentCancel = () => {
     setShowMobilePaymentModal(false);
-    showToast('Debes completar el pago para que el conductor inicie el viaje.', 'info');
   };
 
   /**
@@ -3446,26 +3400,10 @@ export default function PassengerHomeScreen() {
                 description={landmark.type === 'landmark' ? 'Punto de referencia' : 'Negocio local'}
                 anchor={{ x: 0.5, y: 0.5 }}
               >
-                <View
-                  style={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: 15,
-                    backgroundColor: '#fff',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.2,
-                    shadowRadius: 4,
-                    elevation: 4,
-                  }}
-                >
-                  <Ionicons
-                    name={landmark.type === 'landmark' ? 'location' : 'business'}
-                    size={20}
-                    color="#8B5CF6"
-                  />
+                <View style={{ alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 4 }}>
+                  <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }} renderToHardwareTextureAndroid={Platform.OS === 'android'}>
+                    <Ionicons name={landmark.type === 'landmark' ? 'location' : 'business'} size={20} color="#8B5CF6" />
+                  </View>
                 </View>
               </MemoizedMarker>
             ))}
@@ -3749,6 +3687,7 @@ export default function PassengerHomeScreen() {
                   <TouchableOpacity
                     style={styles.searchingCancelButton}
                     onPress={handleCancelSearching}
+                    disabled={isCancelling}
                     activeOpacity={0.7}
                   >
                     <Ionicons name="close-outline" size={18} color="#EF4444" />

@@ -1,6 +1,5 @@
 import React from 'react';
-import { View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import { View, Platform } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 const BORDER = 3;
@@ -10,23 +9,31 @@ const CircleMarker: React.FC<{ size: number; color: string; children: React.Reac
   color,
   children,
 }) => {
-  const inner = size - BORDER * 2;
-  const center = size / 2;
-  const innerR = inner / 2;
+  const innerSize = size - BORDER * 2;
   return (
-    <View style={{
-      width: size,
-      height: size,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'transparent',
-      borderRadius: size / 2,
-    }}>
-      <Svg width={size} height={size} style={{ position: 'absolute' }}>
-        <Circle cx={center} cy={center} r={center - 0.2} fill="#FFFFFF" />
-        <Circle cx={center} cy={center} r={innerR} fill={color} />
-      </Svg>
-      <View style={{ width: inner, height: inner, alignItems: 'center', justifyContent: 'center' }}>
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: '#FFFFFF',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+      }}
+      renderToHardwareTextureAndroid={Platform.OS === 'android'}
+    >
+      <View
+        style={{
+          width: innerSize,
+          height: innerSize,
+          borderRadius: innerSize / 2,
+          backgroundColor: color,
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+        }}
+      >
         {children}
       </View>
     </View>

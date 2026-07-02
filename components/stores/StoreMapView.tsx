@@ -245,7 +245,7 @@ export const StoreMapView: React.FC<StoreMapViewProps> = ({ stores, loading, onR
             onPress={() => handleMarkerPress(store)}
           >
             <View style={styles.markerShadow}>
-              <View style={styles.markerCircle}>
+              <View style={styles.markerCircle} renderToHardwareTextureAndroid={Platform.OS === 'android'}>
                 <Ionicons name="storefront" size={20} color={Colors.white} />
               </View>
             </View>
