@@ -1,4 +1,4 @@
-export { default as api, API_URL, TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY, DEFAULT_TIMEOUT, CANCELLATION_TIMEOUT } from './client';
+export { default as api, API_URL, TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY, DEFAULT_TIMEOUT, CANCELLATION_TIMEOUT, CRITICAL_TIMEOUT, getAdaptiveTimeout } from './client';
 export type { default as AxiosInstance } from 'axios';
 
 export { authAPI } from './auth';

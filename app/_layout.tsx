@@ -22,6 +22,8 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import '@/services/logCapture';
 import { UnifiedNotificationProvider } from '@/context/UnifiedNotificationContext';
 import { UnifiedNotificationOverlay } from '@/components/UnifiedNotificationOverlay';
+import { OfflineBanner } from '@/components/OfflineBanner';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 
 /** Sólo monta los hooks de socket global cuando el usuario está autenticado.
  *  Esto evita que useSound(), useExchangeRate() y el import de socket.io
@@ -33,6 +35,7 @@ function GlobalSocketGuard({ user, isAuthenticated }: { user: any; isAuthenticat
 
 function AppContent() {
   useBadgeSync();
+  useNetworkStatus(); // Initialize network monitoring early
 
   const { user, isAuthenticated, loadStoredAuth } = useAuthStore();
   const segments = useSegments();
@@ -183,6 +186,7 @@ function AppContent() {
         <Stack.Screen name="(driver)" />
       </Stack>
       <UnifiedNotificationOverlay />
+      <OfflineBanner />
       {showSocketGuard && <GlobalSocketGuard user={user} isAuthenticated={isAuthenticated} />}
       <ExpoStatusBar style="auto" />
     </>

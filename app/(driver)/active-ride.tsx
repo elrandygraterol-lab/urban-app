@@ -17,15 +17,16 @@ import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDriverStore } from '@/store/driverStore';
 import Constants from 'expo-constants';
-import api from '@/services/api';
+import api, { getAdaptiveTimeout } from '@/services/api';
 import { rideAPI } from '@/services/api';
 import { getRoute } from '@/services/mapsService';
 import { getSocket, onPaymentConfirmed } from '@/services/socket';
 import { useSound } from '@/hooks/useSound';
+import { useNetworkRecovery, retryWithBackoff, isNetworkError } from '@/hooks/useNetworkRecovery';
 import { Colors as colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { formatCurrency, Currency } from '@/utils/currency';
-import { DriverTaxiIcon, PassengerIcon, DropoffIcon } from '@/src/components/map/markers';
+import { MARKER_ICONS } from '@/src/components/map/markers';
 import {
   computeBearing,
   bearingAlongRoute,
@@ -134,6 +135,7 @@ export default function ActiveRideScreen() {
   const locationRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const prevDriverPosRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const [driverHeading, setDriverHeading] = useState<number>(0);
+  const locationBufferRef = useRef<Array<{ latitude: number; longitude: number; heading: number | null }>>([]);
 
   // Keep rideRef and locationRef in sync
   useEffect(() => {
@@ -455,6 +457,7 @@ export default function ActiveRideScreen() {
           setFinalFare(fareValue);
         }
         if (!isManualFlow) {
+          ratingShownForRideRef.current = rideId;
           setShowRatingModal(true);
         } else {
           setIsAvailable(true);
@@ -567,14 +570,38 @@ export default function ActiveRideScreen() {
           // Only send location updates if ride is still active (not completed)
           // and the current rideRef matches the component's rideId (prevents stale emissions)
           if (rideRef.current && rideRef.current.status !== 'completed' && rideRef.current.id === rideId) {
-            const socket = getSocket();
-            if (socket && socket.connected) {
-              socket.emit('driver:location_update', {
+            const s = getSocket();
+            if (s && s.connected) {
+              // Flush any buffered locations first
+              const buffered = locationBufferRef.current;
+              if (buffered.length > 0) {
+                buffered.forEach(loc => {
+                  s.emit('driver:location_update', {
+                    rideId: rideRef.current!.id,
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    heading: loc.heading,
+                  });
+                });
+                locationBufferRef.current = [];
+              }
+              s.emit('driver:location_update', {
                 rideId: rideRef.current.id,
                 latitude: newCoords.latitude,
                 longitude: newCoords.longitude,
                 heading: newLocation.coords.heading,
               });
+            } else if (s) {
+              // Socket exists but not connected — buffer location
+              locationBufferRef.current.push({
+                latitude: newCoords.latitude,
+                longitude: newCoords.longitude,
+                heading: newLocation.coords.heading || null,
+              });
+              // Keep only last 10 locations to avoid unbounded memory
+              if (locationBufferRef.current.length > 10) {
+                locationBufferRef.current.shift();
+              }
             }
           }
 
@@ -960,6 +987,21 @@ export default function ActiveRideScreen() {
       console.log('[ACTIVE_RIDE]    Socket ID:', socket.id);
       console.log('[ACTIVE_RIDE] ========================================');
 
+      // Flush buffered location updates
+      const buffered = locationBufferRef.current;
+      if (buffered.length > 0) {
+        console.log(`[ACTIVE_RIDE] Flushing ${buffered.length} buffered locations`);
+        buffered.forEach(loc => {
+          socket.emit('driver:location_update', {
+            rideId: rideRef.current!.id,
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            heading: loc.heading,
+          });
+        });
+        locationBufferRef.current = [];
+      }
+
       // Re-join the ride room to receive real-time updates
       const currentRideId = rideRef.current?.id;
       if (currentRideId) {
@@ -1029,54 +1071,126 @@ export default function ActiveRideScreen() {
     };
   };
 
+  // Polling fallback for driver — refreshes ride data and detects status changes every 10s
+  useEffect(() => {
+    if (!ride || !ride.id) return;
+    const activeStatuses = ['accepted', 'arrived', 'in_progress'];
+    if (!activeStatuses.includes(ride.status)) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await rideAPI.getRide(ride.id);
+        const updated = res.data?.data || res.data;
+        if (updated && updated.status && updated.status !== ride.status) {
+          console.log('[ACTIVE_RIDE] ⚡ Polling caught status change:', ride.status, '→', updated.status);
+          setRide(prev => prev ? { ...prev, ...updated } : null);
+        }
+      } catch {
+        // Silently ignore polling errors — next poll will retry
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [ride?.id, ride?.status]);
+
+  // Network recovery — when internet comes back, refresh ride state and reconnect
+  useNetworkRecovery(() => {
+    console.log('[ACTIVE_RIDE] Network recovered — refreshing ride state');
+    const s = getSocket();
+    if (s && !s.connected) {
+      s.connect();
+    }
+    if (rideRef.current?.id) {
+      s?.emit('join_ride', { rideId: rideRef.current.id });
+    }
+    fetchRide().then(() => {
+      if (locationRef.current) {
+        const origin = locationRef.current;
+        const dest =
+          (ride as any)?.destinationLocation ||
+          ((ride as any)?.destinationLatitude && (ride as any)?.destinationLongitude
+            ? { latitude: Number((ride as any).destinationLatitude), longitude: Number((ride as any).destinationLongitude) }
+            : null);
+        if (dest) {
+          getRoute(origin, dest).then(setRouteCoordinates).catch(() => {});
+        }
+      }
+    }).catch(() => {});
+  });
+
   const updateRideStatus = async (newStatus: string) => {
     if (isUpdatingStatus) return;
     setIsUpdatingStatus(true);
-    try {
-      const endpoint =
-        newStatus === 'arrived'
-          ? `/api/rides/${rideId}/arrive`
-          : newStatus === 'in_progress'
-            ? `/api/rides/${rideId}/start`
-            : `/api/rides/${rideId}/complete`;
 
-      const response = await api.post(endpoint);
+    const endpoint =
+      newStatus === 'arrived'
+        ? `/api/rides/${rideId}/arrive`
+        : newStatus === 'in_progress'
+          ? `/api/rides/${rideId}/start`
+          : `/api/rides/${rideId}/complete`;
 
-      // If completing the ride, show rating modal immediately
-      if (newStatus === 'completed') {
-        const rideData = response.data?.data || response.data;
+    const statusLabels: Record<string, string> = {
+      arrived: 'marcar llegada',
+      in_progress: 'iniciar viaje',
+      completed: 'finalizar viaje',
+    };
 
-        // Store final fare from response
-        const fareValue = rideData.finalFare ?? ride?.estimatedFare ?? 0;
-        if (fareValue > 0) {
-          setFinalFare(fareValue);
+    let lastError: any = null;
+    const maxRetries = 3;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          console.log(`[ACTIVE_RIDE] Retry ${attempt}/${maxRetries - 1} for ${newStatus}...`);
         }
 
-        // Update ride state
-        setRide(prev => (prev ? { ...prev, status: 'completed' } : null));
+        const response = await api.post(endpoint, undefined, {
+          timeout: getAdaptiveTimeout(20000),
+        });
 
-        // Show rating modal only for non-manual rides
-        if (!isManualFlow) {
-          ratingShownForRideRef.current = rideId;
-          setShowRatingModal(true);
+        if (newStatus === 'completed') {
+          const rideData = response.data?.data || response.data;
+          const fareValue = rideData.finalFare ?? ride?.estimatedFare ?? 0;
+          if (fareValue > 0) setFinalFare(fareValue);
+          setRide(prev => (prev ? { ...prev, status: 'completed' } : null));
+          if (!isManualFlow) {
+            ratingShownForRideRef.current = rideId;
+            setShowRatingModal(true);
+          } else {
+            router.replace('/(driver)');
+          }
+          playNotificationSound();
         } else {
-          console.log('[ACTIVE_RIDE] Manual ride completed — navigating home');
-          router.replace('/(driver)');
+          fetchRide();
         }
 
-        // Play notification sound
-        playNotificationSound();
-      } else {
-        // For other status changes, just fetch the updated ride
-        fetchRide();
-      }
+        const s = getSocket();
+        if (s?.connected) {
+          s.emit('ride:status_changed', { rideId, status: newStatus });
+        }
+        return; // Success — exit
+      } catch (error: any) {
+        lastError = error;
+        console.error(`[ACTIVE_RIDE] Attempt ${attempt + 1} failed:`, error?.message);
 
-      // Route will be updated automatically by useEffect when status changes
-    } catch (error) {
-      console.error(`Failed to update ride status to ${newStatus}:`, error);
-    } finally {
-      setIsUpdatingStatus(false);
+        if (attempt < maxRetries - 1) {
+          const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
     }
+
+    // All retries exhausted — show error to user
+    const label = statusLabels[newStatus] || newStatus;
+    const errorMsg =
+      lastError?.response?.data?.error?.message ||
+      lastError?.message ||
+      `No se pudo ${label}`;
+    showToast(
+      `Error al ${label}. ${errorMsg}. Verifica tu conexión e intenta de nuevo.`,
+      'error'
+    );
+    setIsUpdatingStatus(false);
   };
 
   const [isCancelling, setIsCancelling] = useState(false);
@@ -1118,6 +1232,13 @@ export default function ActiveRideScreen() {
       await rideAPI.cancelRide(rideId, {
         reason: cancelReason,
       });
+      // Clean up state immediately on success — don't wait for socket event
+      showToast('Viaje cancelado exitosamente', 'success');
+      setIsAvailable(true);
+      setRide(null);
+      setRouteCoordinates([]);
+      setRouteSteps([]);
+      setTimeout(() => router.replace('/(driver)'), 800);
     } catch (error: any) {
       const msg = error?.response?.data?.error?.message || 'No se pudo cancelar el viaje';
       showToast(msg, 'error');
@@ -1244,16 +1365,19 @@ export default function ActiveRideScreen() {
   };
 
   const handleSubmitRating = async () => {
+    if (isSubmittingRating) return; // Prevent double-click before state update
     if (!ride || passengerRating === 0) return;
 
     setIsSubmittingRating(true);
 
     try {
-      await api.post('/api/ratings/passenger', {
-        rideId: ride.id,
-        rating: passengerRating,
-        comment: passengerComment.trim() || undefined,
-      });
+      await retryWithBackoff(async () => {
+        await api.post('/api/ratings/passenger', {
+          rideId: ride!.id,
+          rating: passengerRating,
+          comment: passengerComment.trim() || undefined,
+        });
+      }, 3, 1000);
 
       console.log('✅ Rating submitted successfully');
 
@@ -1269,12 +1393,16 @@ export default function ActiveRideScreen() {
       console.error('Failed to submit rating:', error);
       setIsSubmittingRating(false);
 
-      showToast('No se pudo enviar la valoración. Por favor, intenta de nuevo.', 'error');
+      const msg = isNetworkError(error)
+        ? 'Error de conexión. Verifica tu internet e intenta calificar de nuevo.'
+        : 'No se pudo enviar la valoración. Por favor, intenta de nuevo.';
+      showToast(msg, 'error');
     }
   };
 
   const handleSkipRating = () => {
     setShowRatingModal(false);
+    ratingShownForRideRef.current = null;
     setRouteCoordinates([]);
     setRouteSteps([]);
     setIsAvailable(true);
@@ -1464,9 +1592,8 @@ export default function ActiveRideScreen() {
               anchor={{ x: 0.5, y: 0.5 }}
               flat={false}
               rotation={0}
-            >
-              <DriverTaxiIcon />
-            </Marker>
+              icon={MARKER_ICONS.driverTaxi}
+            />
           )}
 
           {/* Pickup / Passenger marker — visible while going to pickup AND while arrived (passenger hasn't boarded yet) */}
@@ -1476,9 +1603,8 @@ export default function ActiveRideScreen() {
               title="Punto de Recogida"
               description={ride.pickupAddress}
               anchor={{ x: 0.5, y: 1 }}
-            >
-              <PassengerIcon size={44} />
-            </Marker>
+              icon={MARKER_ICONS.passenger}
+            />
           )}
 
           {/* Destination location marker - only visible when navigating to destination (in_progress) */}
@@ -1488,9 +1614,8 @@ export default function ActiveRideScreen() {
               title="Destino"
               description={ride.destinationAddress}
               anchor={{ x: 0.5, y: 1 }}
-            >
-              <DropoffIcon size={40} />
-            </Marker>
+              icon={MARKER_ICONS.dropoff}
+            />
           )}
 
           {/* Route polyline - Different colors based on ride status */}

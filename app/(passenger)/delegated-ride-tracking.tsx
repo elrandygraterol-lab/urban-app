@@ -15,7 +15,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { DriverTaxiIcon, PickupIcon, DropoffIcon } from '@/src/components/map/markers';
+import { MARKER_ICONS } from '@/src/components/map/markers';
 import { useAuthStore } from '@/store/authStore';
 import { rideAPI } from '@/services/api';
 import {
@@ -432,18 +432,16 @@ export default function DelegatedRideTrackingScreen() {
           coordinate={rideData.pickup}
           title="Punto de Recogida"
           description={rideData.pickup.address}
-        >
-          <PickupIcon />
-        </Marker>
+          icon={MARKER_ICONS.pickup}
+        />
 
         {/* Destination marker */}
         <Marker
           coordinate={rideData.destination}
           title="Destino"
           description={rideData.destination.address}
-        >
-          <DropoffIcon />
-        </Marker>
+          icon={MARKER_ICONS.dropoff}
+        />
 
         {/* Driver marker */}
         {driverLocation && rideData.driver && (
@@ -453,9 +451,8 @@ export default function DelegatedRideTrackingScreen() {
             description={`${rideData.driver.vehicleInfo?.model || 'Vehículo'} - ${rideData.driver.vehicleInfo?.licensePlate || 'N/A'}`}
             anchor={{ x: 0.5, y: 0.5 }}
             rotation={0}
-          >
-            <DriverTaxiIcon />
-          </Marker>
+            icon={MARKER_ICONS.driverTaxi}
+          />
         )}
 
         {/* Route polyline */}

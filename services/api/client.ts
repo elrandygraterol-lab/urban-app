@@ -1,13 +1,20 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import { addNetworkListener, getNetworkStatus } from '@/hooks/useNetworkStatus';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 const TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_KEY = 'auth_user';
 
-const DEFAULT_TIMEOUT = 10000;
-const CANCELLATION_TIMEOUT = 15000;
+const DEFAULT_TIMEOUT = 15000;
+const CANCELLATION_TIMEOUT = 20000;
+const CRITICAL_TIMEOUT = 25000;
+
+export function getAdaptiveTimeout(baseMs: number = DEFAULT_TIMEOUT): number {
+  const { isSlowConnection } = getNetworkStatus();
+  return isSlowConnection ? baseMs * 1.5 : baseMs;
+}
 
 let isRefreshing = false;
 let failedQueue: Array<{
@@ -134,5 +141,5 @@ api.interceptors.response.use(
   }
 );
 
-export { API_URL, TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY, DEFAULT_TIMEOUT, CANCELLATION_TIMEOUT };
+export { API_URL, TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY, DEFAULT_TIMEOUT, CANCELLATION_TIMEOUT, CRITICAL_TIMEOUT };
 export default api;

@@ -30,7 +30,7 @@ import { useSound } from '@/hooks/useSound';
 import { Ionicons } from '@expo/vector-icons';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import type { Socket } from 'socket.io-client';
-import { DriverTaxiIcon } from '@/src/components/map/markers';
+import { MARKER_ICONS } from '@/src/components/map/markers';
 import { rideAPI } from '@/services/api';
 // import { setActiveTutorialScreen } from '@/utils/tutorialState';
 // import { useCopilot, walkthroughable, CopilotStep } from 'react-native-copilot';
@@ -735,9 +735,8 @@ export default function DriverHomeScreen() {
           title="Mi ubicación"
           anchor={{ x: 0.5, y: 0.5 }}
           rotation={0}
-        >
-          <DriverTaxiIcon />
-        </MemoizedMarker>
+          icon={MARKER_ICONS.driverTaxi}
+        />
       </MapView>
 
       {/* Center Location Button */}

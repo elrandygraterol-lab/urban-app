@@ -24,10 +24,7 @@ import { getLocation } from '@/utils/lazyLocation';
 import type { LocationSubscription } from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  DriverTaxiIcon,
-  PassengerIcon,
-  PickupIcon,
-  DropoffIcon,
+  MARKER_ICONS,
   SecondPickupIcon,
   SecondDropoffIcon,
 } from '@/src/components/map/markers';
@@ -52,12 +49,12 @@ import {
   onSharedRideInvitationRejected,
   onSharedRideInvitationExpired,
   onPassengerLocationUpdate,
-  removeRideListeners,
   removeAllListeners,
 } from '@/services/socket';
 import { logInfo, logError, logWarning } from '@/utils/errorLogger';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useSocketReconnect } from '@/hooks/useSocketReconnect';
+import { useNetworkRecovery, retryWithBackoff, isNetworkError } from '@/hooks/useNetworkRecovery';
 import { useSound } from '@/hooks/useSound';
 import { useCancellationPolicy } from '@/hooks/useCancellationPolicy';
 import type { SharedRideInvitation } from '@/components/SharedRideInvitationModal';
@@ -356,6 +353,15 @@ export default function PassengerHomeScreen() {
   // Restaurar viaje activo al montar, cuando el token esta listo, y al volver a primer plano
   const restoreAttemptedRef = useRef(false);
   const ratingShownForRideRef = useRef<string | null>(null);
+  const rideCleanupRefs = useRef<Record<string, () => void>>({});
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeRideRef = useRef<any>(null);
+
+  // Keep activeRideRef in sync with state — used inside restoreActiveRide to avoid stale closure
+  useEffect(() => {
+    activeRideRef.current = activeRide;
+  }, [activeRide]);
+
   useEffect(() => {
     if (!token) return;
 
@@ -419,10 +425,10 @@ export default function PassengerHomeScreen() {
           }
         } else {
           // No active rides found — if we had one, it was cancelled or completed while in background
-          if (isMounted && activeRide) {
+          if (isMounted && activeRideRef.current) {
             // If ride was already completed locally (socket processed event in background),
             // preserve state so the rating modal stays visible when user returns
-            if (activeRide.status === 'completed') {
+            if (activeRideRef.current.status === 'completed') {
               console.log('[PASSENGER] Ride completed while in background — preserving state for rating');
               return;
             }
@@ -430,7 +436,7 @@ export default function PassengerHomeScreen() {
             // Socket was disconnected while ride ended — fetch final status
             let finalStatus: string | null = null;
             try {
-              const fullResponse = await rideAPI.getRide(activeRide.id);
+              const fullResponse = await rideAPI.getRide(activeRideRef.current.id);
               const fullData = fullResponse.data?.data || fullResponse.data;
               finalStatus = fullData?.status;
 
@@ -1057,14 +1063,26 @@ export default function PassengerHomeScreen() {
     // Reset notification flags when a new ride starts
     setHasShownNearbyNotification(false);
 
-    // Join ride room
+    // Join ride room — use raw socket.emit to bypass isConnected guard during reconnection
     joinRide(activeRide.id);
 
-    // Re-join ride room on every socket reconnect — ensures listener recovery after background
+    // Re-join ride room AND re-register listeners on every socket reconnect
     const socket = getSocket();
     const handleReconnect = () => {
-      console.log('[PASSENGER] Socket reconnected, re-joining ride room:', activeRide.id);
-      joinRide(activeRide.id);
+      console.log('[PASSENGER] Socket reconnected, re-joining ride room and re-registering listeners');
+      socket?.emit('join_ride', { rideId: activeRide.id });
+      // Clean up stale listeners from previous connection, then re-register fresh ones
+      Object.values(rideCleanupRefs.current).forEach(fn => fn());
+      rideCleanupRefs.current = {};
+      rideCleanupRefs.current.rideAccepted = onRideAccepted(handleRideAccepted);
+      rideCleanupRefs.current.rideStatusChanged = onRideStatusChanged(handleRideStatusChanged);
+      rideCleanupRefs.current.driverLocationUpdate = onDriverLocationUpdate(handleDriverLocationUpdate);
+      rideCleanupRefs.current.passengerLocationUpdate = onPassengerLocationUpdate(handlePassengerLocationUpdate);
+      rideCleanupRefs.current.etaUpdate = onETAUpdate(handleETAUpdate);
+      rideCleanupRefs.current.driverArrived = onDriverArrived(handleDriverArrived);
+      rideCleanupRefs.current.rideCancelled = onRideCancelled(handleRideCancelled);
+      rideCleanupRefs.current.rideCompleted = onRideCompleted(handleRideCompleted);
+      console.log('[PASSENGER] ✅ Listeners re-registered after reconnect');
     };
     socket?.on('connect', handleReconnect);
 
@@ -1104,6 +1122,13 @@ export default function PassengerHomeScreen() {
     // Listen for ride status changes
     const handleRideStatusChanged = (data: any) => {
       console.log('📍 Ride status changed:', data);
+
+      // Guard: if activeRide was already cleared (e.g., after rating),
+      // don't create a zombie object — just ignore the event
+      if (!activeRide?.id) {
+        console.log('[PASSENGER] ride:status_changed ignored — no active ride');
+        return;
+      }
 
       setActiveRide(prev => ({
         ...prev!,
@@ -1438,30 +1463,84 @@ export default function PassengerHomeScreen() {
       setShowRatingModal(true);
     };
 
-    // Register event listeners
+    // Register event listeners — store cleanup functions individually (no destructive socket.off)
     console.log('[PASSENGER] Registering socket event listeners...');
-    onRideAccepted(handleRideAccepted);
-    onRideStatusChanged(handleRideStatusChanged);
-    onDriverLocationUpdate(handleDriverLocationUpdate);
-    onPassengerLocationUpdate(handlePassengerLocationUpdate);
-    onETAUpdate(handleETAUpdate);
-    onDriverArrived(handleDriverArrived);
-    onRideCancelled(handleRideCancelled);
-    onRideCompleted(handleRideCompleted);
+    rideCleanupRefs.current.rideAccepted = onRideAccepted(handleRideAccepted);
+    rideCleanupRefs.current.rideStatusChanged = onRideStatusChanged(handleRideStatusChanged);
+    rideCleanupRefs.current.driverLocationUpdate = onDriverLocationUpdate(handleDriverLocationUpdate);
+    rideCleanupRefs.current.passengerLocationUpdate = onPassengerLocationUpdate(handlePassengerLocationUpdate);
+    rideCleanupRefs.current.etaUpdate = onETAUpdate(handleETAUpdate);
+    rideCleanupRefs.current.driverArrived = onDriverArrived(handleDriverArrived);
+    rideCleanupRefs.current.rideCancelled = onRideCancelled(handleRideCancelled);
+    rideCleanupRefs.current.rideCompleted = onRideCompleted(handleRideCompleted);
     console.log('[PASSENGER] ✅ All socket event listeners registered');
 
     // Cleanup listeners when ride ends or component unmounts
+    const cleanupAll = () => {
+      Object.values(rideCleanupRefs.current).forEach(fn => fn());
+      rideCleanupRefs.current = {};
+    };
+
     return () => {
       console.log('[PASSENGER] Cleaning up ride event listeners for ride:', activeRide.id);
+      cleanupAll();
       if (activeRide) {
         leaveRide(activeRide.id);
       }
       socket?.off('connect', handleReconnect);
-      // Remove ride-specific listeners, keep shared ride invitation listeners alive
-      removeRideListeners();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRide?.id, listenerVersion]); // Re-run when ride changes OR app returns to foreground
+
+  // Polling fallback — refreshes ride status every 5s when ride is active
+  // Ensures the passenger catches status updates even if socket events are missed
+  useEffect(() => {
+    if (!activeRide || !activeRide.id) return;
+    const activeStatuses = ['pending', 'accepted', 'arrived', 'in_progress'];
+    if (!activeStatuses.includes(activeRide.status)) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await rideAPI.getRide(activeRide.id);
+        const updated = res.data?.data || res.data;
+        if (updated && updated.status && updated.status !== activeRide.status) {
+          console.log('[PASSENGER] ⚡ Polling caught status change:', activeRide.status, '→', updated.status);
+          setActiveRide(prev => prev ? { ...prev, status: updated.status, ...updated } : updated);
+        }
+      } catch {
+        // Silently ignore polling errors
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [activeRide?.id, activeRide?.status]);
+
+  // Network recovery — when internet comes back, refresh ride state
+  useNetworkRecovery(() => {
+    console.log('[PASSENGER] Network recovered — refreshing ride state');
+    const s = getSocket();
+    if (s && !s.connected) {
+      s.connect();
+    }
+    // Re-fetch active rides to catch up on missed state changes
+    rideAPI.getActiveRides().then((res) => {
+      const rides = res.data?.data ?? res.data;
+      if (rides && Array.isArray(rides) && rides.length > 0) {
+        const ride = rides[0];
+        if (['pending', 'accepted', 'arrived', 'in_progress'].includes(ride.status)) {
+          setActiveRide(prev => {
+            if (prev && prev.id === ride.id) return { ...prev, ...ride };
+            return ride;
+          });
+          if (ride.pickupAddress) setPickupAddress(ride.pickupAddress);
+          if (ride.destinationAddress) setDestinationAddress(ride.destinationAddress);
+          setIsSearchingDriver(ride.status === 'pending');
+        }
+      }
+      // Force listener re-registration
+      setListenerVersion(v => v + 1);
+    }).catch(() => {});
+  });
 
   // Clear route when driver arrives — route was driver→pickup, no longer needed
   useEffect(() => {
@@ -3029,17 +3108,20 @@ export default function PassengerHomeScreen() {
 
         // Confirmation shown by MobilePaymentModal — no duplicate toast here
       } else {
-        // Legacy payment methods (transfer, cash)
-        const response = await paymentAPI.completePayment(activeRide.id, {
-          method: paymentData.method,
-          amount: finalFare || estimatedFare || 0,
-          referenceNumber: paymentData.referenceNumber,
-          phoneNumber: paymentData.phoneNumber,
-          accountNumber: paymentData.accountNumber,
-          bankName: paymentData.bankName,
-        });
+        // Legacy payment methods (transfer, cash) — retry on network failure
+        await retryWithBackoff(async () => {
+          const response = await paymentAPI.completePayment(activeRide.id, {
+            method: paymentData.method,
+            amount: finalFare || estimatedFare || 0,
+            referenceNumber: paymentData.referenceNumber,
+            phoneNumber: paymentData.phoneNumber,
+            accountNumber: paymentData.accountNumber,
+            bankName: paymentData.bankName,
+          });
+          return response;
+        }, 3, 1500);
 
-        console.log('✅ Payment processed successfully:', response);
+        console.log('✅ Payment processed successfully');
 
         // Ocultar loading
         setIsRequestingRide(false);
@@ -3055,17 +3137,17 @@ export default function PassengerHomeScreen() {
       }
     } catch (error: any) {
       console.error('❌ Payment processing failed:', error);
-
-      // Ocultar loading
       setIsRequestingRide(false);
 
-      // Extraer mensaje de error más específico
-      let errorMessage = 'No se pudo procesar el pago. Por favor intenta nuevamente.';
-
-      if (error?.response?.data?.message) {
+      let errorMessage: string;
+      if (isNetworkError(error)) {
+        errorMessage = 'Error de conexión. Verifica tu internet e intenta de nuevo.';
+      } else if (error?.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error?.message) {
         errorMessage = error.message;
+      } else {
+        errorMessage = 'No se pudo procesar el pago. Por favor intenta nuevamente.';
       }
 
       showStatus('error', errorMessage, 'Error al Procesar Pago', undefined, {
@@ -3133,6 +3215,7 @@ export default function PassengerHomeScreen() {
   };
 
   const handleSubmitRating = async () => {
+    if (isSubmittingRating) return; // Prevent double-click before state update
     if (!activeRide || driverRating === 0) {
       showToast('Por favor selecciona una valoración', 'error');
       return;
@@ -3141,7 +3224,9 @@ export default function PassengerHomeScreen() {
     setIsSubmittingRating(true);
 
     try {
-      await ratingAPI.rateDriver(activeRide.id, driverRating, driverComment.trim() || undefined);
+      await retryWithBackoff(async () => {
+        await ratingAPI.rateDriver(activeRide!.id, driverRating, driverComment.trim() || undefined);
+      }, 3, 1000);
 
       console.log('✅ Rating submitted successfully');
 
@@ -3158,10 +3243,11 @@ export default function PassengerHomeScreen() {
       logError('PassengerHomeScreen', error, { context: 'Submit rating' });
       setIsSubmittingRating(false);
 
-      // Show user-friendly error message
-      const errorMessage = error.response?.data?.error?.message
-        ? error.response.data.error.message
-        : 'No se pudo enviar la valoración. Por favor intenta nuevamente.';
+      const errorMessage = isNetworkError(error)
+        ? 'Error de conexión. Verifica tu internet e intenta calificar de nuevo.'
+        : error?.response?.data?.error?.message
+          ? error.response.data.error.message
+          : 'No se pudo enviar la valoración. Por favor intenta nuevamente.';
 
       showToast(errorMessage, 'error');
     }
@@ -3182,6 +3268,7 @@ export default function PassengerHomeScreen() {
     setDriverRating(0);
     setDriverComment('');
     setFinalFare(null);
+    ratingShownForRideRef.current = null;
 
     // Reset ride state completely - return to initial map view
     setActiveRide(null);
@@ -3307,9 +3394,8 @@ export default function PassengerHomeScreen() {
                 anchor={{ x: 0.5, y: 0.5 }}
                 flat={false}
                 rotation={0}
-              >
-                <DriverTaxiIcon />
-              </MemoizedMarker>
+                icon={MARKER_ICONS.driverTaxi}
+              />
             )}
 
             {/* Pickup marker — shown only during 'accepted' when far from passenger */}
@@ -3322,9 +3408,8 @@ export default function PassengerHomeScreen() {
                 title="Punto de recogida"
                 identifier="pickup"
                 anchor={{ x: 0.5, y: 0.5 }}
-              >
-                <PickupIcon size={36} />
-              </MemoizedMarker>
+                icon={MARKER_ICONS.pickup}
+              />
             )}
 
             {/* Ubicacion actual del pasajero — se oculta solo cuando inicia el viaje */}
@@ -3334,9 +3419,8 @@ export default function PassengerHomeScreen() {
                 title="Tu ubicacion"
                 identifier="passenger_location"
                 anchor={{ x: 0.5, y: 0.5 }}
-              >
-                <PassengerIcon size={44} />
-              </MemoizedMarker>
+                icon={MARKER_ICONS.passenger}
+              />
             )}
 
             {/* Destino */}
@@ -3346,9 +3430,8 @@ export default function PassengerHomeScreen() {
                 title="Destino"
                 identifier="destination"
                 anchor={{ x: 0.5, y: 0.5 }}
-              >
-                <DropoffIcon size={44} />
-              </MemoizedMarker>
+                icon={MARKER_ICONS.dropoff}
+              />
             )}
 
             {/* Second Pickup Marker */}
@@ -3358,9 +3441,8 @@ export default function PassengerHomeScreen() {
                 title="Segundo punto de recogida"
                 identifier="pickup2"
                 anchor={{ x: 0.5, y: 0.5 }}
-              >
-                <SecondPickupIcon />
-              </MemoizedMarker>
+                icon={MARKER_ICONS.pickup}
+              />
             )}
 
             {/* Second Destination Marker */}
@@ -3370,9 +3452,8 @@ export default function PassengerHomeScreen() {
                 title="Segundo destino"
                 identifier="destination2"
                 anchor={{ x: 0.5, y: 0.5 }}
-              >
-                <SecondDropoffIcon />
-              </MemoizedMarker>
+                icon={MARKER_ICONS.dropoff}
+              />
             )}
 
             {/* Route line — shown before ride request, driver approaching, and during trip */}

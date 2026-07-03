@@ -1,8 +1,28 @@
 import React from 'react';
-import { View, Platform } from 'react-native';
+import { View } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 const BORDER = 3;
+
+// ============================================================
+// PNG ICON SOURCES — Para usar con el prop "icon" de <Marker>
+// Los PNGs son pre-renderizados, evitando el bug de GPU
+// Mali/Exynos que ocurre al aplicar overflow + borderRadius
+// durante la conversion View -> textura OpenGL en Android.
+// ============================================================
+export const MARKER_ICONS = {
+  driverTaxi: require('../../assets/iconos-maps/conductor.png'),
+  passenger: require('../../assets/iconos-maps/pasajero.png'),
+  pickup: require('../../assets/iconos-maps/recogida.png'),
+  dropoff: require('../../assets/iconos-maps/destino.png'),
+};
+
+// ============================================================
+// VIEW-BASED COMPONENTS
+// Solo para uso FUERA del mapa (ej. botones de ruta en UI).
+// NO usar como children de <Marker> — causa el bug de GPU.
+// Para marcadores de mapa, usar MARKER_ICONS con el prop icon.
+// ============================================================
 
 const CircleMarker: React.FC<{ size: number; color: string; children: React.ReactNode }> = ({
   size,
@@ -21,7 +41,6 @@ const CircleMarker: React.FC<{ size: number; color: string; children: React.Reac
         justifyContent: 'center',
         overflow: 'hidden',
       }}
-      renderToHardwareTextureAndroid={Platform.OS === 'android'}
     >
       <View
         style={{

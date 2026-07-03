@@ -165,19 +165,21 @@ export const useGlobalSocketListeners = ({
         message += `\n\nCargo por cancelación: Bs. ${data.cancellationFee.toFixed(2)}`;
       }
 
-      // Show status notification for cancellation — drivers only (passenger handled locally)
+      // Show status notification for both roles
       if (user?.role === 'driver') {
         showStatus('ride_cancelled', message, undefined, { rideId: data.rideId, cancelledBy: data.cancelledBy });
+      } else if (user?.role === 'passenger') {
+        const who = data.cancelledBy === 'driver' ? 'El conductor' : 'El sistema';
+        showStatus('ride_cancelled', `${who} canceló el viaje.`, 'Viaje Cancelado', undefined, undefined, 5000);
+        playNotificationSound();
       }
     },
-    [user?.id, user?.role, showStatus]
+    [user?.id, user?.role, showStatus, playNotificationSound]
   );
 
   // ── PASSENGER-SIDE HANDLERS ────────────────────────────────────────────────
 
   // Handler for ride:accepted event (PASSENGER — driver accepted the ride)
-  // Note: the passenger's local screen shows a more detailed notification with vehicle info.
-  // This global handler only plays sound to avoid duplicate notifications.
   const handleRideAccepted = useCallback(
     (data: {
       rideId: string;
@@ -188,10 +190,18 @@ export const useGlobalSocketListeners = ({
     }) => {
       console.log('[GLOBAL_SOCKET] ✅ Ride accepted event received (passenger):', data);
       if (user?.role !== 'passenger') return;
-      // Notification is shown by the passenger's local screen handler (index.tsx)
-      // to provide vehicle details and payment prompt — showing it here would duplicate.
+      playNotificationSound();
+      const driverName = data.driver?.name || 'Un conductor';
+      showStatus(
+        'ride_accepted',
+        `${driverName} ha aceptado tu viaje y se dirige al punto de recogida.`,
+        '¡Viaje Aceptado!',
+        undefined,
+        undefined,
+        5000
+      );
     },
-    [user?.role]
+    [user?.role, playNotificationSound, showStatus]
   );
 
   // Handler for ride:status_changed event (PASSENGER — status updates)
@@ -208,10 +218,53 @@ export const useGlobalSocketListeners = ({
     }) => {
       console.log('[GLOBAL_SOCKET] 🔄 Ride status changed event received:', data);
       if (user?.role !== 'passenger') return;
-      // All status notifications handled by local screen (index.tsx) with sound + actions.
-      // No duplicate notifications from global hook.
+      if (data.status === 'arrived') {
+        playNotificationSound();
+        showStatus(
+          'info',
+          'Tu conductor ha llegado al punto de recogida. Por favor dirígete al vehículo.',
+          '¡Tu Conductor ha Llegado!',
+          undefined,
+          undefined,
+          5000
+        );
+      } else if (data.status === 'in_progress') {
+        playNotificationSound();
+        showStatus(
+          'info',
+          'El viaje ha iniciado. ¡Buen viaje!',
+          'Viaje en Curso',
+          undefined,
+          undefined,
+          3000
+        );
+      }
     },
-    [user?.role]
+    [user?.role, playNotificationSound, showStatus]
+  );
+
+  // Handler for ride:driver_arrived event (PASSENGER — explicit driver arrival)
+  const handleDriverArrived = useCallback(
+    (data: {
+      rideId: string;
+      status: 'arrived';
+      driverName: string;
+      arrivedAt: string;
+      timestamp: string;
+    }) => {
+      console.log('[GLOBAL_SOCKET] 🚗 Driver arrived event received:', data);
+      if (user?.role !== 'passenger') return;
+      playNotificationSound();
+      showStatus(
+        'info',
+        `${data.driverName} te está esperando en el punto de recogida.`,
+        '¡Tu Conductor Está Aquí!',
+        undefined,
+        undefined,
+        6000
+      );
+    },
+    [user?.role, playNotificationSound, showStatus]
   );
 
   // Handler for ride:eta_update event (PASSENGER — ETA updates, informational)
@@ -358,7 +411,7 @@ export const useGlobalSocketListeners = ({
         console.log('[GLOBAL_SOCKET]    ✓ ride:request_created registered (driver only)');
       }
 
-      // PASSENGER-ONLY — driver acceptance, status changes, ETA
+      // PASSENGER-ONLY — driver acceptance, status changes, ETA, driver arrived
       if (user.role === 'passenger') {
         socket.on('ride:accepted', handleRideAccepted);
         console.log('[GLOBAL_SOCKET]    ✓ ride:accepted registered (passenger only)');
@@ -368,6 +421,9 @@ export const useGlobalSocketListeners = ({
 
         socket.on('ride:eta_update', handleEtaUpdate);
         console.log('[GLOBAL_SOCKET]    ✓ ride:eta_update registered (passenger only)');
+
+        socket.on('ride:driver_arrived', handleDriverArrived);
+        console.log('[GLOBAL_SOCKET]    ✓ ride:driver_arrived registered (passenger only)');
       }
 
       // DEBUG: Listen to ALL events to see what's coming
@@ -594,6 +650,7 @@ export const useGlobalSocketListeners = ({
         currentSocket.off('ride:accepted', handleRideAccepted);
         currentSocket.off('ride:status_changed', handleRideStatusChanged);
         currentSocket.off('ride:eta_update', handleEtaUpdate);
+        currentSocket.off('ride:driver_arrived', handleDriverArrived);
         currentSocket.off('ride:completed', handleRideCompleted);
         if (connectHandlerRef.current) {
           currentSocket.off('connect', connectHandlerRef.current);
@@ -621,7 +678,7 @@ export const useGlobalSocketListeners = ({
       console.log('[GLOBAL_SOCKET]    listenersRegisteredRef reset to FALSE');
       console.log('[GLOBAL_SOCKET] ========== CLEANUP COMPLETE ==========');
     }
-  }, [isAuthenticated, user?.id, user?.role, handlePaymentCompleted, handleRideCancelled, handleRideRequest]);
+  }, [isAuthenticated, user?.id, user?.role, handlePaymentCompleted, handleRideCancelled, handleRideRequest, handleRideAccepted, handleRideStatusChanged, handleEtaUpdate, handleDriverArrived, handleRideCompleted]);
 
   // Re-register listeners when socket is fully recreated (e.g., after reconnectSocket destroy+create)
   useEffect(() => {

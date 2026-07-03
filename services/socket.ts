@@ -732,15 +732,18 @@ export const onRideAccepted = (
     };
     acceptedAt: string;
   }) => void
-): void => {
+): (() => void) => {
   if (!socket) {
     console.warn('Cannot listen for ride accepted: Socket not initialized');
-    return;
+    return () => {};
   }
 
-  // Remove any existing listeners for this event to prevent duplicates
-  socket.off('ride:accepted');
   socket.on('ride:accepted', callback);
+  return () => {
+    if (socket) {
+      socket.off('ride:accepted', callback);
+    }
+  };
 };
 
 /**
@@ -752,15 +755,18 @@ export const onRideStatusChanged = (
     status: 'pending' | 'accepted' | 'arrived' | 'in_progress' | 'completed' | 'cancelled';
     timestamp: string;
   }) => void
-): void => {
+): (() => void) => {
   if (!socket) {
     console.warn('Cannot listen for ride status: Socket not initialized');
-    return;
+    return () => {};
   }
 
-  // Remove any existing listeners for this event to prevent duplicates
-  socket.off('ride:status_changed');
   socket.on('ride:status_changed', callback);
+  return () => {
+    if (socket) {
+      socket.off('ride:status_changed', callback);
+    }
+  };
 };
 
 /**
@@ -773,15 +779,18 @@ export const onDriverLocationUpdate = (
     longitude: number;
     timestamp: string;
   }) => void
-): void => {
+): (() => void) => {
   if (!socket) {
     console.warn('Cannot listen for location updates: Socket not initialized');
-    return;
+    return () => {};
   }
 
-  // Remove any existing listeners for this event to prevent duplicates
-  socket.off('driver:location_update');
   socket.on('driver:location_update', callback);
+  return () => {
+    if (socket) {
+      socket.off('driver:location_update', callback);
+    }
+  };
 };
 
 /**
@@ -803,15 +812,18 @@ export const onETAUpdate = (
     };
     targetType: 'pickup' | 'destination';
   }) => void
-): void => {
+): (() => void) => {
   if (!socket) {
     console.warn('Cannot listen for ETA updates: Socket not initialized');
-    return;
+    return () => {};
   }
 
-  // Remove any existing listeners for this event to prevent duplicates
-  socket.off('ride:eta_update');
   socket.on('ride:eta_update', callback);
+  return () => {
+    if (socket) {
+      socket.off('ride:eta_update', callback);
+    }
+  };
 };
 
 /**
@@ -825,15 +837,18 @@ export const onDriverArrived = (
     arrivedAt: string;
     timestamp: string;
   }) => void
-): void => {
+): (() => void) => {
   if (!socket) {
     console.warn('Cannot listen for driver arrived: Socket not initialized');
-    return;
+    return () => {};
   }
 
-  // Remove any existing listeners for this event to prevent duplicates
-  socket.off('ride:driver_arrived');
   socket.on('ride:driver_arrived', callback);
+  return () => {
+    if (socket) {
+      socket.off('ride:driver_arrived', callback);
+    }
+  };
 };
 
 /**
@@ -853,14 +868,10 @@ export const onRideCancelled = (
 ): (() => void) => {
   if (!socket) {
     console.warn('Cannot listen for ride cancelled: Socket not initialized');
-    return () => {}; // Return no-op cleanup function
+    return () => {};
   }
 
-  // Remove any existing listeners for this event to prevent duplicates
-  socket.off('ride:cancelled');
   socket.on('ride:cancelled', callback);
-  
-  // Return cleanup function that removes this specific listener
   return () => {
     if (socket) {
       socket.off('ride:cancelled', callback);
@@ -885,14 +896,10 @@ export const onRideCompleted = (
 ): (() => void) => {
   if (!socket) {
     console.warn('Cannot listen for ride completed: Socket not initialized');
-    return () => {}; // Return no-op cleanup function
+    return () => {};
   }
 
-  // Remove any existing listeners for this event to prevent duplicates
-  socket.off('ride:completed');
   socket.on('ride:completed', callback);
-  
-  // Return cleanup function that removes this specific listener
   return () => {
     if (socket) {
       socket.off('ride:completed', callback);
