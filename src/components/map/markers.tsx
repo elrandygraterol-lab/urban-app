@@ -9,12 +9,13 @@ const BORDER = 3;
 // Los PNGs son pre-renderizados, evitando el bug de GPU
 // Mali/Exynos que ocurre al aplicar overflow + borderRadius
 // durante la conversion View -> textura OpenGL en Android.
+// TODOS los PNGs son 240x160 (mismas dimensiones).
 // ============================================================
 export const MARKER_ICONS = {
-  driverTaxi: require('../../assets/iconos-maps/conductor.png'),
-  passenger: require('../../assets/iconos-maps/pasajero.png'),
-  pickup: require('../../assets/iconos-maps/recogida.png'),
-  dropoff: require('../../assets/iconos-maps/destino.png'),
+  driverTaxi: require('../../../assets/iconos-maps/conductor.png'),
+  passenger: require('../../../assets/iconos-maps/pasajero.png'),
+  pickup: require('../../../assets/iconos-maps/recogida.png'),
+  dropoff: require('../../../assets/iconos-maps/destino.png'),
 };
 
 // ============================================================

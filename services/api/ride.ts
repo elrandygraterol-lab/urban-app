@@ -112,4 +112,6 @@ export const rideAPI = {
   }) => api.patch(`/api/rides/${rideId}/payment-method`, data),
 
   trackDelegatedRide: (rideId: string) => api.get(`/api/rides/delegate/${rideId}/track`),
+
+  getPendingRides: () => api.get('/api/rides/pending'),
 };

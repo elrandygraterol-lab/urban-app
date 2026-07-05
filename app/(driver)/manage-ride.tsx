@@ -134,13 +134,17 @@ export default function ManageRideScreen() {
         if (data?.displayName) {
           setPickup(prev => (prev ? { ...prev, address: data.displayName } : null));
         }
-      } catch {}
+      } catch {
+        console.error('[MANAGE_RIDE] Reverse geocode failed on init');
+      }
 
       try {
         const rateRes = await api.get('/api/fares/exchange-rate');
         const bcv = rateRes.data?.data?.bcv || rateRes.data?.bcv;
         if (bcv) setExchangeRate(Number(bcv));
-      } catch {}
+      } catch {
+        console.error('[MANAGE_RIDE] Exchange rate fetch failed');
+      }
     })();
   }, []);
 
@@ -187,7 +191,9 @@ export default function ManageRideScreen() {
           }
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        console.error('[MANAGE_RIDE] Route fetch failed');
+      })
       .finally(() => setLoadingRoute(false));
 
     // Fare estimate using zone fare matrix engine (same as passenger)
@@ -215,7 +221,9 @@ export default function ManageRideScreen() {
           setFareCurrency((data.currency || 'VES') as Currency);
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        console.error('[MANAGE_RIDE] Fare estimate failed');
+      })
       .finally(() => setLoadingFare(false));
   }, [destination, pickup]);
 
@@ -240,7 +248,9 @@ export default function ManageRideScreen() {
           setDestination(prev => (prev ? { ...prev, address: data.displayName } : null));
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        console.error('[MANAGE_RIDE] Reverse geocode on map press failed');
+      });
   };
 
   const handleSubmit = async () => {
@@ -261,6 +271,11 @@ export default function ManageRideScreen() {
         }
         if (!pagoMovilCedula) {
           showToast('Ingresa la cédula del pagador', 'error');
+          setSubmitting(false);
+          return;
+        }
+        if (!estimatedFare || estimatedFare <= 0) {
+          showToast('No se pudo calcular la tarifa. Verifica que el destino sea válido.', 'error');
           setSubmitting(false);
           return;
         }
@@ -295,6 +310,8 @@ export default function ManageRideScreen() {
         }
       }
 
+      // Si llegamos aquí, P2C fue exitoso o no aplica; validar tarifa antes del body
+
       const body: any = {
         vehicleType: 'taxi',
         pickupLatitude: pickup.latitude,
@@ -320,11 +337,10 @@ export default function ManageRideScreen() {
         body.beneficiaryName = beneficiaryName.trim();
       }
 
-      setIsAvailable(false);
-
       const res = await api.post('/api/rides/manual', body);
       const rideData = res.data?.data;
       if (rideData?.rideId) {
+        setIsAvailable(false);
         // Clear form state before navigating
         setDestSearchText('');
         setDestination(null);
@@ -338,6 +354,7 @@ export default function ManageRideScreen() {
         router.push(`/(driver)/active-ride?rideId=${rideData.rideId}&source=manual` as any);
       }
     } catch (err: any) {
+      setIsAvailable(true);
       const msg = err?.response?.data?.message || err?.message || 'Error al crear el viaje';
       showToast(msg, 'error');
     } finally {

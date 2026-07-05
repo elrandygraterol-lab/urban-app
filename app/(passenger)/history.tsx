@@ -23,12 +23,16 @@ import { setActiveTutorialScreen } from '@/utils/tutorialState';
 
 interface RideHistoryItem extends Ride {
   driver?: {
+    id: string;
     name: string;
+    phone: string;
     vehicleModel: string;
     licensePlate: string;
-    rating: number;
+    averageRating: number;
   };
   currency?: Currency;
+  distance?: number;
+  duration?: number;
   rating?: {
     rating: number;
     comment?: string;
@@ -36,6 +40,11 @@ interface RideHistoryItem extends Ride {
   conductorRating?: {
     rating: number;
     comment?: string;
+  } | null;
+  cancellation?: {
+    reason: string;
+    cancelledBy: string;
+    fee: number;
   } | null;
 }
 
@@ -273,7 +282,7 @@ export default function PassengerHistoryScreen() {
           {ride.driver && (
             <View style={styles.driverRating}>
               <Ionicons name="star" size={11} color="#f59e0b" />
-              <Text style={styles.driverRatingText}>{(ride.driver.rating ?? 0).toFixed(1)}</Text>
+              <Text style={styles.driverRatingText}>{(ride.driver.averageRating ?? 0).toFixed(1)}</Text>
             </View>
           )}
           {ride.conductorRating && (
@@ -378,16 +387,16 @@ export default function PassengerHistoryScreen() {
                   )}
                 </Text>
                 <View style={styles.detailStats}>
-                  {selectedRide.actualDistance != null && (
+                  {(selectedRide.distance ?? selectedRide.actualDistance) != null && (
                     <View style={styles.detailStat}>
                       <Ionicons name="map-outline" size={13} color="#9ca3af" />
-                      <Text style={styles.detailStatText}>{(selectedRide.actualDistance ?? 0).toFixed(1)} km</Text>
+                      <Text style={styles.detailStatText}>{(selectedRide.distance ?? selectedRide.actualDistance ?? 0).toFixed(1)} km</Text>
                     </View>
                   )}
-                  {selectedRide.actualDuration != null && (
+                  {(selectedRide.duration ?? selectedRide.actualDuration) != null && (
                     <View style={styles.detailStat}>
                       <Ionicons name="time-outline" size={13} color="#9ca3af" />
-                      <Text style={styles.detailStatText}>{selectedRide.actualDuration} min</Text>
+                      <Text style={styles.detailStatText}>{selectedRide.duration ?? selectedRide.actualDuration} min</Text>
                     </View>
                   )}
                 </View>
@@ -408,7 +417,7 @@ export default function PassengerHistoryScreen() {
                   <View style={styles.detailDriverRating}>
                     <Ionicons name="star" size={14} color="#f59e0b" />
                     <Text style={styles.detailDriverRatingText}>
-                      {(selectedRide.driver.rating ?? 0).toFixed(1)} promedio
+                      {(selectedRide.driver.averageRating ?? 0).toFixed(1)} promedio
                     </Text>
                   </View>
                 </View>

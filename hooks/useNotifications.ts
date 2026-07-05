@@ -310,7 +310,8 @@ export const useNotifications = () => {
           const isFcmPermanent =
             err.message?.includes('SERVICE_NOT_AVAILABLE') ||
             err.message?.includes('java.io.IOException') ||
-            err.message?.includes('ExecutionException');
+            err.message?.includes('ExecutionException') ||
+            err.message?.includes('FirebaseApp is not initialized');
 
           if (isFcmPermanent) {
             console.warn(

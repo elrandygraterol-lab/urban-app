@@ -2,8 +2,12 @@ import { useEffect, useState } from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
-import { InteractionManager } from 'react-native';
+import { InteractionManager, LogBox } from 'react-native';
 import 'react-native-reanimated';
+
+LogBox.ignoreLogs([
+  'Can\'t perform a React state update on a component that hasn\'t mounted yet',
+]);
 // import { CopilotProvider } from 'react-native-copilot';
 // import CopilotTooltip from '@/components/tutorial/CopilotTooltip';
 // import { handleTourEnd } from '@/utils/tutorialState';

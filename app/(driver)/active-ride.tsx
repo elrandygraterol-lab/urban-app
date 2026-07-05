@@ -1164,6 +1164,8 @@ export default function ActiveRideScreen() {
           fetchRide();
         }
 
+        setIsUpdatingStatus(false);
+
         const s = getSocket();
         if (s?.connected) {
           s.emit('ride:status_changed', { rideId, status: newStatus });

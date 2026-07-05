@@ -6,6 +6,7 @@
 
 import { useEffect, useCallback, useRef } from 'react';
 import { getSocket, connectSocket, addConnectionListener, removeConnectionListener } from '@/services/socket';
+import { rideAPI } from '@/services/api';
 import { useSound } from './useSound';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import { useExchangeRate } from './useExchangeRate';
@@ -32,6 +33,7 @@ export const useGlobalSocketListeners = ({
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const registerListenersRef = useRef<((s: any) => void) | null>(null);
   const setupDisconnectHandlerRef = useRef<((s: any) => void) | null>(null);
+  const fetchingPendingRef = useRef(false);
 
   // Handler for ride:request_created event (GLOBAL - works on any screen)
   const handleRideRequest = useCallback(
@@ -232,7 +234,7 @@ export const useGlobalSocketListeners = ({
         playNotificationSound();
         showStatus(
           'info',
-          'El viaje ha iniciado. ¡Buen viaje!',
+          'Tu viaje ha iniciado. ¡Buen viaje hacia tu destino!',
           'Viaje en Curso',
           undefined,
           undefined,
@@ -322,6 +324,25 @@ export const useGlobalSocketListeners = ({
     },
     [user?.role, playNotificationSound, showStatus]
   );
+
+  // ── DRIVER: Request pending rides on connect/reconnect ──────────
+  const fetchPendingRidesForDriver = useCallback(async () => {
+    if (user?.role !== 'driver' || fetchingPendingRef.current) return;
+    fetchingPendingRef.current = true;
+    try {
+      const res = await rideAPI.getPendingRides();
+      const pending = res.data?.data || res.data?.rides || [];
+      if (Array.isArray(pending) && pending.length > 0) {
+        for (const ride of pending) {
+          handleRideRequest(ride);
+        }
+      }
+    } catch {
+      // Silently ignore — the socket emit is the primary mechanism
+    } finally {
+      fetchingPendingRef.current = false;
+    }
+  }, [user?.role, handleRideRequest]);
 
   // Register global socket listeners
   useEffect(() => {
@@ -462,6 +483,16 @@ export const useGlobalSocketListeners = ({
         registeredSocketIdRef.current = null;
         console.log('[GLOBAL_SOCKET]    listenersRegisteredRef reset for reconnection');
         registerListeners(socket);
+
+        // ── Request pending rides ─────────────────────────────────
+        // Emit socket event so backend re-sends ride:request_created for active requests
+        if (user?.role === 'driver') {
+          socket.emit('driver:request_pending_rides');
+          console.log('[GLOBAL_SOCKET] 🚗 Emitted driver:request_pending_rides');
+
+          // Also call REST API as fallback
+          fetchPendingRidesForDriver();
+        }
       };
 
       socket.on('connect', connectHandlerRef.current);

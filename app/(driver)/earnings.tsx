@@ -186,6 +186,34 @@ function DriverEarningsScreenContent() {
       .reduce((sum, tx) => sum + tx.amount, 0);
   }, [transactions]);
 
+  const filteredTransactions = useMemo(() => {
+    if (dateFilter === 'all') return transactions;
+    const now = new Date();
+    let start: Date;
+    switch (dateFilter) {
+      case 'today':
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        break;
+      case 'week': {
+        start = new Date(now);
+        start.setDate(start.getDate() - start.getDay());
+        start.setHours(0, 0, 0, 0);
+        break;
+      }
+      case 'month':
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      default:
+        return transactions;
+    }
+    return transactions.filter(tx => new Date(tx.createdAt) >= start);
+  }, [transactions, dateFilter]);
+
+  const filteredTotalCount = useMemo(() => {
+    if (dateFilter === 'all') return totalTransactions;
+    return filteredTransactions.length;
+  }, [dateFilter, totalTransactions, filteredTransactions]);
+
   const avgPerRide = useMemo(() => {
     return totalTransactions > 0 && wallet ? wallet.balance / totalTransactions : 0;
   }, [totalTransactions, wallet]);
@@ -238,7 +266,7 @@ function DriverEarningsScreenContent() {
     <FlatList
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
-      data={transactions}
+      data={filteredTransactions}
       keyExtractor={(item, index) => `${item.id}-${index}`}
       refreshControl={
         <RefreshControl
@@ -397,11 +425,11 @@ function DriverEarningsScreenContent() {
           </View>
 
           {/* Transaction History Header */}
-          {transactions.length > 0 && (
+          {filteredTransactions.length > 0 && (
             <View style={styles.historyHeader}>
               <Text style={styles.historyTitle}>Historial de Transacciones</Text>
-              {totalTransactions > 0 && (
-                <Text style={styles.historyCount}>{totalTransactions} total</Text>
+              {filteredTotalCount > 0 && (
+                <Text style={styles.historyCount}>{filteredTotalCount} total</Text>
               )}
             </View>
           )}
@@ -417,20 +445,20 @@ function DriverEarningsScreenContent() {
       )}
       ItemSeparatorComponent={() => <View style={styles.separator} />}
       ListEmptyComponent={
-        isEmpty && dateFilter === 'all' ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="cash-outline" size={50} color={colors.lightGray} />
-            <Text style={styles.emptyText}>Sin ganancias aún</Text>
-            <Text style={styles.emptySubtext}>
-              Tus ganancias aparecerán aquí cuando completes viajes
-            </Text>
-          </View>
-        ) : isEmpty ? (
+        dateFilter !== 'all' && filteredTransactions.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="filter-outline" size={50} color={colors.lightGray} />
             <Text style={styles.emptyText}>Sin resultados</Text>
             <Text style={styles.emptySubtext}>
               No hay transacciones en este periodo para el filtro seleccionado
+            </Text>
+          </View>
+        ) : isEmpty ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="cash-outline" size={50} color={colors.lightGray} />
+            <Text style={styles.emptyText}>Sin ganancias aún</Text>
+            <Text style={styles.emptySubtext}>
+              Tus ganancias aparecerán aquí cuando completes viajes
             </Text>
           </View>
         ) : null
@@ -655,8 +683,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 16,
     borderRadius: 16,
-    padding: 16,
-    paddingBottom: 14,
+    padding: 20,
+    paddingBottom: 18,
+    minHeight: 200,
     shadowColor: '#059669',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
@@ -713,35 +742,35 @@ const styles = StyleSheet.create({
   cardBalanceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginTop: 2,
+    marginTop: 8,
     flexShrink: 1,
   },
   cardBalanceValue: {
-    fontSize: 26,
+    fontSize: 30,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 1,
+    letterSpacing: 1.5,
     fontVariant: ['tabular-nums'],
   },
   cardBalanceCurrency: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
     color: 'rgba(255, 255, 255, 0.5)',
     marginLeft: 8,
     letterSpacing: 2,
   },
   cardSecondaryBalance: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     color: 'rgba(255, 255, 255, 0.45)',
-    marginTop: 2,
+    marginTop: 6,
     letterSpacing: 0.5,
   },
   cardBottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    marginTop: 2,
+    marginTop: 10,
   },
   cardLabel: {
     fontSize: 10,

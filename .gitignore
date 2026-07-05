@@ -8,7 +8,8 @@ node_modules/
 dist/
 web-build/
 expo-env.d.ts
-
+@zhetazioas__app-taxis.jks
+keystore-creds.txt
 # Native
 .kotlin/
 *.orig.*

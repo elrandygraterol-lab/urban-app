@@ -85,6 +85,9 @@ export default function DriverProfileScreen() {
     bankTransferAccountType: 'Corriente',
   });
 
+  // Vehicle information
+  const [vehicleLabel, setVehicleLabel] = useState('');
+
   // Notification preferences
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>({
     rideRequests: true,
@@ -142,6 +145,13 @@ export default function DriverProfileScreen() {
             bankTransferAccount: profile.bankTransferAccount || '',
             bankTransferAccountType: profile.bankTransferAccountType || 'Corriente',
           });
+
+          // Load vehicle information
+          const typeLabel = profile.vehicleType === 'moto_taxi' ? 'Moto-Taxi' : 'Taxi';
+          const parts = [typeLabel];
+          if (profile.vehicleModel) parts.push(profile.vehicleModel);
+          if (profile.licensePlate) parts.push(profile.licensePlate);
+          setVehicleLabel(parts.join(' · '));
         }
       } catch (error) {
         console.log('Could not load driver availability:', error);
@@ -426,6 +436,7 @@ export default function DriverProfileScreen() {
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{user?.name || ''}</Text>
             <Text style={styles.profileRole}>{user?.role === 'driver' ? 'Conductor' : user?.role === 'passenger' ? 'Pasajero' : 'Propietario'}</Text>
+            {vehicleLabel ? <Text style={styles.profileVehicle}>{vehicleLabel}</Text> : null}
             {user?.rating !== undefined && (
               <View style={styles.profileRating}>
                 <Ionicons name="star" size={14} color="#f59e0b" />
@@ -1002,6 +1013,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6b7280',
     fontWeight: '500',
+  },
+  profileVehicle: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 1,
   },
   profileRating: {
     flexDirection: 'row',

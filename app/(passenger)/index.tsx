@@ -1090,9 +1090,6 @@ export default function PassengerHomeScreen() {
     const handleRideAccepted = (data: any) => {
       console.log('[PASSENGER] Ride accepted:', data);
 
-      // Play notification sound
-      playNotificationSound();
-
       setActiveRide(prev => ({
         ...prev!,
         status: 'accepted',
@@ -1106,15 +1103,7 @@ export default function PassengerHomeScreen() {
         setDriverLocation(data.driver.currentLocation);
       }
 
-      // Show ONE clear notification with driver name — give 3s to read before payment modal
-      const driverName = data.driver?.name || 'Tu conductor';
-      showStatus(
-        'ride_accepted',
-        `${driverName} ha aceptado tu viaje y se dirige hacia ti.`,
-        'Conductor en camino',
-      );
-
-      // Open payment modal after 3 seconds so passenger can read the notification
+      // Open payment modal after 3 seconds
       setFinalFare(estimatedFare || 0);
       setTimeout(() => setShowMobilePaymentModal(true), 3000);
     };
@@ -1135,36 +1124,6 @@ export default function PassengerHomeScreen() {
         status: data.status,
       }));
 
-      // Show native alerts for important status changes
-      if (data.status === 'arrived') {
-        playNotificationSound();
-        showStatus(
-          'info',
-          'Tu conductor está esperándote en el punto de recogida. Por favor dirígete al vehículo.',
-          'Tu Conductor ha Llegado',
-          undefined,
-          {
-            label: 'Ver Ubicación',
-            onPress: () => {
-              // Focus map on pickup location
-              if (pickupLocation && mapRef.current) {
-                mapRef.current.animateToRegion(
-                  {
-                    latitude: pickupLocation.latitude,
-                    longitude: pickupLocation.longitude,
-                    latitudeDelta: 0.01,
-                    longitudeDelta: 0.01,
-                  },
-                  1000
-                );
-              }
-            },
-          }
-        );
-      } else if (data.status === 'in_progress') {
-        playNotificationSound();
-        showToast('Buen viaje! Tu conductor te llevara a tu destino.', 'success');
-      }
       // Note: 'completed' status is handled by the dedicated handleRideCompleted event listener
     };
 
@@ -1279,34 +1238,7 @@ export default function PassengerHomeScreen() {
         status: 'arrived',
       }));
 
-      // Play notification sound
-      playNotificationSound();
-
-      // Show native alert with enhanced message
-      showStatus(
-        'info',
-        `${data.driverName} te está esperando en el punto de recogida.\n\n` +
-          `Por favor dirígete al vehículo. Si no lo ves, puedes llamarlo desde el panel.`,
-          '¡Tu Conductor Está Aquí!',
-        undefined,
-        {
-          label: 'Ver en Mapa',
-          onPress: () => {
-            // Focus map on pickup location if available
-            if (pickupLocation && mapRef.current) {
-              mapRef.current.animateToRegion(
-                {
-                  latitude: pickupLocation.latitude,
-                  longitude: pickupLocation.longitude,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                },
-                1000
-              );
-            }
-          },
-        }
-      );
+      // Notification handled globally via useGlobalSocketListeners
     };
 
     // Listen for ride cancelled event
@@ -1325,31 +1257,13 @@ export default function PassengerHomeScreen() {
 
       console.log('❌ Ride cancelled:', data);
 
-      // Play notification sound
-      playNotificationSound();
-
-      // Show native alert based on who cancelled
+      // Notification handled globally via useGlobalSocketListeners
       if (data.cancelledBy === 'system') {
-        showStatus(
-          'ride_cancelled',
-          data.cancellationReason ||
-            'Lo sentimos, no encontramos conductores disponibles en este momento.\n\n' +
-              'Por favor intenta nuevamente en unos minutos.',
-          'No Hay Conductores Disponibles'
-        );
-
         // Reset ride state
         setActiveRide(null);
         setDriverLocation(null);
         setIsSearchingDriver(false);
       } else if (data.cancelledBy === 'driver') {
-        showStatus(
-          'ride_cancelled',
-          `El conductor ha cancelado tu viaje.\n\n` +
-            `Motivo: ${data.cancellationReason || 'No especificado'}`,
-          'Conductor Canceló el Viaje'
-        );
-
         // Full reset — passenger goes back to the initial state (same as passenger-initiated cancel)
         setActiveRide(null);
         setDriverLocation(null);
@@ -1554,7 +1468,6 @@ export default function PassengerHomeScreen() {
   }, [activeRide?.status]);
   useEffect(() => {
     if (!activeRide || !driverLocation || !isDynamicRouteEnabled) return;
-    if (listenerVersion === 0) return;
 
     if (activeRide.status === 'accepted' && pickupLocation && routeCoordinates.length === 0) {
       updateDynamicRoute(driverLocation, pickupLocation);

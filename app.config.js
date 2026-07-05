@@ -1,7 +1,17 @@
 module.exports = ({ config }) => {
+  const profile = process.env.EAS_BUILD_PROFILE;
+  const appName = profile === 'production' ? 'UrbanTaxi SJ'
+    : profile === 'preview' ? 'UrbanTaxi PP'
+    : 'UrbanTaxi D';
+  const suffix = profile === 'production' ? ''
+    : profile === 'preview' ? '.preview'
+    : '.dev';
+  const packageName = `com.urbantaxi.app${suffix}`;
+  const isFirebaseEnabled = profile === 'production';
+
   return {
     ...config,
-    name: 'UrbanTaxi SJ',
+    name: appName,
     slug: 'app-taxis',
     version: '1.0.0',
     orientation: 'portrait',
@@ -10,13 +20,13 @@ module.exports = ({ config }) => {
     userInterfaceStyle: 'automatic',
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'com.urbantaxi.app',
-      googleServicesFile: './GoogleService-Info.plist',
+      bundleIdentifier: packageName,
+      googleServicesFile: isFirebaseEnabled ? './GoogleService-Info.plist' : undefined,
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
-          'UrbanTaxi SJ necesita acceso a tu ubicación para mostrarte en el mapa, encontrar conductores cercanos, calcular tarifas y rutas.',
+          `${appName} necesita acceso a tu ubicación para mostrarte en el mapa, encontrar conductores cercanos, calcular tarifas y rutas.`,
         NSLocationAlwaysAndWhenInUseUsageDescription:
-          'UrbanTaxi SJ necesita acceso a tu ubicación incluso en segundo plano para compartir tu posición en tiempo real con el conductor durante el viaje y con el pasajero cuando conducas, garantizando un servicio seguro y preciso.',
+          `${appName} necesita acceso a tu ubicación incluso en segundo plano para compartir tu posición en tiempo real con el conductor durante el viaje y con el pasajero cuando conducas, garantizando un servicio seguro y preciso.`,
         UIBackgroundModes: ['location', 'fetch', 'remote-notification'],
       },
       config: {
@@ -24,9 +34,9 @@ module.exports = ({ config }) => {
       },
     },
     android: {
-      versionCode: 4,
-      package: 'com.urbantaxi.app',
-      googleServicesFile: './google-services.json',
+      versionCode: 5,
+      package: packageName,
+      googleServicesFile: isFirebaseEnabled ? './google-services.json' : undefined,
       adaptiveIcon: {
         backgroundColor: '#E6F4FE',
         foregroundImage: './assets/images/android-icon-foreground.png',
@@ -83,9 +93,9 @@ module.exports = ({ config }) => {
         'expo-location',
         {
           locationAlwaysAndWhenInUsePermission:
-            'UrbanTaxi SJ necesita acceso a tu ubicación incluso en segundo plano para compartir tu posición en tiempo real con el conductor durante el viaje y con el pasajero cuando conducas, garantizando un servicio seguro y preciso.',
+            `${appName} necesita acceso a tu ubicación incluso en segundo plano para compartir tu posición en tiempo real con el conductor durante el viaje y con el pasajero cuando conducas, garantizando un servicio seguro y preciso.`,
           locationWhenInUsePermission:
-            'UrbanTaxi SJ necesita acceso a tu ubicación para mostrarte en el mapa, encontrar conductores cercanos, calcular tarifas y rutas.',
+            `${appName} necesita acceso a tu ubicación para mostrarte en el mapa, encontrar conductores cercanos, calcular tarifas y rutas.`,
           isAndroidBackgroundLocationEnabled: true,
         },
       ],
@@ -94,10 +104,10 @@ module.exports = ({ config }) => {
         {
           icon: './assets/images/icon.png',
           color: '#22c55e',
-          androidCollapsedTitle: 'UrbanTaxi SJ',
+          androidCollapsedTitle: appName,
         },
       ],
-      '@react-native-firebase/app',
+      ...(isFirebaseEnabled ? ['@react-native-firebase/app'] : []),
       'expo-audio',
       './plugins/withRemoveRecordAudioPermission',
     ],
