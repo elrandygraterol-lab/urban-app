@@ -19,7 +19,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { Colors } from '@/constants/theme';
 import api from '@/services/api';
 import { getRoute } from '@/services/mapsService';
-import { MARKER_ICONS } from '@/src/components/map/markers';
+import { DriverTaxiIcon, DropoffIcon, PickupIcon } from '@/src/components/map/markers';
 import { useDriverStore } from '@/store/driverStore';
 import { formatCurrency, Currency } from '@/utils/currency';
 import CenterLocationButton from '@/components/CenterLocationButton';
@@ -429,11 +429,14 @@ export default function ManageRideScreen() {
                   anchor={{ x: 0.5, y: 0.5 }}
                   flat={false}
                   rotation={0}
-                  icon={MARKER_ICONS.driverTaxi}
-                />
+                >
+                  <DriverTaxiIcon />
+                </Marker>
               )}
               {destination && (
-                <Marker coordinate={destination} title="Destino" anchor={{ x: 0.5, y: 0.5 }} icon={MARKER_ICONS.dropoff} />
+                <Marker coordinate={destination} title="Destino" anchor={{ x: 0.5, y: 0.5 }}>
+                <DropoffIcon />
+              </Marker>
               )}
               {routeCoordinates.length > 0 && (
                 <Polyline

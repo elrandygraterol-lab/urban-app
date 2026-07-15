@@ -68,7 +68,7 @@ export const rideAPI = {
   ): Promise<CancelRideResponse> => {
     try {
       const response = await api.post<CancelRideResponse>(
-        `/api/rides/${rideId}/cancel`,
+        `/api/rides/${rideId}/cancel-with-policy`,
         data || {},
         { timeout: CANCELLATION_TIMEOUT }
       );

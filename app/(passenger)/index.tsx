@@ -24,7 +24,10 @@ import { getLocation } from '@/utils/lazyLocation';
 import type { LocationSubscription } from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  MARKER_ICONS,
+  DriverTaxiIcon,
+  PassengerIcon,
+  PickupIcon,
+  DropoffIcon,
   SecondPickupIcon,
   SecondDropoffIcon,
 } from '@/src/components/map/markers';
@@ -48,8 +51,8 @@ import {
   onSharedRideInvitationAccepted,
   onSharedRideInvitationRejected,
   onSharedRideInvitationExpired,
-  onPassengerLocationUpdate,
-  removeAllListeners,
+  onRoutePointCompleted,
+  removeRideListeners,
 } from '@/services/socket';
 import { logInfo, logError, logWarning } from '@/utils/errorLogger';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -202,6 +205,7 @@ export default function PassengerHomeScreen() {
   // UI states
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
   const [isRequestingRide, setIsRequestingRide] = useState(false);
+  const isRequestingRideRef = useRef(false);
   const [isSearchingDriver, setIsSearchingDriver] = useState(false);
   const [userInteractedWithMap, setUserInteractedWithMap] = useState(false);
 
@@ -283,6 +287,7 @@ export default function PassengerHomeScreen() {
     'Otra razón',
   ];
   const [isCancelling, setIsCancelling] = useState(false);
+  const isCancellingRef = useRef(false);
   const [, setCancellationFeeWarning] = useState<string | null>(null);
 
   const driverCoord = useMemo(
@@ -351,16 +356,58 @@ export default function PassengerHomeScreen() {
   const insets = useSafeAreaInsets();
 
   // Restaurar viaje activo al montar, cuando el token esta listo, y al volver a primer plano
-  const restoreAttemptedRef = useRef(false);
   const ratingShownForRideRef = useRef<string | null>(null);
+  const acceptedRideIdRef = useRef<string | null>(null);
   const rideCleanupRefs = useRef<Record<string, () => void>>({});
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeRideRef = useRef<any>(null);
+  const paymentTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const estimatedFareRef = useRef<number | null>(null);
+  const currentInvitationRef = useRef<SharedRideInvitation | null>(null);
+  const pickupLocationRef = useRef<LocationCoords | null>(null);
+  const destinationLocationRef = useRef<LocationCoords | null>(null);
+  const routeCoordinatesRef = useRef<RouteCoordinates[]>([]);
+  const hasShownNearbyNotificationRef = useRef(false);
+  const isDynamicRouteEnabledRef = useRef(true);
+  const lastRouteUpdateRef = useRef<number>(0);
+  const initialDistanceToDestinationRef = useRef<number>(0);
+  const lastRouteUpdateLocationRef = useRef<LocationCoords | null>(null);
+  const fareCurrencyRef = useRef<Currency>('VES');
+  const fareBreakdownRef = useRef<{ exchangeRate?: number } | null>(null);
+  const currentLocationRef = useRef<LocationCoords | null>(null);
 
-  // Keep activeRideRef in sync with state — used inside restoreActiveRide to avoid stale closure
+  // Keep refs in sync with state — avoids stale closures in socket handlers
   useEffect(() => {
     activeRideRef.current = activeRide;
   }, [activeRide]);
+
+  useEffect(() => {
+    estimatedFareRef.current = estimatedFare;
+  }, [estimatedFare]);
+
+  useEffect(() => {
+    pickupLocationRef.current = pickupLocation;
+  }, [pickupLocation]);
+
+  useEffect(() => {
+    destinationLocationRef.current = destinationLocation;
+  }, [destinationLocation]);
+
+  useEffect(() => {
+    routeCoordinatesRef.current = routeCoordinates;
+  }, [routeCoordinates]);
+
+  useEffect(() => {
+    fareCurrencyRef.current = fareCurrency;
+  }, [fareCurrency]);
+
+  useEffect(() => {
+    fareBreakdownRef.current = fareBreakdown;
+  }, [fareBreakdown]);
+
+  useEffect(() => {
+    currentLocationRef.current = currentLocation;
+  }, [currentLocation]);
 
   useEffect(() => {
     if (!token) return;
@@ -380,7 +427,6 @@ export default function PassengerHomeScreen() {
               }
               setActiveRide(prev => {
                 if (prev && prev.id === ride.id) return prev;
-                restoreAttemptedRef.current = true;
                 return ride;
               });
               // Restaurar direcciones y coordenadas
@@ -634,6 +680,7 @@ export default function PassengerHomeScreen() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showMobilePaymentModal, setShowMobilePaymentModal] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const isProcessingPaymentRef = useRef(false);
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [finalFare, setFinalFare] = useState<number | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<
@@ -651,6 +698,7 @@ export default function PassengerHomeScreen() {
   const [driverRating, setDriverRating] = useState(0);
   const [driverComment, setDriverComment] = useState('');
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+  const isSubmittingRatingRef = useRef(false);
 
   // Contact modal states
   const [showContactModal, setShowContactModal] = useState(false);
@@ -659,17 +707,37 @@ export default function PassengerHomeScreen() {
   const [showInvitationModal, setShowInvitationModal] = useState(false);
   const [currentInvitation, setCurrentInvitation] = useState<SharedRideInvitation | null>(null);
 
+  useEffect(() => {
+    currentInvitationRef.current = currentInvitation;
+  }, [currentInvitation]);
+
   // Notification tracking - to avoid showing "driver nearby" notification multiple times
   const [hasShownNearbyNotification, setHasShownNearbyNotification] = useState(false);
+
+  useEffect(() => {
+    hasShownNearbyNotificationRef.current = hasShownNearbyNotification;
+  }, [hasShownNearbyNotification]);
 
   // ========== MEJORAS DE NAVEGACIÓN ==========
   // Mejora 1: Actualización dinámica de ruta
   const [isDynamicRouteEnabled] = useState(true);
   const [lastRouteUpdate, setLastRouteUpdate] = useState<number>(0);
 
+  useEffect(() => {
+    isDynamicRouteEnabledRef.current = isDynamicRouteEnabled;
+  }, [isDynamicRouteEnabled]);
+
+  useEffect(() => {
+    lastRouteUpdateRef.current = lastRouteUpdate;
+  }, [lastRouteUpdate]);
+
   // Mejora 2: Indicador de progreso visual
   const [rideProgress, setRideProgress] = useState<number>(0); // 0-100%
   const [initialDistanceToDestination, setInitialDistanceToDestination] = useState<number>(0);
+
+  useEffect(() => {
+    initialDistanceToDestinationRef.current = initialDistanceToDestination;
+  }, [initialDistanceToDestination]);
 
   // Mejora 3: Puntos de interés en la ruta
   const [nearbyLandmarks, setNearbyLandmarks] = useState<
@@ -1033,7 +1101,7 @@ export default function PassengerHomeScreen() {
     // Cleanup on unmount
     return () => {
       mounted = false;
-      removeAllListeners();
+      removeRideListeners();
       // Don't disconnect socket here - keep it alive for the session
     };
   }, [user, token]); // Depend on both user AND token
@@ -1070,24 +1138,32 @@ export default function PassengerHomeScreen() {
     const socket = getSocket();
     const handleReconnect = () => {
       console.log('[PASSENGER] Socket reconnected, re-joining ride room and re-registering listeners');
-      socket?.emit('join_ride', { rideId: activeRide.id });
+      if (activeRideRef.current?.id) {
+        socket?.emit('join_ride', { rideId: activeRideRef.current.id });
+      }
       // Clean up stale listeners from previous connection, then re-register fresh ones
       Object.values(rideCleanupRefs.current).forEach(fn => fn());
       rideCleanupRefs.current = {};
       rideCleanupRefs.current.rideAccepted = onRideAccepted(handleRideAccepted);
       rideCleanupRefs.current.rideStatusChanged = onRideStatusChanged(handleRideStatusChanged);
       rideCleanupRefs.current.driverLocationUpdate = onDriverLocationUpdate(handleDriverLocationUpdate);
-      rideCleanupRefs.current.passengerLocationUpdate = onPassengerLocationUpdate(handlePassengerLocationUpdate);
       rideCleanupRefs.current.etaUpdate = onETAUpdate(handleETAUpdate);
       rideCleanupRefs.current.driverArrived = onDriverArrived(handleDriverArrived);
       rideCleanupRefs.current.rideCancelled = onRideCancelled(handleRideCancelled);
       rideCleanupRefs.current.rideCompleted = onRideCompleted(handleRideCompleted);
+      rideCleanupRefs.current.routePointCompleted = onRoutePointCompleted(handleRoutePointCompleted);
       console.log('[PASSENGER] ✅ Listeners re-registered after reconnect');
+      // Bump listenerVersion to trigger re-registration of shared ride invitation handlers
+      setListenerVersion(v => v + 1);
     };
     socket?.on('connect', handleReconnect);
 
     // Listen for ride accepted event
     const handleRideAccepted = (data: any) => {
+      // Guard: prevent double processing from ride room + emitToUser
+      if (acceptedRideIdRef.current === data.rideId) return;
+      acceptedRideIdRef.current = data.rideId;
+
       console.log('[PASSENGER] Ride accepted:', data);
 
       setActiveRide(prev => ({
@@ -1098,14 +1174,24 @@ export default function PassengerHomeScreen() {
 
       setIsSearchingDriver(false);
 
+      // Clear search timeout — ride was accepted so no need to auto-cancel
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+
       // Update driver location on map
       if (data.driver?.currentLocation) {
         setDriverLocation(data.driver.currentLocation);
       }
 
       // Open payment modal after 3 seconds
-      setFinalFare(estimatedFare || 0);
-      setTimeout(() => setShowMobilePaymentModal(true), 3000);
+      setFinalFare(estimatedFareRef.current || 0);
+      if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
+      paymentTimeoutRef.current = setTimeout(() => {
+        if (activeRideRef.current?.paymentMode === 'cash') return;
+        setShowMobilePaymentModal(true);
+      }, 3000);
     };
 
     // Listen for ride status changes
@@ -1114,8 +1200,14 @@ export default function PassengerHomeScreen() {
 
       // Guard: if activeRide was already cleared (e.g., after rating),
       // don't create a zombie object — just ignore the event
-      if (!activeRide?.id) {
+      if (!activeRideRef.current?.id) {
         console.log('[PASSENGER] ride:status_changed ignored — no active ride');
+        return;
+      }
+
+      // Ignore arrived/completed — handled by dedicated listeners
+      if (data.status === 'arrived' || data.status === 'completed') {
+        console.log(`[PASSENGER] ride:status_changed ignored — ${data.status} handled by dedicated listener`);
         return;
       }
 
@@ -1123,8 +1215,6 @@ export default function PassengerHomeScreen() {
         ...prev!,
         status: data.status,
       }));
-
-      // Note: 'completed' status is handled by the dedicated handleRideCompleted event listener
     };
 
     // Listen for driver location updates
@@ -1153,44 +1243,38 @@ export default function PassengerHomeScreen() {
       // ========== ACTUALIZACIÓN DINÁMICA DE RUTA ==========
       // Durante 'accepted': ruta conductor → recogida (para ETA/distance precisos por OSRM)
       // Durante 'in_progress': ruta conductor → destino
-      if (isDynamicRouteEnabled) {
-        if (activeRide?.status === 'accepted' && pickupLocation && (Date.now() - lastRouteUpdate > 30000 || routeCoordinates.length === 0)) {
-          updateDynamicRoute(newDriverLocation, pickupLocation);
-        } else if (activeRide?.status === 'in_progress' && destinationLocation && (Date.now() - lastRouteUpdate > 30000 || routeCoordinates.length === 0)) {
-          updateDynamicRoute(newDriverLocation, destinationLocation);
+      const currentStatus = activeRideRef.current?.status;
+      const pkUp = pickupLocationRef.current;
+      const dest = destinationLocationRef.current;
+      if (isDynamicRouteEnabledRef.current) {
+        const timeSinceLastUpdate = Date.now() - lastRouteUpdateRef.current;
+        const needsImmediate = routeCoordinatesRef.current.length === 0;
+        const lastUpdateLoc = lastRouteUpdateLocationRef.current;
+        let hasMovedEnough = true;
+        if (lastUpdateLoc && timeSinceLastUpdate < 10000) {
+          const dLat = newDriverLocation.latitude - lastUpdateLoc.latitude;
+          const dLng = (newDriverLocation.longitude - lastUpdateLoc.longitude) * Math.cos(newDriverLocation.latitude * Math.PI / 180);
+          const distMeters = Math.sqrt(dLat * dLat + dLng * dLng) * 111320;
+          hasMovedEnough = distMeters > 50;
+        }
+        if (timeSinceLastUpdate > 10000 || needsImmediate || hasMovedEnough) {
+          if (currentStatus === 'accepted' && pkUp) {
+            lastRouteUpdateLocationRef.current = newDriverLocation;
+            updateDynamicRoute(newDriverLocation, pkUp);
+          } else if (currentStatus === 'in_progress' && dest) {
+            lastRouteUpdateLocationRef.current = newDriverLocation;
+            updateDynamicRoute(newDriverLocation, dest);
+          }
         }
       }
 
       // ========== MEJORA 2: Calcular Progreso del Viaje ==========
       if (
-        activeRide?.status === 'in_progress' &&
-        destinationLocation &&
-        initialDistanceToDestination > 0
+        currentStatus === 'in_progress' &&
+        dest &&
+        initialDistanceToDestinationRef.current > 0
       ) {
-        calculateRideProgress(newDriverLocation, destinationLocation);
-      }
-    };
-
-    // Listen for passenger location updates in shared rides (Req. 4.10)
-    const handlePassengerLocationUpdate = (data: any) => {
-      console.log('📍 Passenger location update:', data);
-
-      // Only process if this is a shared ride
-      if (!activeRide?.isShared) {
-        return;
-      }
-
-      // Update the appropriate passenger location based on passengerNumber
-      if (data.passengerNumber === 1) {
-        setPassenger1Location({
-          latitude: data.latitude,
-          longitude: data.longitude,
-        });
-      } else if (data.passengerNumber === 2) {
-        setPassenger2Location({
-          latitude: data.latitude,
-          longitude: data.longitude,
-        });
+        calculateRideProgress(newDriverLocation, dest);
       }
     };
 
@@ -1211,12 +1295,13 @@ export default function PassengerHomeScreen() {
 
       // Show "driver nearby" notification when driver is close (2 minutes or less, and only for accepted status)
       if (
-        !hasShownNearbyNotification &&
-        activeRide?.status === 'accepted' &&
+        !hasShownNearbyNotificationRef.current &&
+        activeRideRef.current?.status === 'accepted' &&
         estimatedMinutes <= 2 &&
         estimatedMinutes > 0
       ) {
         setHasShownNearbyNotification(true);
+        hasShownNearbyNotificationRef.current = true;
         playNotificationSound();
 
         showStatus(
@@ -1225,6 +1310,17 @@ export default function PassengerHomeScreen() {
             `Preparate para abordar el vehiculo.`,
           'Tu conductor esta cerca'
         );
+      }
+    };
+
+    // Listen for route point completed (multi-point ride progress)
+    const handleRoutePointCompleted = (data: any) => {
+      console.log('[PASSENGER] Route point completed:', data);
+      if (data.nextPoint) {
+        const label = data.nextPoint.pointType === 'pickup' ? 'parada' : 'destino';
+        showToast(`Avanzando a la siguiente ${label}`, 'info', 3000);
+      } else {
+        showToast('Última parada completada, en camino al destino final', 'info', 3000);
       }
     };
 
@@ -1238,19 +1334,28 @@ export default function PassengerHomeScreen() {
         status: 'arrived',
       }));
 
-      // Notification handled globally via useGlobalSocketListeners
+      playNotificationSound();
+      const arrivedDriverName = activeRideRef.current?.driver?.name || 'Tu conductor';
+      showStatus(
+        'success',
+        `${arrivedDriverName} ha llegado al punto de recogida.`,
+        '📍 Conductor en el Punto de Recogida',
+        undefined,
+        undefined,
+        5000
+      );
     };
 
     // Listen for ride cancelled event
     const handleRideCancelled = (data: any) => {
       // CRITICAL: Only handle cancellation for the CURRENT active ride
       // Otherwise, an auto-cancelled previous ride will wipe the active ride's state
-      if (data.rideId !== activeRide?.id) {
+      if (data.rideId !== activeRideRef.current?.id) {
         console.log(
           '❌ Cancellation for different ride, ignoring. Cancelled:',
           data.rideId,
           'Active:',
-          activeRide?.id
+          activeRideRef.current?.id
         );
         return;
       }
@@ -1259,11 +1364,37 @@ export default function PassengerHomeScreen() {
 
       // Notification handled globally via useGlobalSocketListeners
       if (data.cancelledBy === 'system') {
+        if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
         // Reset ride state
         setActiveRide(null);
         setDriverLocation(null);
         setIsSearchingDriver(false);
+        setPaymentCompleted(false);
+        setShowMobilePaymentModal(false);
+        setShowPaymentModal(false);
+        setShowRatingModal(false);
+        setFinalFare(null);
+        setPaymentMethod('cash');
+        setCancelReason('');
+        setRouteCoordinates([]);
+        setNearestRouteIndex(0);
+        setDisplayDistance(null);
+        setDisplayDuration(null);
+        prevDriverLocationRef.current = null;
+        setPickupLocation(null);
+        setPickupAddress('');
+        setPickupFullAddress('');
+        setDestinationLocation(null);
+        setDestinationAddress('');
+        setDestinationFullAddress('');
+        setEstimatedFare(null);
+        setFareBreakdown(null);
+        setIsCalculatingFare(false);
+        setZoneInfo(null);
+        setHasShownNearbyNotification(false);
+        acceptedRideIdRef.current = null;
       } else if (data.cancelledBy === 'driver') {
+        if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
         // Full reset — passenger goes back to the initial state (same as passenger-initiated cancel)
         setActiveRide(null);
         setDriverLocation(null);
@@ -1294,11 +1425,12 @@ export default function PassengerHomeScreen() {
         setHasShownNearbyNotification(false);
 
         // Center map on user's current location
-        if (currentLocation && mapRef.current) {
+        const loc = currentLocationRef.current;
+        if (loc && mapRef.current) {
           mapRef.current.animateToRegion(
             {
-              latitude: currentLocation.latitude,
-              longitude: currentLocation.longitude,
+              latitude: loc.latitude,
+              longitude: loc.longitude,
               latitudeDelta: 0.01,
               longitudeDelta: 0.01,
             },
@@ -1307,14 +1439,16 @@ export default function PassengerHomeScreen() {
         }
 
         // Auto-set pickup to current location so user can start a new request immediately
-        if (currentLocation) {
-          setPickupLocation(currentLocation);
+        if (loc) {
+          setPickupLocation(loc);
         }
+        acceptedRideIdRef.current = null;
       } else if (data.cancelledBy === 'passenger') {
+        if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
         // Show cancellation fee if applicable
         const feeMessage =
           data.cancellationFee > 0
-            ? `\n\nTarifa de cancelación aplicada: ${formatCurrency(data.cancellationFee, fareCurrency)}`
+            ? `\n\nTarifa de cancelación aplicada: ${formatCurrency(data.cancellationFee, fareCurrencyRef.current)}`
             : '';
 
         showToast(`Tu viaje ha sido cancelado exitosamente.${feeMessage}`, 'info');
@@ -1323,6 +1457,30 @@ export default function PassengerHomeScreen() {
         setActiveRide(null);
         setDriverLocation(null);
         setIsSearchingDriver(false);
+        setRouteCoordinates([]);
+        setNearestRouteIndex(0);
+        setDisplayDistance(null);
+        setDisplayDuration(null);
+        prevDriverLocationRef.current = null;
+        setPickupLocation(null);
+        setPickupAddress('');
+        setPickupFullAddress('');
+        setDestinationLocation(null);
+        setDestinationAddress('');
+        setDestinationFullAddress('');
+        setEstimatedFare(null);
+        setFareBreakdown(null);
+        setIsCalculatingFare(false);
+        setZoneInfo(null);
+        setHasShownNearbyNotification(false);
+        setPaymentCompleted(false);
+        setShowMobilePaymentModal(false);
+        setShowPaymentModal(false);
+        setShowRatingModal(false);
+        setFinalFare(null);
+        setPaymentMethod('cash');
+        setCancelReason('');
+        acceptedRideIdRef.current = null;
       }
     };
 
@@ -1331,12 +1489,12 @@ export default function PassengerHomeScreen() {
       console.log('[PASSENGER] ========================================');
       console.log('[PASSENGER] ✅ RIDE COMPLETED EVENT RECEIVED');
       console.log('[PASSENGER]    Ride ID:', data.rideId);
-      console.log('[PASSENGER]    Current Active Ride ID:', activeRide?.id);
+      console.log('[PASSENGER]    Current Active Ride ID:', activeRideRef.current?.id);
       console.log('[PASSENGER]    Final Fare:', data.finalFare);
       console.log('[PASSENGER] ========================================');
 
       // Guard: only process for current active ride
-      if (data.rideId !== activeRide?.id) {
+      if (data.rideId !== activeRideRef.current?.id) {
         console.log('[PASSENGER] Ride completed for different ride, ignoring');
         return;
       }
@@ -1348,6 +1506,9 @@ export default function PassengerHomeScreen() {
       }
       ratingShownForRideRef.current = data.rideId;
 
+      // Clear payment timeout — ride is done, no modal needed
+      if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
+
       // Store final fare
       setFinalFare(data.finalFare);
 
@@ -1358,15 +1519,17 @@ export default function PassengerHomeScreen() {
       setActiveRide((prev: any) => prev ? { ...prev, status: 'completed' } : null);
 
       // Show text-only notification — no buttons
-      const dualInfo = fareBreakdown?.exchangeRate && fareBreakdown.exchangeRate > 0
-        ? fareCurrency === 'USD'
-          ? `\n≈ Bs. ${(data.finalFare * fareBreakdown.exchangeRate).toFixed(2)}`
-          : `\n≈ $ ${(data.finalFare / fareBreakdown.exchangeRate).toFixed(2)}`
+      const fb = fareBreakdownRef.current;
+      const fc = fareCurrencyRef.current;
+      const dualInfo = fb?.exchangeRate && fb.exchangeRate > 0
+        ? fc === 'USD'
+          ? `\n≈ Bs. ${(data.finalFare * fb.exchangeRate).toFixed(2)}`
+          : `\n≈ $ ${(data.finalFare / fb.exchangeRate).toFixed(2)}`
         : '';
 
       showStatus(
         'success',
-        `Tu viaje ha finalizado exitosamente.\n\nTarifa Final: ${formatCurrency(data.finalFare, fareCurrency)}${dualInfo}`,
+        `Tu viaje ha finalizado exitosamente.\n\nTarifa Final: ${formatCurrency(data.finalFare, fc)}${dualInfo}`,
         'Viaje Completado',
         undefined,
         undefined,
@@ -1382,11 +1545,11 @@ export default function PassengerHomeScreen() {
     rideCleanupRefs.current.rideAccepted = onRideAccepted(handleRideAccepted);
     rideCleanupRefs.current.rideStatusChanged = onRideStatusChanged(handleRideStatusChanged);
     rideCleanupRefs.current.driverLocationUpdate = onDriverLocationUpdate(handleDriverLocationUpdate);
-    rideCleanupRefs.current.passengerLocationUpdate = onPassengerLocationUpdate(handlePassengerLocationUpdate);
     rideCleanupRefs.current.etaUpdate = onETAUpdate(handleETAUpdate);
     rideCleanupRefs.current.driverArrived = onDriverArrived(handleDriverArrived);
     rideCleanupRefs.current.rideCancelled = onRideCancelled(handleRideCancelled);
     rideCleanupRefs.current.rideCompleted = onRideCompleted(handleRideCompleted);
+    rideCleanupRefs.current.routePointCompleted = onRoutePointCompleted(handleRoutePointCompleted);
     console.log('[PASSENGER] ✅ All socket event listeners registered');
 
     // Cleanup listeners when ride ends or component unmounts
@@ -1406,20 +1569,32 @@ export default function PassengerHomeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRide?.id, listenerVersion]); // Re-run when ride changes OR app returns to foreground
 
-  // Polling fallback — refreshes ride status every 5s when ride is active
+  // Polling fallback - refreshes ride status every 5s when ride is active
   // Ensures the passenger catches status updates even if socket events are missed
   useEffect(() => {
     if (!activeRide || !activeRide.id) return;
-    const activeStatuses = ['pending', 'accepted', 'arrived', 'in_progress'];
+    const activeStatuses = ['pending', 'accepted', 'arrived', 'in_progress', 'completed'];
     if (!activeStatuses.includes(activeRide.status)) return;
 
     const interval = setInterval(async () => {
       try {
-        const res = await rideAPI.getRide(activeRide.id);
+        const currentId = activeRideRef.current?.id;
+        const currentStatus = activeRideRef.current?.status;
+        if (!currentId) return;
+        const res = await rideAPI.getRide(currentId);
         const updated = res.data?.data || res.data;
-        if (updated && updated.status && updated.status !== activeRide.status) {
-          console.log('[PASSENGER] ⚡ Polling caught status change:', activeRide.status, '→', updated.status);
-          setActiveRide(prev => prev ? { ...prev, status: updated.status, ...updated } : updated);
+        if (updated && updated.status && updated.status !== currentStatus) {
+          console.log('[PASSENGER] Polling caught status change:', currentStatus, '->', updated.status);
+          setActiveRide(prev => prev ? {
+            ...prev,
+            status: updated.status || prev.status,
+            ...(updated.finalFare !== undefined ? { finalFare: updated.finalFare } : {}),
+            ...(updated.actualDistanceKm !== undefined ? { actualDistanceKm: updated.actualDistanceKm } : {}),
+            ...(updated.actualDurationMinutes !== undefined ? { actualDurationMinutes: updated.actualDurationMinutes } : {}),
+            ...(updated.driver !== undefined ? { driver: updated.driver } : {}),
+            ...(updated.completedAt ? { completedAt: updated.completedAt } : {}),
+            ...(updated.cancelledAt ? { cancelledAt: updated.cancelledAt } : {}),
+          } : updated);
         }
       } catch {
         // Silently ignore polling errors
@@ -1427,7 +1602,7 @@ export default function PassengerHomeScreen() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [activeRide?.id, activeRide?.status]);
+  }, [activeRide?.id]); // Only depend on rideId — polling runs continuously for the same ride
 
   // Network recovery — when internet comes back, refresh ride state
   useNetworkRecovery(() => {
@@ -1456,16 +1631,17 @@ export default function PassengerHomeScreen() {
     }).catch(() => {});
   });
 
-  // Clear route when driver arrives — route was driver→pickup, no longer needed
+  // Clear route when ride ends completely (cancelled or dismissed)
   useEffect(() => {
     if (!activeRide) return;
-    if (activeRide.status === 'arrived' && routeCoordinates.length > 0) {
+    if ((activeRide.status === 'cancelled' || !activeRide.status) && routeCoordinates.length > 0) {
       setRouteCoordinates([]);
       setNearestRouteIndex(0);
       setDisplayDistance(null);
       setDisplayDuration(null);
     }
   }, [activeRide?.status]);
+  // Fetch route when status transitions to in_progress — driver→destination
   useEffect(() => {
     if (!activeRide || !driverLocation || !isDynamicRouteEnabled) return;
 
@@ -1474,7 +1650,7 @@ export default function PassengerHomeScreen() {
     } else if (activeRide.status === 'in_progress' && destinationLocation && routeCoordinates.length === 0) {
       updateDynamicRoute(driverLocation, destinationLocation);
     }
-  }, [listenerVersion, driverLocation]);
+  }, [activeRide?.status, listenerVersion, driverLocation]);
 
   // Camera follows driver during the ride — same navigation experience as driver
   useEffect(() => {
@@ -1548,7 +1724,7 @@ export default function PassengerHomeScreen() {
       console.log('[PASSENGER] Shared ride invitation expired:', data);
 
       // Close modal if it's still open for this invitation
-      if (currentInvitation?.id === data.invitationId) {
+      if (currentInvitationRef.current?.id === data.invitationId) {
         setShowInvitationModal(false);
         setCurrentInvitation(null);
         showToast('La invitación de viaje compartido ha expirado.', 'info');
@@ -1564,7 +1740,7 @@ export default function PassengerHomeScreen() {
       cleanupInvitationRejected();
       cleanupInvitationExpired();
     };
-  }, [isSocketConnected, currentInvitation?.id, playNotificationSound, showToast]);
+  }, [isSocketConnected, currentInvitation?.id, listenerVersion, playNotificationSound, showToast]);
 
   // Track and send passenger location during active shared ride (Req. 4.10)
   useEffect(() => {
@@ -1883,7 +2059,10 @@ export default function PassengerHomeScreen() {
         });
       } catch (error) {
         console.error('[DYNAMIC_ROUTE] Failed to update route:', error);
-        // Keep existing route on error
+        setLastRouteUpdate(Date.now());
+        if (process.env.NODE_ENV !== 'production') {
+          showToast('No se pudo actualizar la ruta en el mapa.', 'warning');
+        }
       }
     },
     []
@@ -1904,13 +2083,14 @@ export default function PassengerHomeScreen() {
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       const currentDistance = R * c;
 
+      const initDist = initialDistanceToDestinationRef.current;
       // Calcular progreso: (distancia inicial - distancia actual) / distancia inicial * 100
-      if (initialDistanceToDestination > 0) {
+      if (initDist > 0) {
         const progress = Math.min(
           100,
           Math.max(
             0,
-            ((initialDistanceToDestination - currentDistance) / initialDistanceToDestination) * 100
+            ((initDist - currentDistance) / initDist) * 100
           )
         );
         setRideProgress(Math.round(progress));
@@ -1922,7 +2102,7 @@ export default function PassengerHomeScreen() {
         });
       }
     },
-    [initialDistanceToDestination]
+    []
   );
 
   // Resolve dynamic search context from user's current location via reverse geocoding
@@ -2679,6 +2859,8 @@ export default function PassengerHomeScreen() {
       return;
     }
 
+    if (isRequestingRideRef.current) return;
+    isRequestingRideRef.current = true;
     setIsRequestingRide(true);
 
     try {
@@ -2737,8 +2919,9 @@ export default function PassengerHomeScreen() {
       }
 
       // Sync estimated fare with backend's calculated value (uses full zone matrix engine)
-      const backendFare = response.data.data?.estimatedFare ?? response.data.estimatedFare;
-      const backendCurrency = response.data.data?.currency ?? response.data.currency;
+      const estimates = response.data.data?.estimates;
+      const backendFare = estimates?.fare ?? response.data.data?.estimatedFare ?? response.data.estimatedFare;
+      const backendCurrency = estimates?.currency ?? response.data.data?.currency ?? response.data.currency;
       if (backendFare != null && Number(backendFare) > 0) {
         setEstimatedFare(Number(backendFare));
       }
@@ -2789,6 +2972,8 @@ export default function PassengerHomeScreen() {
         });
         // Don't show technical errors to users
       }
+    } finally {
+      isRequestingRideRef.current = false;
     }
   };
 
@@ -2806,6 +2991,8 @@ export default function PassengerHomeScreen() {
     }
 
     if (isCancelling) return;
+    if (isCancellingRef.current) return;
+    isCancellingRef.current = true;
     setIsCancelling(true);
     try {
       console.log('Cancelling ride:', activeRide.id);
@@ -2838,6 +3025,7 @@ export default function PassengerHomeScreen() {
       }
     } finally {
       setIsCancelling(false);
+      isCancellingRef.current = false;
     }
   };
 
@@ -2864,6 +3052,9 @@ export default function PassengerHomeScreen() {
       showToast('Debes seleccionar un motivo para cancelar', 'warning');
       return;
     }
+    if (isCancelling) return;
+    if (isCancellingRef.current) return;
+    isCancellingRef.current = true;
 
     // If there's a cancellation fee, warn if passenger has no payment methods registered
     if (cancellationPolicy && cancellationPolicy.fee > 0) {
@@ -2894,6 +3085,7 @@ export default function PassengerHomeScreen() {
       console.log('✅ Ride cancelled:', response.data);
 
       // Limpiar estado inmediatamente (no depender solo del WebSocket)
+      if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
       setActiveRide(null);
       setDriverLocation(null);
       setIsSearchingDriver(false);
@@ -2910,6 +3102,8 @@ export default function PassengerHomeScreen() {
         : 'No se pudo cancelar el viaje. Por favor intenta nuevamente.';
 
       showToast(errorMessage, 'error');
+    } finally {
+      isCancellingRef.current = false;
     }
   };
 
@@ -2921,9 +3115,12 @@ export default function PassengerHomeScreen() {
 
   const handleProcessPayment = async () => {
     if (!activeRide) return;
+    if (isProcessingPaymentRef.current) return;
+    isProcessingPaymentRef.current = true;
 
     // If cash, call backend to mark payment as completed, then show confirmation
     if (paymentMethod === 'cash') {
+      setIsProcessingPayment(true);
       try {
         await paymentAPI.completePayment(activeRide.id, {
           method: 'cash',
@@ -2935,11 +3132,14 @@ export default function PassengerHomeScreen() {
         // Still show as completed locally — cash is paid physically at end of ride
       }
       setPaymentCompleted(true);
+      setIsProcessingPayment(false);
+      isProcessingPaymentRef.current = false;
       return;
     }
 
     // If Pago Móvil or Bank Transfer, open the MobilePaymentModal with the selected method
     if (paymentMethod === 'pago_movil' || paymentMethod === 'bank_transfer') {
+      setIsProcessingPayment(true);
       setShowMobilePaymentModal(true);
       return;
     }
@@ -2972,6 +3172,8 @@ export default function PassengerHomeScreen() {
         label: 'Reintentar',
         onPress: handleProcessPayment,
       });
+    } finally {
+      isProcessingPaymentRef.current = false;
     }
   };
 
@@ -2979,6 +3181,7 @@ export default function PassengerHomeScreen() {
     setShowPaymentModal(false);
     setPaymentCompleted(false);
     setIsProcessingPayment(false);
+    isProcessingPaymentRef.current = false;
 
     // Show rating modal after payment is confirmed
     setShowRatingModal(true);
@@ -3129,11 +3332,13 @@ export default function PassengerHomeScreen() {
 
   const handleSubmitRating = async () => {
     if (isSubmittingRating) return; // Prevent double-click before state update
+    if (isSubmittingRatingRef.current) return;
     if (!activeRide || driverRating === 0) {
       showToast('Por favor selecciona una valoración', 'error');
       return;
     }
 
+    isSubmittingRatingRef.current = true;
     setIsSubmittingRating(true);
 
     try {
@@ -3145,7 +3350,6 @@ export default function PassengerHomeScreen() {
 
       // Close rating modal
       setShowRatingModal(false);
-      setIsSubmittingRating(false);
 
       // Show thank you alert
       showToast('Tu valoración ha sido enviada exitosamente.', 'success');
@@ -3154,7 +3358,6 @@ export default function PassengerHomeScreen() {
     } catch (error: any) {
       console.error('Submit rating error:', error);
       logError('PassengerHomeScreen', error, { context: 'Submit rating' });
-      setIsSubmittingRating(false);
 
       const errorMessage = isNetworkError(error)
         ? 'Error de conexión. Verifica tu internet e intenta calificar de nuevo.'
@@ -3163,6 +3366,9 @@ export default function PassengerHomeScreen() {
           : 'No se pudo enviar la valoración. Por favor intenta nuevamente.';
 
       showToast(errorMessage, 'error');
+    } finally {
+      setIsSubmittingRating(false);
+      isSubmittingRatingRef.current = false;
     }
   };
 
@@ -3177,11 +3383,13 @@ export default function PassengerHomeScreen() {
   };
 
   const handleCloseRatingModal = () => {
+    if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
     setShowRatingModal(false);
     setDriverRating(0);
     setDriverComment('');
     setFinalFare(null);
     ratingShownForRideRef.current = null;
+    acceptedRideIdRef.current = null;
 
     // Reset ride state completely - return to initial map view
     setActiveRide(null);
@@ -3307,8 +3515,9 @@ export default function PassengerHomeScreen() {
                 anchor={{ x: 0.5, y: 0.5 }}
                 flat={false}
                 rotation={0}
-                icon={MARKER_ICONS.driverTaxi}
-              />
+              >
+                <DriverTaxiIcon />
+              </MemoizedMarker>
             )}
 
             {/* Pickup marker — shown only during 'accepted' when far from passenger */}
@@ -3321,8 +3530,9 @@ export default function PassengerHomeScreen() {
                 title="Punto de recogida"
                 identifier="pickup"
                 anchor={{ x: 0.5, y: 0.5 }}
-                icon={MARKER_ICONS.pickup}
-              />
+              >
+                <PickupIcon />
+              </MemoizedMarker>
             )}
 
             {/* Ubicacion actual del pasajero — se oculta solo cuando inicia el viaje */}
@@ -3332,8 +3542,9 @@ export default function PassengerHomeScreen() {
                 title="Tu ubicacion"
                 identifier="passenger_location"
                 anchor={{ x: 0.5, y: 0.5 }}
-                icon={MARKER_ICONS.passenger}
-              />
+              >
+                <PassengerIcon />
+              </MemoizedMarker>
             )}
 
             {/* Destino */}
@@ -3343,8 +3554,9 @@ export default function PassengerHomeScreen() {
                 title="Destino"
                 identifier="destination"
                 anchor={{ x: 0.5, y: 0.5 }}
-                icon={MARKER_ICONS.dropoff}
-              />
+              >
+                <DropoffIcon />
+              </MemoizedMarker>
             )}
 
             {/* Second Pickup Marker */}
@@ -3354,8 +3566,9 @@ export default function PassengerHomeScreen() {
                 title="Segundo punto de recogida"
                 identifier="pickup2"
                 anchor={{ x: 0.5, y: 0.5 }}
-                icon={MARKER_ICONS.pickup}
-              />
+              >
+                <PickupIcon />
+              </MemoizedMarker>
             )}
 
             {/* Second Destination Marker */}
@@ -3365,18 +3578,23 @@ export default function PassengerHomeScreen() {
                 title="Segundo destino"
                 identifier="destination2"
                 anchor={{ x: 0.5, y: 0.5 }}
-                icon={MARKER_ICONS.dropoff}
-              />
+              >
+                <DropoffIcon />
+              </MemoizedMarker>
             )}
 
             {/* Route line — shown before ride request, driver approaching, and during trip */}
-            {(!activeRide || activeRide.status === 'pending' || activeRide.status === 'accepted' || activeRide.status === 'in_progress') && routeCoordinates.length > 1 && (
+            {(!activeRide || activeRide.status === 'pending' || activeRide.status === 'accepted' || activeRide.status === 'arrived' || activeRide.status === 'in_progress' || activeRide.status === 'completed') && routeCoordinates.length > 1 && (
               <MemoizedPolyline
                 coordinates={slicedRouteCoords}
                 strokeColor={
-                  activeRide?.status === 'accepted' ? '#FF8C00' : '#22C55E'
+                  !activeRide || activeRide.status === 'pending'
+                    ? '#6B7280'
+                    : activeRide.status === 'accepted'
+                      ? '#FF8C00'
+                      : '#22C55E'
                 }
-                strokeWidth={4}
+                strokeWidth={isApproximateRoute ? 3 : 4}
                 lineCap="round"
                 lineJoin="round"
               />

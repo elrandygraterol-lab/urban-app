@@ -70,12 +70,36 @@ export default function DriverRideHistoryScreen() {
         let pages = 1;
 
         if (payload?.rides && Array.isArray(payload.rides)) {
-          ridesData = payload.rides;
+          ridesData = payload.rides.map((ride: any) => ({
+            ...ride,
+            pickup: ride.pickup || (ride.pickupAddress ? {
+              latitude: ride.pickupLatitude || 0,
+              longitude: ride.pickupLongitude || 0,
+              address: ride.pickupAddress,
+            } : undefined),
+            destination: ride.destination || (ride.destinationAddress ? {
+              latitude: ride.destinationLatitude || 0,
+              longitude: ride.destinationLongitude || 0,
+              address: ride.destinationAddress,
+            } : undefined),
+          }));
           const pagination = payload.pagination;
           total = pagination?.totalCount ?? ridesData.length;
           pages = pagination?.totalPages ?? 1;
         } else if (Array.isArray(payload)) {
-          ridesData = payload;
+          ridesData = payload.map((ride: any) => ({
+            ...ride,
+            pickup: ride.pickup || (ride.pickupAddress ? {
+              latitude: ride.pickupLatitude || 0,
+              longitude: ride.pickupLongitude || 0,
+              address: ride.pickupAddress,
+            } : undefined),
+            destination: ride.destination || (ride.destinationAddress ? {
+              latitude: ride.destinationLatitude || 0,
+              longitude: ride.destinationLongitude || 0,
+              address: ride.destinationAddress,
+            } : undefined),
+          }));
           total = ridesData.length;
         }
 

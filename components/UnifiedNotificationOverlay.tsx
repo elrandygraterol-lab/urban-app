@@ -22,6 +22,7 @@ import {
   Animated,
   ScrollView,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -380,7 +381,7 @@ const RideRequestCard: React.FC<{
       {/* Actions */}
       <View style={styles.rideCardActions}>
         <TouchableOpacity
-          style={styles.rideRejectBtn}
+          style={[styles.rideRejectBtn, isProcessingRide && { opacity: 0.6 }]}
           onPress={() => {
             if (isProcessingRide) return;
             setIsProcessingRide(true);
@@ -389,11 +390,15 @@ const RideRequestCard: React.FC<{
           disabled={isProcessingRide}
           activeOpacity={0.8}
         >
-          <Ionicons name="close" size={16} color="#dc2626" />
+          {isProcessingRide ? (
+            <ActivityIndicator size="small" color="#dc2626" />
+          ) : (
+            <Ionicons name="close" size={16} color="#dc2626" />
+          )}
           <Text style={styles.rideRejectText}>Rechazar</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.rideAcceptBtn}
+          style={[styles.rideAcceptBtn, isProcessingRide && { opacity: 0.6 }]}
           onPress={() => {
             if (isProcessingRide) return;
             setIsProcessingRide(true);
@@ -402,7 +407,11 @@ const RideRequestCard: React.FC<{
           disabled={isProcessingRide}
           activeOpacity={0.8}
         >
-          <Ionicons name="checkmark" size={16} color="#fff" />
+          {isProcessingRide ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Ionicons name="checkmark" size={16} color="#fff" />
+          )}
           <Text style={styles.rideAcceptText}>Aceptar</Text>
         </TouchableOpacity>
       </View>
@@ -678,9 +687,9 @@ export const UnifiedNotificationOverlay: React.FC = () => {
   const handleAcceptRide = async (rideId: string) => {
     try {
       await rideAPI.acceptRide(rideId);
-      dismissRideRequest();
       const socket = getSocket();
       if (socket) socket.emit('join_ride', { rideId });
+      dismissRideRequest();
       router.push({ pathname: '/(driver)/active-ride', params: { rideId } } as any);
     } catch (error: any) {
       dismissRideRequest();
@@ -695,10 +704,10 @@ export const UnifiedNotificationOverlay: React.FC = () => {
   const handleRejectRide = async (rideId: string) => {
     try {
       await rideAPI.rejectRide(rideId);
+      dismissRideRequest();
     } catch {
       showToast('Error al rechazar el viaje', 'error');
     }
-    dismissRideRequest();
   };
 
   // ── Render ────────────────────────────────────────────────────────────────

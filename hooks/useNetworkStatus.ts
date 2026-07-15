@@ -30,10 +30,10 @@ export const addNetworkListener = (fn: NetworkListener): (() => void) => {
 
 export const getNetworkStatus = (): NetworkStatus => currentStatus;
 
-function isSlowNetwork(type: NetInfoStateType): boolean {
-  return type === NetInfoStateType.cellular && (
-    type === NetInfoStateType.cellular
-  );
+function isSlowNetwork(state: NetInfoState): boolean {
+  if (state.type !== NetInfoStateType.cellular || !state.details) return false;
+  const generation = (state.details as any).cellularGeneration as string | null;
+  return !generation || generation === '2g' || generation === '3g';
 }
 
 export function useNetworkStatus(): NetworkStatus {

@@ -26,7 +26,7 @@ import { useNetworkRecovery, retryWithBackoff, isNetworkError } from '@/hooks/us
 import { Colors as colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { formatCurrency, Currency } from '@/utils/currency';
-import { MARKER_ICONS } from '@/src/components/map/markers';
+import { DriverTaxiIcon, PassengerIcon, DropoffIcon } from '@/src/components/map/markers';
 import {
   computeBearing,
   bearingAlongRoute,
@@ -54,6 +54,8 @@ interface Ride {
   destinationAddress: string;
   pickupLocation: { latitude: number; longitude: number };
   destinationLocation: { latitude: number; longitude: number };
+  destinationLatitude?: number | string | null;
+  destinationLongitude?: number | string | null;
   estimatedFare: number;
   actualDistance?: number;
   actualDuration?: number;
@@ -113,6 +115,8 @@ export default function ActiveRideScreen() {
 
   const [ride, setRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<RouteCoordinate[]>([]);
   const [loadingRoute, setLoadingRoute] = useState(false);
@@ -141,6 +145,11 @@ export default function ActiveRideScreen() {
   useEffect(() => {
     rideRef.current = ride;
   }, [ride]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     locationRef.current = location;
@@ -292,7 +301,7 @@ export default function ActiveRideScreen() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', nextState => {
       if (nextState !== 'active') return;
-      if (!rideRef.current && !ride) return; // No active ride at all
+      if (!rideRef.current) return; // No active ride at all
 
       console.log('[ACTIVE_RIDE] App returned to foreground — full recovery starting...');
 
@@ -305,7 +314,7 @@ export default function ActiveRideScreen() {
       isReroutingRef.current = false;
 
       // Re-join the ride room via socket to receive real-time updates again
-      const currentRideId = rideRef.current?.id || ride?.id;
+      const currentRideId = rideRef.current?.id;
       if (currentRideId) {
         const socket = getSocket();
         if (socket) {
@@ -435,7 +444,7 @@ export default function ActiveRideScreen() {
         setRide(null);
         rideRef.current = null;
         showStatus('ride_cancelled', 'El viaje fue cancelado mientras estabas fuera de la app.', 'Viaje Cancelado');
-        setTimeout(() => router.replace('/(driver)'), 3000);
+        setTimeout(() => router.replace('/(driver)'), 1500);
         return;
       }
 
@@ -461,7 +470,7 @@ export default function ActiveRideScreen() {
           setShowRatingModal(true);
         } else {
           setIsAvailable(true);
-          setTimeout(() => router.replace('/(driver)'), 800);
+          setTimeout(() => router.replace('/(driver)'), 1500);
         }
         return;
       }
@@ -494,7 +503,7 @@ export default function ActiveRideScreen() {
       }
     } catch (error) {
       console.error('Failed to load ride details:', error);
-      // Don't show technical error to user, just log it
+      setFetchError('No se pudo cargar el viaje. Verifica tu conexión.');
     } finally {
       // Only set loading=false if this response is still relevant
       if (currentRideIdRef.current === rideId) {
@@ -757,8 +766,11 @@ export default function ActiveRideScreen() {
       console.error('[ACTIVE_RIDE] Failed to fetch route:', error);
       // Fallback to straight line if OSRM fails
       if (origin && destination) {
-        setRouteCoordinates([origin, destination]);
+        const fallbackCoords = [origin, destination];
+        setRouteCoordinates(fallbackCoords);
+        routePolylineRef.current = fallbackCoords;
         setIsApproximateRoute(true);
+        showToast('No se pudo obtener la ruta exacta. Usando ruta aproximada.', 'warning');
       }
     } finally {
       setLoadingRoute(false);
@@ -801,6 +813,12 @@ export default function ActiveRideScreen() {
         // Block accepted→completed via socket for ALL flows — use button to complete
         if (prevStatus === 'accepted' && newStatus === 'completed') {
           console.warn('[ACTIVE_RIDE] ⚠️ Ignoring accepted→completed via socket — must use button');
+          return;
+        }
+
+        // Ignore cancelled/completed in status_changed — handled by dedicated listeners
+        if (newStatus === 'cancelled' || newStatus === 'completed') {
+          console.log(`[ACTIVE_RIDE] ⏭️ Ignoring ${newStatus} in status_changed — handled by dedicated listener`);
           return;
         }
 
@@ -861,7 +879,7 @@ export default function ActiveRideScreen() {
         setShowRatingModal(true);
       } else {
         console.log('[ACTIVE_RIDE] Manual ride completed — navigating home');
-        router.replace('/(driver)');
+        setTimeout(() => router.replace('/(driver)'), 1500);
       }
     };
 
@@ -915,11 +933,13 @@ export default function ActiveRideScreen() {
       // Restore driver availability
       setIsAvailable(true);
       setRide(null);
+      setRouteCoordinates([]);
+      setRouteSteps([]);
 
       showStatus('ride_cancelled', message, 'Viaje Cancelado');
 
       // Auto-redirect to home after notification shows
-      setTimeout(() => router.replace('/(driver)'), 3000);
+      setTimeout(() => router.replace('/(driver)'), 1500);
     };
 
     // Listen for payment method change by passenger (Req. 3.4)
@@ -989,11 +1009,12 @@ export default function ActiveRideScreen() {
 
       // Flush buffered location updates
       const buffered = locationBufferRef.current;
-      if (buffered.length > 0) {
+      const currentRideId = rideRef.current?.id;
+      if (buffered.length > 0 && currentRideId) {
         console.log(`[ACTIVE_RIDE] Flushing ${buffered.length} buffered locations`);
         buffered.forEach(loc => {
           socket.emit('driver:location_update', {
-            rideId: rideRef.current!.id,
+            rideId: currentRideId,
             latitude: loc.latitude,
             longitude: loc.longitude,
             heading: loc.heading,
@@ -1003,7 +1024,6 @@ export default function ActiveRideScreen() {
       }
 
       // Re-join the ride room to receive real-time updates
-      const currentRideId = rideRef.current?.id;
       if (currentRideId) {
         socket.emit('join_ride', { rideId: currentRideId });
         console.log('[ACTIVE_RIDE] Re-joined ride room:', currentRideId);
@@ -1014,6 +1034,7 @@ export default function ActiveRideScreen() {
       isReroutingRef.current = false;
 
       // Re-register payment listener and refresh ride state after reconnect
+      socket.off('ride:payment_completed', handlePaymentConfirmed);
       onPaymentConfirmed(handlePaymentConfirmed);
       fetchRide().then(() => {
         if (locationRef.current) {
@@ -1077,12 +1098,28 @@ export default function ActiveRideScreen() {
     const activeStatuses = ['accepted', 'arrived', 'in_progress'];
     if (!activeStatuses.includes(ride.status)) return;
 
+    let terminated = false;
     const interval = setInterval(async () => {
+      if (terminated) return;
+      const cs = rideRef.current?.status as string;
+      if (!cs || !activeStatuses.includes(cs)) {
+        clearInterval(interval);
+        return;
+      }
       try {
         const res = await rideAPI.getRide(ride.id);
         const updated = res.data?.data || res.data;
-        if (updated && updated.status && updated.status !== ride.status) {
-          console.log('[ACTIVE_RIDE] ⚡ Polling caught status change:', ride.status, '→', updated.status);
+        const currentStatus = rideRef.current?.status;
+        if (!updated?.status || !currentStatus) return;
+        if (updated.status === currentStatus) return;
+        // Never revert completed or cancelled
+        if (cs === 'completed' || cs === 'cancelled') return;
+        // Only allow forward progression in the status flow
+        const STATUS_ORDER = ['accepted', 'arrived', 'in_progress', 'completed'];
+        const currentIdx = STATUS_ORDER.indexOf(currentStatus);
+        const newIdx = STATUS_ORDER.indexOf(updated.status);
+        if (newIdx > currentIdx) {
+          console.log('[ACTIVE_RIDE] ⚡ Polling caught status change:', currentStatus, '→', updated.status);
           setRide(prev => prev ? { ...prev, ...updated } : null);
         }
       } catch {
@@ -1090,8 +1127,11 @@ export default function ActiveRideScreen() {
       }
     }, 10000);
 
-    return () => clearInterval(interval);
-  }, [ride?.id, ride?.status]);
+    return () => {
+      terminated = true;
+      clearInterval(interval);
+    };
+  }, [ride?.id]);
 
   // Network recovery — when internet comes back, refresh ride state and reconnect
   useNetworkRecovery(() => {
@@ -1105,15 +1145,7 @@ export default function ActiveRideScreen() {
     }
     fetchRide().then(() => {
       if (locationRef.current) {
-        const origin = locationRef.current;
-        const dest =
-          (ride as any)?.destinationLocation ||
-          ((ride as any)?.destinationLatitude && (ride as any)?.destinationLongitude
-            ? { latitude: Number((ride as any).destinationLatitude), longitude: Number((ride as any).destinationLongitude) }
-            : null);
-        if (dest) {
-          getRoute(origin, dest).then(setRouteCoordinates).catch(() => {});
-        }
+        fetchAndDrawRoute();
       }
     }).catch(() => {});
   });
@@ -1148,6 +1180,8 @@ export default function ActiveRideScreen() {
           timeout: getAdaptiveTimeout(20000),
         });
 
+        if (!mountedRef.current) return;
+
         if (newStatus === 'completed') {
           const rideData = response.data?.data || response.data;
           const fareValue = rideData.finalFare ?? ride?.estimatedFare ?? 0;
@@ -1157,7 +1191,7 @@ export default function ActiveRideScreen() {
             ratingShownForRideRef.current = rideId;
             setShowRatingModal(true);
           } else {
-            router.replace('/(driver)');
+            setTimeout(() => router.replace('/(driver)'), 1500);
           }
           playNotificationSound();
         } else {
@@ -1165,11 +1199,6 @@ export default function ActiveRideScreen() {
         }
 
         setIsUpdatingStatus(false);
-
-        const s = getSocket();
-        if (s?.connected) {
-          s.emit('ride:status_changed', { rideId, status: newStatus });
-        }
         return; // Success — exit
       } catch (error: any) {
         lastError = error;
@@ -1178,6 +1207,7 @@ export default function ActiveRideScreen() {
         if (attempt < maxRetries - 1) {
           const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
           await new Promise(resolve => setTimeout(resolve, delay));
+          if (!mountedRef.current) return;
         }
       }
     }
@@ -1228,19 +1258,19 @@ export default function ActiveRideScreen() {
       return;
     }
 
-    setShowCancelReasonModal(false);
     setIsCancelling(true);
     try {
       await rideAPI.cancelRide(rideId, {
         reason: cancelReason,
       });
       // Clean up state immediately on success — don't wait for socket event
+      setShowCancelReasonModal(false);
       showToast('Viaje cancelado exitosamente', 'success');
       setIsAvailable(true);
       setRide(null);
       setRouteCoordinates([]);
       setRouteSteps([]);
-      setTimeout(() => router.replace('/(driver)'), 800);
+      setTimeout(() => router.replace('/(driver)'), 1500);
     } catch (error: any) {
       const msg = error?.response?.data?.error?.message || 'No se pudo cancelar el viaje';
       showToast(msg, 'error');
@@ -1248,7 +1278,7 @@ export default function ActiveRideScreen() {
       setIsCancelling(false);
       setCancelReason('');
     }
-  }; 
+  };
 
   const openCallModal = () => {
     if (!ride) return;
@@ -1390,7 +1420,7 @@ export default function ActiveRideScreen() {
       setRouteSteps([]);
       showToast('Valoración enviada exitosamente.', 'success');
       setIsAvailable(true);
-      setTimeout(() => router.replace('/(driver)'), 800);
+      setTimeout(() => router.replace('/(driver)'), 1500);
     } catch (error) {
       console.error('Failed to submit rating:', error);
       setIsSubmittingRating(false);
@@ -1404,11 +1434,10 @@ export default function ActiveRideScreen() {
 
   const handleSkipRating = () => {
     setShowRatingModal(false);
-    ratingShownForRideRef.current = null;
     setRouteCoordinates([]);
     setRouteSteps([]);
     setIsAvailable(true);
-    setTimeout(() => router.replace('/(driver)'), 800);
+    setTimeout(() => router.replace('/(driver)'), 1500);
   };
 
   // Navigation Banner — show when approaching a real maneuver (not just "continue straight")
@@ -1499,6 +1528,28 @@ export default function ActiveRideScreen() {
     if (meters >= 1000) return `${(meters / 1000).toFixed(1)} km`;
     return `${Math.round(meters)} m`;
   };
+
+  if (fetchError) {
+    return (
+      <View
+        style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', padding: 24 }}
+      >
+        <Ionicons name="cloud-offline-outline" size={48} color="#ef4444" />
+        <Text style={{ fontSize: 16, fontWeight: '600', color: '#1f2937', marginTop: 16, marginBottom: 8, textAlign: 'center' }}>
+          {fetchError}
+        </Text>
+        <TouchableOpacity
+          onPress={() => { setFetchError(null); setLoading(true); fetchRide(); }}
+          style={{
+            marginTop: 12, backgroundColor: colors.primary, paddingVertical: 12, paddingHorizontal: 24,
+            borderRadius: 10,
+          }}
+        >
+          <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>Reintentar</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   if (loading || !ride) {
     return (
@@ -1594,8 +1645,10 @@ export default function ActiveRideScreen() {
               anchor={{ x: 0.5, y: 0.5 }}
               flat={false}
               rotation={0}
-              icon={MARKER_ICONS.driverTaxi}
-            />
+              icon={undefined}
+            >
+              <DriverTaxiIcon />
+            </Marker>
           )}
 
           {/* Pickup / Passenger marker — visible while going to pickup AND while arrived (passenger hasn't boarded yet) */}
@@ -1605,8 +1658,9 @@ export default function ActiveRideScreen() {
               title="Punto de Recogida"
               description={ride.pickupAddress}
               anchor={{ x: 0.5, y: 1 }}
-              icon={MARKER_ICONS.passenger}
-            />
+            >
+              <PassengerIcon />
+            </Marker>
           )}
 
           {/* Destination location marker - only visible when navigating to destination (in_progress) */}
@@ -1616,8 +1670,9 @@ export default function ActiveRideScreen() {
               title="Destino"
               description={ride.destinationAddress}
               anchor={{ x: 0.5, y: 1 }}
-              icon={MARKER_ICONS.dropoff}
-            />
+            >
+              <DropoffIcon />
+            </Marker>
           )}
 
           {/* Route polyline - Different colors based on ride status */}
@@ -1633,7 +1688,7 @@ export default function ActiveRideScreen() {
                   ? '#FF8C00' // Orange for going to pickup
                   : '#22c55e' // Green for going to destination
               }
-              strokeWidth={5}
+              strokeWidth={isApproximateRoute ? 3 : 5}
               lineCap="round"
               lineJoin="round"
             />
@@ -2314,9 +2369,17 @@ export default function ActiveRideScreen() {
                     paddingVertical: 10,
                     borderRadius: 8,
                     alignItems: 'center',
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    gap: 6,
                   }}
                 >
-                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>He Llegado</Text>
+                  {isUpdatingStatus ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : null}
+                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>
+                    {isUpdatingStatus ? 'Llegando...' : 'He Llegado'}
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleCancelRide}
@@ -2390,12 +2453,16 @@ export default function ActiveRideScreen() {
                       gap: 6,
                     }}
                   >
-                    <Ionicons
-                      name={isPaymentConfirmed ? 'play-circle' : 'time-outline'}
-                      size={18} color="#fff"
-                    />
+                    {isUpdatingStatus ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Ionicons
+                        name={isPaymentConfirmed ? 'play-circle' : 'time-outline'}
+                        size={18} color="#fff"
+                      />
+                    )}
                     <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>
-                      {isPaymentConfirmed ? 'Iniciar' : 'Esperando Pago'}
+                      {isUpdatingStatus ? 'Iniciando...' : isPaymentConfirmed ? 'Iniciar' : 'Esperando Pago'}
                     </Text>
                   </TouchableOpacity>
 
@@ -2441,8 +2508,14 @@ export default function ActiveRideScreen() {
                     gap: 6,
                   }}
                 >
-                  <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                  <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>He Llegado</Text>
+                  {isUpdatingStatus ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                  )}
+                  <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>
+                    {isUpdatingStatus ? 'Finalizando...' : 'Completar Viaje'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}

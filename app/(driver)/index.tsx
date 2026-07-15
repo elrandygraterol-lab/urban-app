@@ -30,7 +30,7 @@ import { useSound } from '@/hooks/useSound';
 import { Ionicons } from '@expo/vector-icons';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import type { Socket } from 'socket.io-client';
-import { MARKER_ICONS } from '@/src/components/map/markers';
+import { DriverTaxiIcon } from '@/src/components/map/markers';
 import { rideAPI } from '@/services/api';
 // import { setActiveTutorialScreen } from '@/utils/tutorialState';
 // import { useCopilot, walkthroughable, CopilotStep } from 'react-native-copilot';
@@ -351,31 +351,12 @@ export default function DriverHomeScreen() {
       console.log('[DRIVER]    Component Mounted:', isMountedRef.current);
       console.log('[DRIVER] ========================================');
 
-      // Verify component is still mounted
-      if (!isMountedRef.current) {
-        console.warn('[DRIVER] ⚠️ Component unmounted, skipping cancellation handling');
-        return;
-      }
-
-      // Play notification sound
-      playNotificationSound();
-
-      // Build cancellation message
-      let message = `El pasajero ha cancelado el viaje`;
-
-      if (data.cancellationReason) {
-        message += `\n\nMotivo: ${data.cancellationReason}`;
-      }
-
-      // Add compensation information if applicable
-      if (data.cancellationFee > 0) {
-        message += `\n\nCompensación recibida: Bs. ${data.cancellationFee.toFixed(2)}`;
-      }
-
-      // Show alert to driver
-      showStatus('ride_cancelled', message, 'Viaje Cancelado');
+      // Notification handled by active-ride.tsx (screen-level) and
+      // useGlobalSocketListeners (global) — this handler restores availability
+      // for the edge case where driver accepted a ride but navigation never completed
+      setIsAvailable(true);
     },
-    [playNotificationSound, showStatus]
+    [setIsAvailable]
   );
 
   // Memoized callback for handling driver availability changes
@@ -466,6 +447,9 @@ export default function DriverHomeScreen() {
       // Evento 'ride:payment_completed' ahora se maneja globalmente en useGlobalSocketListeners
 
       // Add connection status listeners for debugging (store refs for targeted cleanup)
+      if (connectHandlerRef.current) {
+        socket.off('connect', connectHandlerRef.current);
+      }
       connectHandlerRef.current = () => {
         console.log('[DRIVER] ========================================');
         console.log('[DRIVER] ✅ SOCKET CONNECTED EVENT');
@@ -475,6 +459,9 @@ export default function DriverHomeScreen() {
       };
       socket.on('connect', connectHandlerRef.current);
 
+      if (disconnectHandlerRef.current) {
+        socket.off('disconnect', disconnectHandlerRef.current);
+      }
       disconnectHandlerRef.current = (reason: string) => {
         console.log('[DRIVER] ========================================');
         console.log('[DRIVER] ❌ SOCKET DISCONNECTED EVENT');
@@ -485,6 +472,9 @@ export default function DriverHomeScreen() {
       };
       socket.on('disconnect', disconnectHandlerRef.current);
 
+      if (errorHandlerRef.current) {
+        socket.off('error', errorHandlerRef.current);
+      }
       errorHandlerRef.current = (error: any) => {
         console.error('[DRIVER] ========================================');
         console.error('[DRIVER] ❌ SOCKET ERROR EVENT');
@@ -735,8 +725,9 @@ export default function DriverHomeScreen() {
           title="Mi ubicación"
           anchor={{ x: 0.5, y: 0.5 }}
           rotation={0}
-          icon={MARKER_ICONS.driverTaxi}
-        />
+        >
+          <DriverTaxiIcon />
+        </MemoizedMarker>
       </MapView>
 
       {/* Center Location Button */}

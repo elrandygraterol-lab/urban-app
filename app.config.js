@@ -34,7 +34,7 @@ module.exports = ({ config }) => {
       },
     },
     android: {
-      versionCode: 5,
+      versionCode: 7,
       package: packageName,
       googleServicesFile: isFirebaseEnabled ? './google-services.json' : undefined,
       adaptiveIcon: {
@@ -127,7 +127,7 @@ module.exports = ({ config }) => {
     extra: {
       router: {},
       eas: {
-      projectId:'d5d00c82-5977-4eca-9535-22c8b356cb71',
+      projectId:'30ef3cd5-fa02-47c3-9994-c57eeb7860be',
       },
       // Store Management System Configuration
       storeImageMaxSizeMB: 5,

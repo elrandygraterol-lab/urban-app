@@ -1,4 +1,4 @@
-/**
+﻿/**
  * useGlobalSocketListeners Hook
  * Registers global socket.io listeners that remain active across all screens
  * Fixes bug where payment and cancellation notifications were only received on home screen
@@ -11,6 +11,7 @@ import { useSound } from './useSound';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import { useExchangeRate } from './useExchangeRate';
 import type { User } from '@/store/authStore';
+import { useDriverStore } from '@/store/driverStore';
 
 interface UseGlobalSocketListenersProps {
   user: User | null;
@@ -47,7 +48,7 @@ export const useGlobalSocketListeners = ({
       expiresAt: string;
     }) => {
       console.log('[GLOBAL_SOCKET] ========================================');
-      console.log('[GLOBAL_SOCKET] 🚗 RIDE REQUEST RECEIVED (GLOBAL)!');
+      console.log('[GLOBAL_SOCKET] RIDE REQUEST RECEIVED (GLOBAL)!');
       console.log('[GLOBAL_SOCKET]    Ride ID:', data.id);
       console.log('[GLOBAL_SOCKET]    Passenger:', data.passengerName);
       console.log('[GLOBAL_SOCKET]    Pickup:', data.pickupAddress);
@@ -59,7 +60,7 @@ export const useGlobalSocketListeners = ({
 
       // Only show to drivers
       if (user?.role !== 'driver') {
-        console.log('[GLOBAL_SOCKET] ⚠️ User is not a driver, ignoring ride request');
+        console.log('[GLOBAL_SOCKET] User is not a driver, ignoring ride request');
         return;
       }
 
@@ -67,8 +68,6 @@ export const useGlobalSocketListeners = ({
       playNotificationSound();
 
       // Show ride request modal via notification manager (deduplication handled by context)
-      // Backend sends estimatedDuration (trip duration) and distance (trip distance).
-      // Use the backend values directly; only compute as fallback if missing.
       const safeDistance = Number(data.distance) || 0;
       const backendDuration = Number((data as any).estimatedDuration) || 0;
       const calcDuration = backendDuration > 0
@@ -86,7 +85,7 @@ export const useGlobalSocketListeners = ({
     [user?.role, playNotificationSound, showRideRequest]
   );
 
-  // Handler for ride:payment_completed event (BOTH roles — different messages)
+  // Handler for ride:payment_completed event (BOTH roles - different messages)
   const handlePaymentCompleted = useCallback(
     (data: {
       rideId: string;
@@ -96,25 +95,36 @@ export const useGlobalSocketListeners = ({
       platformCommission: number;
       currency?: string;
     }) => {
-      console.log('[GLOBAL_SOCKET] 💰 Payment completed event received:', data);
-      // ✅ No playNotificationSound aquí — active-ride.tsx ya lo reproduce
-      // para evitar duplicado cuando el conductor está en la pantalla del viaje
+      console.log('[GLOBAL_SOCKET] Payment completed event received:', data);
+      // No playNotificationSound here - active-ride.tsx already plays it
+      // to avoid duplicate when driver is on the ride screen
 
       if (user?.role === 'driver') {
         const earnings = data.driverEarnings;
+        const amount = data.amount;
         const dualMsg = data.currency === 'USD'
           ? `${convertToBs(earnings) !== '—' ? ` (≈ Bs. ${convertToBs(earnings)})` : ''}`
           : `${convertToUsd(earnings) !== '—' ? ` (≈ $ ${convertToUsd(earnings)})` : ''}`;
         const currencySymbol = data.currency === 'USD' ? '$' : 'Bs.';
+        const amountMsg = amount && amount !== earnings
+          ? `Pasajero pagó ${currencySymbol} ${amount.toFixed(2)}. `
+          : '';
         showStatus(
           'payment_completed',
-          `Has recibido ${currencySymbol} ${earnings.toFixed(2)}${dualMsg} por el viaje`,
+          `${amountMsg}Recibiste ${currencySymbol} ${earnings.toFixed(2)}${dualMsg} por el viaje`,
           '¡Pago Recibido!',
           { rideId: data.rideId, amount: data.amount, currency: data.currency }
         );
+        // Auto-update wallet balance in driver store
+        const driverStore = useDriverStore.getState();
+        driverStore.addEarning(
+          earnings,
+          data.currency === 'USD' ? 'USD' : 'VES',
+          data.rideId
+        );
       }
       // Passenger: payment confirmation is shown inline in the payment modal
-      // (with dual amounts) — no duplicate notification needed here.
+      // (with dual amounts) - no duplicate notification needed here.
     },
     [user?.role, playNotificationSound, showStatus, convertToUsd, convertToBs]
   );
@@ -132,7 +142,7 @@ export const useGlobalSocketListeners = ({
       driverId?: string;
       passengerId?: string;
     }) => {
-      console.log('[GLOBAL_SOCKET] ❌ Ride cancelled event received:', data);
+      console.log('[GLOBAL_SOCKET] Ride cancelled event received:', data);
 
       // Check if this event is relevant for the current user
       if (!user) {
@@ -179,9 +189,9 @@ export const useGlobalSocketListeners = ({
     [user?.id, user?.role, showStatus, playNotificationSound]
   );
 
-  // ── PASSENGER-SIDE HANDLERS ────────────────────────────────────────────────
+  // HANDLERS FOR PASSENGER
 
-  // Handler for ride:accepted event (PASSENGER — driver accepted the ride)
+  // Handler for ride:accepted event (PASSENGER - driver accepted the ride)
   const handleRideAccepted = useCallback(
     (data: {
       rideId: string;
@@ -190,7 +200,7 @@ export const useGlobalSocketListeners = ({
       acceptedAt: string;
       timestamp: string;
     }) => {
-      console.log('[GLOBAL_SOCKET] ✅ Ride accepted event received (passenger):', data);
+      console.log('[GLOBAL_SOCKET] Ride accepted event received (passenger):', data);
       if (user?.role !== 'passenger') return;
       playNotificationSound();
       const driverName = data.driver?.name || 'Un conductor';
@@ -206,7 +216,7 @@ export const useGlobalSocketListeners = ({
     [user?.role, playNotificationSound, showStatus]
   );
 
-  // Handler for ride:status_changed event (PASSENGER — status updates)
+  // Handler for ride:status_changed event (PASSENGER - status updates)
   const handleRideStatusChanged = useCallback(
     (data: {
       rideId: string;
@@ -218,19 +228,11 @@ export const useGlobalSocketListeners = ({
       finalFare?: number;
       timestamp: string;
     }) => {
-      console.log('[GLOBAL_SOCKET] 🔄 Ride status changed event received:', data);
+      console.log('[GLOBAL_SOCKET] Ride status changed event received:', data);
       if (user?.role !== 'passenger') return;
-      if (data.status === 'arrived') {
-        playNotificationSound();
-        showStatus(
-          'info',
-          'Tu conductor ha llegado al punto de recogida. Por favor dirígete al vehículo.',
-          '¡Tu Conductor ha Llegado!',
-          undefined,
-          undefined,
-          5000
-        );
-      } else if (data.status === 'in_progress') {
+      // 'arrived' handled by dedicated ride:driver_arrived handler (screen-level)
+      if (data.status === 'arrived') return;
+      if (data.status === 'in_progress') {
         playNotificationSound();
         showStatus(
           'info',
@@ -245,7 +247,7 @@ export const useGlobalSocketListeners = ({
     [user?.role, playNotificationSound, showStatus]
   );
 
-  // Handler for ride:driver_arrived event (PASSENGER — explicit driver arrival)
+  // Handler for ride:driver_arrived event (PASSENGER - explicit driver arrival)
   const handleDriverArrived = useCallback(
     (data: {
       rideId: string;
@@ -254,22 +256,14 @@ export const useGlobalSocketListeners = ({
       arrivedAt: string;
       timestamp: string;
     }) => {
-      console.log('[GLOBAL_SOCKET] 🚗 Driver arrived event received:', data);
+      console.log('[GLOBAL_SOCKET] Driver arrived event received:', data);
       if (user?.role !== 'passenger') return;
-      playNotificationSound();
-      showStatus(
-        'info',
-        `${data.driverName} te está esperando en el punto de recogida.`,
-        '¡Tu Conductor Está Aquí!',
-        undefined,
-        undefined,
-        6000
-      );
+      // Notification handled by screen-level handleDriverArrived — only log here
     },
-    [user?.role, playNotificationSound, showStatus]
+    [user?.role]
   );
 
-  // Handler for ride:eta_update event (PASSENGER — ETA updates, informational)
+  // Handler for ride:eta_update event (PASSENGER - ETA updates, informational)
   const handleEtaUpdate = useCallback(
     (data: {
       rideId: string;
@@ -278,7 +272,7 @@ export const useGlobalSocketListeners = ({
       targetType: string;
     }) => {
       if (user?.role !== 'passenger') return;
-      // ETA updates handled by local screen — no duplicate notification
+      // ETA updates handled by local screen - no duplicate notification
     },
     [user?.role]
   );
@@ -297,9 +291,9 @@ export const useGlobalSocketListeners = ({
       currency?: string;
       timestamp: string;
     }) => {
-      console.log('[GLOBAL_SOCKET] 🏁 Ride completed event received:', data);
-      // ✅ No playNotificationSound aquí — active-ride.tsx ya lo reproduce
-      // para evitar duplicado cuando el conductor está en la pantalla del viaje
+      console.log('[GLOBAL_SOCKET] Ride completed event received:', data);
+      // No playNotificationSound here - active-ride.tsx already plays it
+      // to avoid duplicate when driver is on the ride screen
 
       const curr = data.currency || 'VES';
       const currencySymbol = curr === 'USD' ? '$' : 'Bs.';
@@ -314,18 +308,18 @@ export const useGlobalSocketListeners = ({
         showStatus(
           'ride_completed',
           `${distanceMsg}Tarifa: ${currencySymbol} ${fare.toFixed(2)} ${earningsMsg}`,
-          '🏁 Viaje Finalizado',
+          'Viaje Finalizado',
           { rideId: data.rideId, finalFare: fare, driverEarnings: earnings, currency: curr },
           undefined,
           7000
         );
       }
-      // Passenger: ride completed handled by local screen with rating modal — no duplicate
+      // Passenger: ride completed handled by local screen with rating modal - no duplicate
     },
     [user?.role, playNotificationSound, showStatus]
   );
 
-  // ── DRIVER: Request pending rides on connect/reconnect ──────────
+  // DRIVER: Request pending rides on connect/reconnect
   const fetchPendingRidesForDriver = useCallback(async () => {
     if (user?.role !== 'driver' || fetchingPendingRef.current) return;
     fetchingPendingRef.current = true;
@@ -338,7 +332,7 @@ export const useGlobalSocketListeners = ({
         }
       }
     } catch {
-      // Silently ignore — the socket emit is the primary mechanism
+      // Silently ignore - the socket emit is the primary mechanism
     } finally {
       fetchingPendingRef.current = false;
     }
@@ -359,19 +353,19 @@ export const useGlobalSocketListeners = ({
 
     // Only register listeners if user is authenticated
     if (!isAuthenticated || !user) {
-      console.log('[GLOBAL_SOCKET] ❌ User not authenticated, skipping listener registration');
+      console.log('[GLOBAL_SOCKET] User not authenticated, skipping listener registration');
       console.log('[GLOBAL_SOCKET]    isAuthenticated:', isAuthenticated);
       console.log('[GLOBAL_SOCKET]    user object:', user ? 'exists' : 'null');
-      console.log('[GLOBAL_SOCKET]    Returns early — no cleanup function set');
+      console.log('[GLOBAL_SOCKET]    Returns early - no cleanup function set');
       return;
     }
 
-    console.log('[GLOBAL_SOCKET] ✅ User authenticated, proceeding with socket setup');
+    console.log('[GLOBAL_SOCKET] User authenticated, proceeding with socket setup');
 
     // Helper function to register all listeners
     const registerListeners = (socket: any) => {
       if (!socket) {
-        console.log('[GLOBAL_SOCKET] ❌ Socket not available for listener registration');
+        console.log('[GLOBAL_SOCKET] Socket not available for listener registration');
         console.log('[GLOBAL_SOCKET]    Socket parameter is null/undefined');
         return;
       }
@@ -382,11 +376,8 @@ export const useGlobalSocketListeners = ({
       console.log('[GLOBAL_SOCKET]    Socket transport:', socket.io?.engine?.transport?.name || 'unknown');
       console.log('[GLOBAL_SOCKET]    listenersRegisteredRef:', listenersRegisteredRef.current);
 
-      // Always re-register listeners — the socket.off calls above prevent duplicates
-      // This ensures ride:request_created is never missed after reconnects or re-renders
-
       console.log('[GLOBAL_SOCKET] ============================================');
-      console.log('[GLOBAL_SOCKET] ✅ REGISTERING GLOBAL SOCKET LISTENERS');
+      console.log('[GLOBAL_SOCKET] REGISTERING GLOBAL SOCKET LISTENERS');
       console.log('[GLOBAL_SOCKET]    User ID:', user.id);
       console.log('[GLOBAL_SOCKET]    User Role:', user.role);
       console.log('[GLOBAL_SOCKET]    Socket ID:', socket.id);
@@ -414,54 +405,54 @@ export const useGlobalSocketListeners = ({
       socket.offAny(); // Remove debug listener
       console.log('[GLOBAL_SOCKET]    Existing listeners cleared');
 
-      // ── Register listeners (shared + role-specific) ─────────────────────
+      // Register listeners (shared + role-specific)
 
-      // SHARED — both roles receive these
+      // SHARED - both roles receive these
       socket.on('ride:payment_completed', handlePaymentCompleted);
-      console.log('[GLOBAL_SOCKET]    ✓ ride:payment_completed registered (shared)');
+      console.log('[GLOBAL_SOCKET]    ride:payment_completed registered (shared)');
 
       socket.on('ride:cancelled', handleRideCancelled);
-      console.log('[GLOBAL_SOCKET]    ✓ ride:cancelled registered (shared)');
+      console.log('[GLOBAL_SOCKET]    ride:cancelled registered (shared)');
 
       socket.on('ride:completed', handleRideCompleted);
-      console.log('[GLOBAL_SOCKET]    ✓ ride:completed registered (shared)');
+      console.log('[GLOBAL_SOCKET]    ride:completed registered (shared)');
 
-      // DRIVER-ONLY — ride request notification
+      // DRIVER-ONLY - ride request notification
       if (user.role === 'driver') {
         socket.on('ride:request_created', handleRideRequest);
-        console.log('[GLOBAL_SOCKET]    ✓ ride:request_created registered (driver only)');
+        console.log('[GLOBAL_SOCKET]    ride:request_created registered (driver only)');
       }
 
-      // PASSENGER-ONLY — driver acceptance, status changes, ETA, driver arrived
+      // PASSENGER-ONLY - driver acceptance, status changes, ETA, driver arrived
       if (user.role === 'passenger') {
         socket.on('ride:accepted', handleRideAccepted);
-        console.log('[GLOBAL_SOCKET]    ✓ ride:accepted registered (passenger only)');
+        console.log('[GLOBAL_SOCKET]    ride:accepted registered (passenger only)');
 
         socket.on('ride:status_changed', handleRideStatusChanged);
-        console.log('[GLOBAL_SOCKET]    ✓ ride:status_changed registered (passenger only)');
+        console.log('[GLOBAL_SOCKET]    ride:status_changed registered (passenger only)');
 
         socket.on('ride:eta_update', handleEtaUpdate);
-        console.log('[GLOBAL_SOCKET]    ✓ ride:eta_update registered (passenger only)');
+        console.log('[GLOBAL_SOCKET]    ride:eta_update registered (passenger only)');
 
         socket.on('ride:driver_arrived', handleDriverArrived);
-        console.log('[GLOBAL_SOCKET]    ✓ ride:driver_arrived registered (passenger only)');
+        console.log('[GLOBAL_SOCKET]    ride:driver_arrived registered (passenger only)');
       }
 
       // DEBUG: Listen to ALL events to see what's coming
       const debugAllEvents = (eventName: string, ...args: any[]) => {
-        console.log('[GLOBAL_SOCKET] 📨 DEBUG: Event received:', eventName, '| role:', user.role);
+        console.log('[GLOBAL_SOCKET] DEBUG: Event received:', eventName, '| role:', user.role);
       };
 
       socket.onAny(debugAllEvents);
-      console.log('[GLOBAL_SOCKET]    ✓ onAny debug listener registered');
+      console.log('[GLOBAL_SOCKET]    onAny debug listener registered');
 
       // Verify listeners were registered
       const afterCount = socket.listeners('ride:payment_completed').length;
-      console.log('[GLOBAL_SOCKET] 📊 After registration, listeners for ride:payment_completed:', afterCount);
+      console.log('[GLOBAL_SOCKET] After registration, listeners for ride:payment_completed:', afterCount);
       if (afterCount === 0) {
-        console.error('[GLOBAL_SOCKET] ❌ CRITICAL: Listener registration FAILED (count=0)');
+        console.error('[GLOBAL_SOCKET] CRITICAL: Listener registration FAILED (count=0)');
       } else {
-        console.log('[GLOBAL_SOCKET]    ✓ Listener count OK');
+        console.log('[GLOBAL_SOCKET]    Listener count OK');
       }
 
       // Mark listeners as registered on this socket
@@ -472,7 +463,7 @@ export const useGlobalSocketListeners = ({
       // Handle socket reconnection - re-register listeners with fresh callbacks
       connectHandlerRef.current = () => {
         console.log('[GLOBAL_SOCKET] ============================================');
-        console.log('[GLOBAL_SOCKET] 🔄 Socket reconnected');
+        console.log('[GLOBAL_SOCKET] Socket reconnected');
         console.log('[GLOBAL_SOCKET]    Socket ID:', socket.id);
         console.log('[GLOBAL_SOCKET]    Socket transport:', socket.io?.engine?.transport?.name);
         console.log('[GLOBAL_SOCKET]    Re-registering listeners...');
@@ -484,11 +475,11 @@ export const useGlobalSocketListeners = ({
         console.log('[GLOBAL_SOCKET]    listenersRegisteredRef reset for reconnection');
         registerListeners(socket);
 
-        // ── Request pending rides ─────────────────────────────────
+        // Request pending rides for driver
         // Emit socket event so backend re-sends ride:request_created for active requests
         if (user?.role === 'driver') {
           socket.emit('driver:request_pending_rides');
-          console.log('[GLOBAL_SOCKET] 🚗 Emitted driver:request_pending_rides');
+          console.log('[GLOBAL_SOCKET] Emitted driver:request_pending_rides');
 
           // Also call REST API as fallback
           fetchPendingRidesForDriver();
@@ -496,10 +487,10 @@ export const useGlobalSocketListeners = ({
       };
 
       socket.on('connect', connectHandlerRef.current);
-      console.log('[GLOBAL_SOCKET]    ✓ connect handler registered for reconnection');
+      console.log('[GLOBAL_SOCKET]    connect handler registered for reconnection');
 
       console.log('[GLOBAL_SOCKET] ============================================');
-      console.log('[GLOBAL_SOCKET] ✅ LISTENERS REGISTERED SUCCESSFULLY');
+      console.log('[GLOBAL_SOCKET] LISTENERS REGISTERED SUCCESSFULLY');
       console.log('[GLOBAL_SOCKET]    - ride:payment_completed (shared)');
       console.log('[GLOBAL_SOCKET]    - ride:cancelled (shared)');
       console.log('[GLOBAL_SOCKET]    - ride:completed (shared)');
@@ -525,13 +516,13 @@ export const useGlobalSocketListeners = ({
     console.log('[GLOBAL_SOCKET] getSocket() returned:', !!socket, 'connected:', socket?.connected);
     
     if (!socket) {
-      console.log('[GLOBAL_SOCKET] 🔌 Socket not initialized, connecting...');
+      console.log('[GLOBAL_SOCKET] Socket not initialized, connecting...');
       console.log('[GLOBAL_SOCKET]    Calling connectSocket()...');
       
       // Connect socket asynchronously
       connectSocket()
         .then(connectedSocket => {
-          console.log('[GLOBAL_SOCKET] ✅ Socket connected successfully via connectSocket()');
+          console.log('[GLOBAL_SOCKET] Socket connected successfully via connectSocket()');
           console.log('[GLOBAL_SOCKET]    Socket ID:', connectedSocket.id);
           console.log('[GLOBAL_SOCKET]    Socket connected:', connectedSocket.connected);
           console.log('[GLOBAL_SOCKET]    Socket transport:', connectedSocket.io?.engine?.transport?.name);
@@ -545,28 +536,28 @@ export const useGlobalSocketListeners = ({
           setupDisconnectHandler(connectedSocket);
         })
         .catch(error => {
-          console.error('[GLOBAL_SOCKET] ❌ Failed to connect socket:', error.message);
+          console.error('[GLOBAL_SOCKET] Failed to connect socket:', error.message);
           console.error('[GLOBAL_SOCKET]    Error name:', error.name);
           console.error('[GLOBAL_SOCKET]    Error stack:', error.stack);
           
           // Schedule a retry after 10 seconds
           const retryDelay = 10000;
-          console.log('[GLOBAL_SOCKET] 🔄 Scheduling retry in ' + (retryDelay/1000) + 's...');
+          console.log('[GLOBAL_SOCKET] Scheduling retry in ' + (retryDelay/1000) + 's...');
           reconnectTimeoutRef.current = setTimeout(() => {
-            console.log('[GLOBAL_SOCKET] 🔄 Retrying socket connection...');
+            console.log('[GLOBAL_SOCKET] Retrying socket connection...');
             console.log('[GLOBAL_SOCKET]    Time:', new Date().toISOString());
             const s = getSocket();
-            console.log('[GLOBAL_SOCKET]    Current socket state — exists:', !!s, 'connected:', s?.connected);
+            console.log('[GLOBAL_SOCKET]    Current socket state - exists:', !!s, 'connected:', s?.connected);
             if (!s || !s.connected) {
               console.log('[GLOBAL_SOCKET]    Calling connectSocket() (retry)...');
               connectSocket()
                 .then(connectedSocket => {
-                  console.log('[GLOBAL_SOCKET] ✅ Retry successful!');
+                  console.log('[GLOBAL_SOCKET] Retry successful!');
                   registerListeners(connectedSocket);
                   setupDisconnectHandler(connectedSocket);
                 })
                 .catch(err => {
-                  console.error('[GLOBAL_SOCKET] ❌ Retry also failed:', err.message);
+                  console.error('[GLOBAL_SOCKET] Retry also failed:', err.message);
                 });
             } else {
               console.log('[GLOBAL_SOCKET]    Socket already connected, no retry needed');
@@ -575,7 +566,7 @@ export const useGlobalSocketListeners = ({
         });
       
       // Return early - listeners will be registered after connection
-      console.log('[GLOBAL_SOCKET]    Returning early — cleanup will run on unmount');
+      console.log('[GLOBAL_SOCKET]    Returning early - cleanup will run on unmount');
       return cleanup;
     }
     
@@ -603,7 +594,7 @@ export const useGlobalSocketListeners = ({
       
       disconnectHandlerRef.current = (reason: string) => {
         console.log('[GLOBAL_SOCKET] ============================================');
-        console.log('[GLOBAL_SOCKET] 🔌 Socket disconnected event');
+        console.log('[GLOBAL_SOCKET] Socket disconnected event');
         console.log('[GLOBAL_SOCKET]    Reason:', reason);
         console.log('[GLOBAL_SOCKET]    Time:', new Date().toISOString());
         console.log('[GLOBAL_SOCKET]    Transport was:', sock?.io?.engine?.transport?.name || 'unknown');
@@ -626,21 +617,21 @@ export const useGlobalSocketListeners = ({
         const reconnectDelay = 5000;
         console.log('[GLOBAL_SOCKET]    Scheduling reconnect in ' + (reconnectDelay/1000) + 's...');
         reconnectTimeoutRef.current = setTimeout(() => {
-          console.log('[GLOBAL_SOCKET] 🔄 Attempting auto-reconnect after disconnect...');
+          console.log('[GLOBAL_SOCKET] Attempting auto-reconnect after disconnect...');
           console.log('[GLOBAL_SOCKET]    Time:', new Date().toISOString());
           const currentSocket = getSocket();
-          console.log('[GLOBAL_SOCKET]    Current socket — exists:', !!currentSocket, 'connected:', currentSocket?.connected);
+          console.log('[GLOBAL_SOCKET]    Current socket - exists:', !!currentSocket, 'connected:', currentSocket?.connected);
           if (!currentSocket || !currentSocket.connected) {
             console.log('[GLOBAL_SOCKET]    Calling connectSocket() (auto-reconnect)...');
             connectSocket()
               .then(connectedSocket => {
-                console.log('[GLOBAL_SOCKET] ✅ Auto-reconnect successful!');
+                console.log('[GLOBAL_SOCKET] Auto-reconnect successful!');
                 console.log('[GLOBAL_SOCKET]    New Socket ID:', connectedSocket.id);
                 registerListeners(connectedSocket);
                 setupDisconnectHandler(connectedSocket);
               })
               .catch(error => {
-                console.error('[GLOBAL_SOCKET] ❌ Auto-reconnect failed:', error.message);
+                console.error('[GLOBAL_SOCKET] Auto-reconnect failed:', error.message);
               });
           } else {
             console.log('[GLOBAL_SOCKET]    Socket already reconnected, skipping');
@@ -650,13 +641,13 @@ export const useGlobalSocketListeners = ({
       
       console.log('[GLOBAL_SOCKET]    Setting disconnect handler on socket...');
       sock.on('disconnect', disconnectHandlerRef.current);
-      console.log('[GLOBAL_SOCKET] ✅ setupDisconnectHandler complete');
+      console.log('[GLOBAL_SOCKET] setupDisconnectHandler complete');
     }
     
     // Cleanup helper
     function cleanup() {
       console.log('[GLOBAL_SOCKET] ============================================');
-      console.log('[GLOBAL_SOCKET] 🧹 CLEANING UP GLOBAL SOCKET LISTENERS');
+      console.log('[GLOBAL_SOCKET] CLEANING UP GLOBAL SOCKET LISTENERS');
       console.log('[GLOBAL_SOCKET]    User ID:', user?.id);
       console.log('[GLOBAL_SOCKET]    User role:', user?.role);
       console.log('[GLOBAL_SOCKET]    listenersRegisteredRef:', listenersRegisteredRef.current);
@@ -695,12 +686,12 @@ export const useGlobalSocketListeners = ({
         console.log('[GLOBAL_SOCKET]    Listeners after cleanup:', afterCount);
         
         if (afterCount === 0) {
-          console.log('[GLOBAL_SOCKET] ✅ All listeners removed successfully');
+          console.log('[GLOBAL_SOCKET] All listeners removed successfully');
         } else {
-          console.warn('[GLOBAL_SOCKET] ⚠️ Some listeners may not have been removed:', afterCount);
+          console.warn('[GLOBAL_SOCKET] Some listeners may not have been removed:', afterCount);
         }
       } else {
-        console.log('[GLOBAL_SOCKET] ⚠️ Socket not available for cleanup');
+        console.log('[GLOBAL_SOCKET] Socket not available for cleanup');
       }
       
       // Reset flag on cleanup
@@ -709,7 +700,7 @@ export const useGlobalSocketListeners = ({
       console.log('[GLOBAL_SOCKET]    listenersRegisteredRef reset to FALSE');
       console.log('[GLOBAL_SOCKET] ========== CLEANUP COMPLETE ==========');
     }
-  }, [isAuthenticated, user?.id, user?.role, handlePaymentCompleted, handleRideCancelled, handleRideRequest, handleRideAccepted, handleRideStatusChanged, handleEtaUpdate, handleDriverArrived, handleRideCompleted]);
+  }, [isAuthenticated, user?.id, user?.role, handlePaymentCompleted, handleRideCancelled, handleRideRequest, handleRideAccepted, handleRideStatusChanged, handleEtaUpdate, handleDriverArrived, handleRideCompleted, fetchPendingRidesForDriver]);
 
   // Re-register listeners when socket is fully recreated (e.g., after reconnectSocket destroy+create)
   useEffect(() => {
@@ -717,7 +708,7 @@ export const useGlobalSocketListeners = ({
       if (!connected) return;
       const currentSocket = getSocket();
       if (!currentSocket) return;
-      console.log('[GLOBAL_SOCKET] 🔄 Connection listener: socket connected/recreated, re-registering listeners');
+      console.log('[GLOBAL_SOCKET] Connection listener: socket connected/recreated, re-registering listeners');
       if (registerListenersRef.current) {
         registerListenersRef.current(currentSocket);
       }

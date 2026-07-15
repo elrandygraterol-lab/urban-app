@@ -104,6 +104,7 @@ export default function ForgotPasswordScreen() {
             <View style={styles.formContainer}>
               {/* Header */}
               <View style={styles.formHeader}>
+                <View style={styles.formTitleAccent} />
                 <Text style={styles.formTitle}>Recuperar contraseña</Text>
                 <Text style={styles.formSubtitle}>Ingresa tu email y te enviaremos un enlace</Text>
               </View>
@@ -142,7 +143,7 @@ export default function ForgotPasswordScreen() {
                 onPress={() => router.push('/(auth)/reset-password' as any)}
                 disabled={isLoading}
               >
-                <Ionicons name="key-outline" size={16} color="#22c55e" />
+                <Ionicons name="key-outline" size={16} color="#059669" />
                 <Text style={styles.linkBtnText}>Ya tengo un código de recuperación</Text>
               </TouchableOpacity>
 
@@ -151,7 +152,7 @@ export default function ForgotPasswordScreen() {
                 onPress={() => router.push('/(auth)/login' as any)}
                 disabled={isLoading}
               >
-                <Ionicons name="arrow-back-outline" size={16} color="#22c55e" />
+                <Ionicons name="arrow-back-outline" size={16} color="#059669" />
                 <Text style={styles.linkBtnText}>Volver al inicio de sesión</Text>
               </TouchableOpacity>
             </View>
@@ -165,7 +166,7 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: '#f5f7f5',
   },
   scrollContent: {
     flexGrow: 1,
@@ -179,7 +180,7 @@ const styles = StyleSheet.create({
   },
   illustrationBg: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#dcedc8',
+    backgroundColor: '#f2f6f2',
   },
   sunGlow: {
     position: 'absolute',
@@ -222,7 +223,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 60,
-    backgroundColor: '#81c784',
+    backgroundColor: '#d4e2d4',
     borderTopLeftRadius: 140,
     borderTopRightRadius: 140,
   },
@@ -232,7 +233,7 @@ const styles = StyleSheet.create({
     left: -20,
     width: 160,
     height: 130,
-    backgroundColor: '#66bb6a',
+    backgroundColor: '#c0d6c0',
     borderTopLeftRadius: 100,
     borderTopRightRadius: 100,
     transform: [{ scaleX: 1.2 }],
@@ -243,7 +244,7 @@ const styles = StyleSheet.create({
     left: '18%',
     width: 150,
     height: 160,
-    backgroundColor: '#4caf50',
+    backgroundColor: '#a8c8a8',
     borderTopLeftRadius: 90,
     borderTopRightRadius: 90,
     transform: [{ scaleX: 1.3 }],
@@ -254,7 +255,7 @@ const styles = StyleSheet.create({
     right: -10,
     width: 130,
     height: 120,
-    backgroundColor: '#43a047',
+    backgroundColor: '#90ba90',
     borderTopLeftRadius: 80,
     borderTopRightRadius: 80,
     transform: [{ scaleX: 1.4 }],
@@ -265,10 +266,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 30,
-    backgroundColor: '#2e7d32',
+    backgroundColor: '#78ac78',
     borderTopLeftRadius: 160,
     borderTopRightRadius: 160,
-    opacity: 0.4,
+    opacity: 0.3,
   },
   logoContainer: {
     position: 'absolute',
@@ -307,18 +308,27 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 10,
   },
+  formTitleAccent: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#059669',
+    borderRadius: 2,
+    marginBottom: 16,
+  },
   formHeader: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   formTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
     color: '#0f172a',
-    marginBottom: 4,
+    marginBottom: 6,
+    letterSpacing: -0.3,
   },
   formSubtitle: {
     fontSize: 14,
     color: '#64748b',
+    lineHeight: 20,
   },
 
   /* Form */
@@ -360,12 +370,12 @@ const styles = StyleSheet.create({
   /* Primary btn */
   primaryBtn: {
     height: 54,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#059669',
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 18,
-    shadowColor: '#22c55e',
+    shadowColor: '#059669',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
@@ -390,7 +400,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   linkBtnText: {
-    color: '#22c55e',
+    color: '#059669',
     fontSize: 14,
     fontWeight: '600',
   },

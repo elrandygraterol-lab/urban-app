@@ -115,6 +115,11 @@ let tokenRefreshPromise: Promise<string | null> | null = null;
 // Connection state listeners
 const connectionListeners: Set<(connected: boolean) => void> = new Set();
 
+// Track previous callbacks for registration functions so they can
+// remove their previously registered callback without destroying other
+// listeners registered elsewhere (e.g. global listeners in useGlobalSocketListeners).
+const _onDriverAvailabilityChangedPreviousCallback: { current: ((data: any) => void) | null } = { current: null };
+
 // Detailed state export for diagnostics
 export const getSocketDiagnostics = () => ({
   isConnected,
@@ -832,7 +837,6 @@ export const onETAUpdate = (
 export const onDriverArrived = (
   callback: (data: {
     rideId: string;
-    status: 'arrived';
     driverName: string;
     arrivedAt: string;
     timestamp: string;
@@ -928,8 +932,11 @@ export const onDriverAvailabilityChanged = (
     return () => {};
   }
 
-  // Remove any existing listeners for this event to prevent duplicates
-  socket.off('driver:availability_changed');
+  // Remove only our previously registered callback (not other listeners)
+  if (_onDriverAvailabilityChangedPreviousCallback.current) {
+    socket.off('driver:availability_changed', _onDriverAvailabilityChangedPreviousCallback.current);
+  }
+  _onDriverAvailabilityChangedPreviousCallback.current = callback;
   socket.on('driver:availability_changed', callback);
 
   // Return cleanup function
@@ -951,7 +958,7 @@ export const onPaymentConfirmed = (
     paymentId: string;
     status: string;
     amount: number;
-    timestamp: string;
+    processedAt: string;
   }) => void
 ): (() => void) => {
   if (!socket) {
@@ -959,11 +966,8 @@ export const onPaymentConfirmed = (
     return () => {};
   }
 
-  // Remove any existing listeners for this event to prevent duplicates
-  socket.off('ride:payment_completed');
   socket.on('ride:payment_completed', callback);
 
-  // Return cleanup function
   return () => {
     if (socket) {
       socket.off('ride:payment_completed', callback);
@@ -993,8 +997,7 @@ export const onSharedRideInvitationReceived = (
     return () => {};
   }
 
-  // Remove any existing listeners for this event to prevent duplicates
-  socket.off('shared_ride:invitation_received');
+  // Register the listener (no global remove — cleanup uses specific callback)
   socket.on('shared_ride:invitation_received', callback);
 
   // Return cleanup function
@@ -1024,8 +1027,7 @@ export const onSharedRideInvitationAccepted = (
     return () => {};
   }
 
-  // Remove any existing listeners for this event to prevent duplicates
-  socket.off('shared_ride:invitation_accepted');
+  // Register the listener (no duplicate remove — cleanup uses specific callback)
   socket.on('shared_ride:invitation_accepted', callback);
 
   // Return cleanup function
@@ -1053,8 +1055,7 @@ export const onSharedRideInvitationRejected = (
     return () => {};
   }
 
-  // Remove any existing listeners for this event to prevent duplicates
-  socket.off('shared_ride:invitation_rejected');
+  // Register the listener (no duplicate remove — cleanup uses specific callback)
   socket.on('shared_ride:invitation_rejected', callback);
 
   // Return cleanup function
@@ -1080,8 +1081,7 @@ export const onSharedRideInvitationExpired = (
     return () => {};
   }
 
-  // Remove any existing listeners for this event to prevent duplicates
-  socket.off('shared_ride:invitation_expired');
+  // Register the listener (no duplicate remove — cleanup uses specific callback)
   socket.on('shared_ride:invitation_expired', callback);
 
   // Return cleanup function
@@ -1093,32 +1093,34 @@ export const onSharedRideInvitationExpired = (
 };
 
 /**
- * Listen for passenger location updates in shared rides
+ * Listen for route point completed event
+ * Notifies when a multi-point ride route point is completed
  * @returns Cleanup function to remove the listener
  */
-export const onPassengerLocationUpdate = (
+export const onRoutePointCompleted = (
   callback: (data: {
     rideId: string;
-    passengerId: string;
-    passengerNumber: 1 | 2; // 1 for primary passenger, 2 for shared passenger
-    latitude: number;
-    longitude: number;
-    timestamp: string;
+    completedSequence: number;
+    completedAt: string;
+    nextPoint: {
+      sequence: number;
+      pointType: string;
+      latitude: number;
+      longitude: number;
+      address: string;
+    } | null;
   }) => void
 ): (() => void) => {
   if (!socket) {
-    console.warn('Cannot listen for passenger location updates: Socket not initialized');
+    console.warn('Cannot listen for route point completed: Socket not initialized');
     return () => {};
   }
 
-  // Remove any existing listeners for this event to prevent duplicates
-  socket.off('passenger:location_update');
-  socket.on('passenger:location_update', callback);
+  socket.on('ride:route_point_completed', callback);
 
-  // Return cleanup function
   return () => {
     if (socket) {
-      socket.off('passenger:location_update', callback);
+      socket.off('ride:route_point_completed', callback);
     }
   };
 };
@@ -1155,8 +1157,7 @@ export const onDelegatedRideTrackingUpdate = (
     return () => {};
   }
 
-  // Remove any existing listeners for this event to prevent duplicates
-  socket.off('delegated_ride:tracking_update');
+  // Register the listener (no duplicate remove — cleanup uses specific callback)
   socket.on('delegated_ride:tracking_update', callback);
 
   // Return cleanup function
@@ -1168,43 +1169,32 @@ export const onDelegatedRideTrackingUpdate = (
 };
 
 /**
- * Remove all event listeners
+ * Remove specific ride event listeners
+ * Accepts optional callbacks to avoid blasting ALL listeners for each event
  */
-export const removeRideListeners = (): void => {
+export const removeRideListeners = (callbacks?: {
+  onAccepted?: (...args: any[]) => void;
+  onStatusChanged?: (...args: any[]) => void;
+  onDriverLocation?: (...args: any[]) => void;
+  onETA?: (...args: any[]) => void;
+  onDriverArrived?: (...args: any[]) => void;
+  onCancelled?: (...args: any[]) => void;
+  onCompleted?: (...args: any[]) => void;
+}): void => {
   if (!socket) {
     return;
   }
 
-  socket.off('ride:accepted');
-  socket.off('ride:status_changed');
-  socket.off('driver:location_update');
-  socket.off('ride:eta_update');
-  socket.off('ride:driver_arrived');
-  socket.off('ride:cancelled');
-  socket.off('ride:completed');
-  socket.off('passenger:location_update');
+  socket.off('ride:accepted', callbacks?.onAccepted);
+  socket.off('ride:status_changed', callbacks?.onStatusChanged);
+  socket.off('driver:location_update', callbacks?.onDriverLocation);
+  socket.off('ride:eta_update', callbacks?.onETA);
+  socket.off('ride:driver_arrived', callbacks?.onDriverArrived);
+  socket.off('ride:cancelled', callbacks?.onCancelled);
+  socket.off('ride:completed', callbacks?.onCompleted);
 };
 
-export const removeAllListeners = (): void => {
-  if (!socket) {
-    return;
-  }
 
-  socket.off('ride:accepted');
-  socket.off('ride:status_changed');
-  socket.off('driver:location_update');
-  socket.off('ride:eta_update');
-  socket.off('ride:driver_arrived');
-  socket.off('ride:cancelled');
-  socket.off('ride:completed');
-  socket.off('driver:availability_changed');
-  socket.off('shared_ride:invitation_received');
-  socket.off('shared_ride:invitation_accepted');
-  socket.off('shared_ride:invitation_rejected');
-  socket.off('shared_ride:invitation_expired');
-  socket.off('passenger:location_update');
-  socket.off('delegated_ride:tracking_update');
-};
 
 /**
  * Remove specific event listener
@@ -1242,8 +1232,7 @@ export default {
   onSharedRideInvitationAccepted,
   onSharedRideInvitationRejected,
   onSharedRideInvitationExpired,
-  onPassengerLocationUpdate,
+  onRoutePointCompleted,
   onDelegatedRideTrackingUpdate,
-  removeAllListeners,
   removeListener,
 };

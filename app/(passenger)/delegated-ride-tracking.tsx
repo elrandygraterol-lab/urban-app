@@ -15,7 +15,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MARKER_ICONS } from '@/src/components/map/markers';
+import { DriverTaxiIcon, PickupIcon, DropoffIcon } from '@/src/components/map/markers';
 import { useAuthStore } from '@/store/authStore';
 import { rideAPI } from '@/services/api';
 import {
@@ -27,7 +27,7 @@ import {
   onETAUpdate,
   onRideCompleted,
   onRideCancelled,
-  removeAllListeners,
+  onDelegatedRideTrackingUpdate,
 } from '@/services/socket';
 import { logInfo, logError } from '@/utils/errorLogger';
 import { formatCurrency, Currency } from '@/utils/currency';
@@ -83,6 +83,7 @@ export default function DelegatedRideTrackingScreen() {
   const router = useRouter();
   const { user, token } = useAuthStore();
   const mapRef = useRef<MapView>(null);
+  const rideDataRef = useRef<any>(null);
   const insets = useSafeAreaInsets();
   const { showToast, showStatus, dismissStatus } = useUnifiedNotifications();
 
@@ -162,6 +163,11 @@ export default function DelegatedRideTrackingScreen() {
     }
   }, [rideId, token, router, showToast]);
 
+  // Sync rideDataRef with rideData state
+  useEffect(() => {
+    rideDataRef.current = rideData;
+  }, [rideData]);
+
   // Setup WebSocket connection and listeners
   useEffect(() => {
     if (!user || !token || !rideId) {
@@ -195,7 +201,6 @@ export default function DelegatedRideTrackingScreen() {
       if (rideId) {
         leaveRide(rideId);
       }
-      removeAllListeners();
     };
   }, [user, token, rideId]);
 
@@ -207,23 +212,84 @@ export default function DelegatedRideTrackingScreen() {
 
     logInfo('DelegatedRideTracking', 'Setting up ride event listeners');
 
+    // Listen for dedicated delegated ride tracking updates (richer data)
+    const cleanupDelegatedTracking = onDelegatedRideTrackingUpdate((data: any) => {
+      logInfo('DelegatedRideTracking', 'Dedicated tracking update received', data);
+
+      setRideData(prev => {
+        const pickup = data.pickup
+          ? { latitude: data.pickup.latitude, longitude: data.pickup.longitude, address: data.pickup.address }
+          : prev?.pickup;
+        const destination = data.destination
+          ? { latitude: data.destination.latitude, longitude: data.destination.longitude, address: data.destination.address }
+          : prev?.destination;
+
+        return {
+          id: prev?.id || data.rideId,
+          status: data.status,
+          beneficiaryName: data.beneficiary?.name || prev?.beneficiaryName || '',
+          beneficiaryPhone: data.beneficiary?.phone || prev?.beneficiaryPhone || '',
+          pickup: pickup || { latitude: 0, longitude: 0, address: '' },
+          destination: destination || { latitude: 0, longitude: 0, address: '' },
+          estimatedFare: data.estimatedFare ?? prev?.estimatedFare,
+          finalFare: prev?.finalFare,
+          currency: (data.currency as Currency) || prev?.currency,
+          driver: data.driver
+            ? {
+                id: data.driver.id,
+                name: data.driver.name,
+                phone: data.driver.phone,
+                rating: 0,
+                vehicleInfo: {
+                  type: data.driver.vehicleType || '',
+                  model: data.driver.vehicleModel || '',
+                  licensePlate: data.driver.licensePlate || '',
+                  color: data.driver.vehicleColor || '',
+                },
+                currentLocation: data.driver.location
+                  ? {
+                      latitude: data.driver.location.latitude,
+                      longitude: data.driver.location.longitude,
+                    }
+                  : prev?.driver?.currentLocation,
+              }
+            : prev?.driver,
+          eta: data.eta || prev?.eta,
+        };
+      });
+
+      if (data.driver?.location) {
+        setDriverLocation({
+          latitude: data.driver.location.latitude,
+          longitude: data.driver.location.longitude,
+        });
+      }
+    });
+
     // Listen for ride status changes
     const handleRideStatusChanged = (data: any) => {
       logInfo('DelegatedRideTracking', 'Ride status changed', { status: data.status });
 
+      // Ignore completed — no dedicated handler in this screen
+      if (data.status === 'completed') {
+        logInfo('DelegatedRideTracking', 'Ignoring completed in status_changed');
+        return;
+      }
+
       setRideData(prev => (prev ? { ...prev, status: data.status } : null));
 
       // Show alerts for important status changes
+      const beneficiaryName = rideDataRef.current?.beneficiaryName || 'el beneficiario';
       if (data.status === 'arrived') {
         showStatus(
           'info',
-          `El conductor ha llegado al punto de recogida para ${rideData?.beneficiaryName}.`,
+          `El conductor ha llegado al punto de recogida para ${beneficiaryName}.`,
           '📍 Conductor en el Punto de Recogida'
         );
       } else if (data.status === 'in_progress') {
         showStatus(
           'info',
-          `El viaje de ${rideData?.beneficiaryName} está en progreso.`,
+          `El viaje de ${beneficiaryName} está en progreso.`,
           '🚀 Viaje en Progreso'
         );
       }
@@ -262,6 +328,7 @@ export default function DelegatedRideTrackingScreen() {
     // Listen for ride completed
     const cleanupCompleted = onRideCompleted((data: any) => {
       logInfo('DelegatedRideTracking', 'Ride completed', { rideId: data.rideId });
+      const name = rideDataRef.current?.beneficiaryName || 'el beneficiario';
 
       setRideData(prev =>
         prev
@@ -275,7 +342,7 @@ export default function DelegatedRideTrackingScreen() {
 
       showStatus(
         'info',
-        `El viaje de ${rideData?.beneficiaryName} ha sido completado exitosamente.`,
+        `El viaje de ${name} ha sido completado exitosamente.`,
         '✅ Viaje Completado',
         undefined,
         { label: 'Ver Historial', onPress: () => { router.push('/(passenger)/history'); dismissStatus(); } }
@@ -285,27 +352,64 @@ export default function DelegatedRideTrackingScreen() {
     // Listen for ride cancelled
     const cleanupCancelled = onRideCancelled((data: any) => {
       logInfo('DelegatedRideTracking', 'Ride cancelled', { rideId: data.rideId });
+      const name = rideDataRef.current?.beneficiaryName || 'el beneficiario';
 
       setRideData(prev => (prev ? { ...prev, status: 'cancelled' } : null));
 
       showStatus(
         'info',
-        `El viaje de ${rideData?.beneficiaryName} ha sido cancelado.\n\nMotivo: ${data.cancellationReason}`,
+        `El viaje de ${name} ha sido cancelado.\n\nMotivo: ${data.cancellationReason}`,
         '❌ Viaje Cancelado',
         undefined,
         { label: 'Entendido', onPress: () => { router.back(); dismissStatus(); } }
       );
     });
 
-    onRideStatusChanged(handleRideStatusChanged);
-    onDriverLocationUpdate(handleDriverLocationUpdate);
-    onETAUpdate(handleETAUpdate);
+    const cleanupStatusChanged = onRideStatusChanged(handleRideStatusChanged);
+    const cleanupDriverLocation = onDriverLocationUpdate(handleDriverLocationUpdate);
+    const cleanupETA = onETAUpdate(handleETAUpdate);
 
     return () => {
+      cleanupDelegatedTracking();
       cleanupCompleted();
       cleanupCancelled();
+      cleanupStatusChanged();
+      cleanupDriverLocation();
+      cleanupETA();
     };
-  }, [rideId, isSocketConnected, rideData?.beneficiaryName, router, showStatus]);
+  }, [rideId, isSocketConnected, router, showStatus]);
+
+// Polling fallback - refreshes ride status every 5s
+  useEffect(() => {
+    if (!rideData || !rideData.id) return;
+    const activeStatuses = ['pending', 'accepted', 'arrived', 'in_progress'];
+    if (!activeStatuses.includes(rideData.status)) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await rideAPI.getRide(rideData.id);
+        const updated = res.data?.data || res.data;
+        if (updated && updated.status) {
+          setRideData(prev => prev ? {
+            ...prev,
+            status: updated.status !== prev.status ? updated.status : prev.status,
+            ...(updated.finalFare !== undefined ? { finalFare: updated.finalFare } : {}),
+          } : null);
+        }
+        // Also update driver location if available
+        if (updated?.driver?.currentLocation) {
+          setDriverLocation({
+            latitude: updated.driver.currentLocation.latitude,
+            longitude: updated.driver.currentLocation.longitude,
+          });
+        }
+      } catch {
+        // Silently ignore polling errors
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [rideData?.id, rideData?.status]);
 
   // Load ride data on mount
   useEffect(() => {
@@ -432,16 +536,18 @@ export default function DelegatedRideTrackingScreen() {
           coordinate={rideData.pickup}
           title="Punto de Recogida"
           description={rideData.pickup.address}
-          icon={MARKER_ICONS.pickup}
-        />
+        >
+          <PickupIcon />
+        </Marker>
 
         {/* Destination marker */}
         <Marker
           coordinate={rideData.destination}
           title="Destino"
           description={rideData.destination.address}
-          icon={MARKER_ICONS.dropoff}
-        />
+        >
+          <DropoffIcon />
+        </Marker>
 
         {/* Driver marker */}
         {driverLocation && rideData.driver && (
@@ -451,8 +557,9 @@ export default function DelegatedRideTrackingScreen() {
             description={`${rideData.driver.vehicleInfo?.model || 'Vehículo'} - ${rideData.driver.vehicleInfo?.licensePlate || 'N/A'}`}
             anchor={{ x: 0.5, y: 0.5 }}
             rotation={0}
-            icon={MARKER_ICONS.driverTaxi}
-          />
+          >
+            <DriverTaxiIcon />
+          </Marker>
         )}
 
         {/* Route polyline */}

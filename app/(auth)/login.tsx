@@ -154,7 +154,7 @@ export default function LoginScreen() {
         style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}
         edges={['top', 'bottom']}
       >
-        <ActivityIndicator size="large" color="#22c55e" />
+        <ActivityIndicator size="large" color="#059669" />
       </SafeAreaView>
     );
   }
@@ -217,8 +217,9 @@ export default function LoginScreen() {
             <View style={styles.formContainer}>
               {/* Welcome header */}
               <View style={styles.formHeader}>
+                <View style={styles.formTitleAccent} />
                 <Text style={styles.formTitle}>Bienvenido de vuelta</Text>
-                <Text style={styles.formSubtitle}>Inicia sesión para continuar</Text>
+                <Text style={styles.formSubtitle}>Inicia sesión para acceder a tu cuenta</Text>
               </View>
               {/* Email */}
               <View style={styles.inputWrapper}>
@@ -326,7 +327,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: '#f5f7f5',
   },
   scrollContent: {
     flexGrow: 1,
@@ -340,7 +341,7 @@ const styles = StyleSheet.create({
   },
   illustrationBg: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#dcedc8',
+    backgroundColor: '#f2f6f2',
   },
 
   /* Sun */
@@ -396,7 +397,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 80,
-    backgroundColor: '#81c784',
+    backgroundColor: '#d4e2d4',
     borderTopLeftRadius: 180,
     borderTopRightRadius: 180,
   },
@@ -406,7 +407,7 @@ const styles = StyleSheet.create({
     left: -30,
     width: 200,
     height: 160,
-    backgroundColor: '#66bb6a',
+    backgroundColor: '#c0d6c0',
     borderTopLeftRadius: 120,
     borderTopRightRadius: 120,
     transform: [{ scaleX: 1.2 }],
@@ -417,7 +418,7 @@ const styles = StyleSheet.create({
     left: '20%',
     width: 180,
     height: 195,
-    backgroundColor: '#4caf50',
+    backgroundColor: '#a8c8a8',
     borderTopLeftRadius: 100,
     borderTopRightRadius: 100,
     transform: [{ scaleX: 1.3 }],
@@ -428,7 +429,7 @@ const styles = StyleSheet.create({
     right: -10,
     width: 160,
     height: 145,
-    backgroundColor: '#43a047',
+    backgroundColor: '#90ba90',
     borderTopLeftRadius: 90,
     borderTopRightRadius: 90,
     transform: [{ scaleX: 1.4 }],
@@ -439,10 +440,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 40,
-    backgroundColor: '#2e7d32',
+    backgroundColor: '#78ac78',
     borderTopLeftRadius: 200,
     borderTopRightRadius: 200,
-    opacity: 0.4,
+    opacity: 0.3,
   },
 
   /* Logo */
@@ -486,17 +487,26 @@ const styles = StyleSheet.create({
 
   /* Form header */
   formHeader: {
-    marginBottom: 24,
+    marginBottom: 28,
+  },
+  formTitleAccent: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#059669',
+    borderRadius: 2,
+    marginBottom: 16,
   },
   formTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
     color: '#0f172a',
-    marginBottom: 4,
+    marginBottom: 6,
+    letterSpacing: -0.3,
   },
   formSubtitle: {
     fontSize: 14,
     color: '#64748b',
+    lineHeight: 20,
   },
   /* Form */
   formContainer: {
@@ -561,8 +571,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   checkboxChecked: {
-    borderColor: '#22c55e',
-    backgroundColor: '#22c55e',
+    borderColor: '#059669',
+    backgroundColor: '#059669',
   },
   rememberText: {
     fontSize: 14,
@@ -571,18 +581,18 @@ const styles = StyleSheet.create({
   },
   forgotText: {
     fontSize: 14,
-    color: '#22c55e',
+    color: '#059669',
     fontWeight: '600',
   },
   /* Primary Button */
   primaryBtn: {
     height: 48,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#059669',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 14,
-    shadowColor: '#22c55e',
+    shadowColor: '#059669',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
@@ -610,7 +620,7 @@ const styles = StyleSheet.create({
   },
   linkRowAction: {
     fontSize: 14,
-    color: '#22c55e',
+    color: '#059669',
     fontWeight: '700',
   },
 
