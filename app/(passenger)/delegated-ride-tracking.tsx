@@ -569,7 +569,7 @@ export default function DelegatedRideTrackingScreen() {
               driverLocation,
               rideData.status === 'in_progress' ? rideData.destination : rideData.pickup,
             ]}
-            strokeColor={Colors.primary}
+            strokeColor={rideData.status === 'in_progress' ? '#22C55E' : '#FF8C00'}
             strokeWidth={3}
             lineDashPattern={[10, 5]}
           />

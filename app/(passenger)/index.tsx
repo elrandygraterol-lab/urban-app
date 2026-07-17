@@ -3593,11 +3593,9 @@ export default function PassengerHomeScreen() {
               <MemoizedPolyline
                 coordinates={slicedRouteCoords}
                 strokeColor={
-                  !activeRide || activeRide.status === 'pending'
-                    ? '#6B7280'
-                    : activeRide.status === 'accepted'
-                      ? '#FF8C00'
-                      : '#22C55E'
+                  !activeRide || activeRide.status === 'pending' || activeRide.status === 'accepted'
+                    ? '#FF8C00'
+                    : '#22C55E'
                 }
                 strokeWidth={isApproximateRoute ? 3 : 4}
                 lineCap="round"
