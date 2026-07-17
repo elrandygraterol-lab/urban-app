@@ -9,6 +9,7 @@
 
 import axios from 'axios';
 import config from '../src/config/api';
+import { searchFallbackPlaces, FallbackPlace } from './fallbackPlaces';
 
 console.log('[MAPS SERVICE] Initializing with baseURL:', config.apiUrl);
 
@@ -185,11 +186,25 @@ export async function searchPlaces(
     const response = await api.get('/maps/search-places', { params });
     const results = response.data.data || [];
     console.log('[mapsService] searchPlaces (legacy) response:', results.length, 'results');
-    return results;
+    if (results.length > 0) return results;
   } catch (error) {
-    console.error('Error buscando lugares:', error);
-    throw error;
+    console.warn('[mapsService] Legacy search also unavailable:', error);
   }
+
+  // Final fallback: client-side local place list
+  console.warn('[mapsService] Both API endpoints failed, using client-side fallback');
+  const fallbackResults = searchFallbackPlaces(query);
+  console.log('[mapsService] Fallback results:', fallbackResults.length);
+  return fallbackResults.map((p: FallbackPlace) => ({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    latitude: p.latitude,
+    longitude: p.longitude,
+    type: p.type,
+    fullAddress: p.fullAddress,
+    source: p.source as 'custom',
+  }));
 }
 
 /**

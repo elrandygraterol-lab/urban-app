@@ -64,23 +64,20 @@ export default function AddressAutocomplete({
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const justSelectedRef = useRef(false);
   const isInputFocusedRef = useRef(false);
-  const initialMountRef = useRef(true);
+  const lastSearchValue = useRef<string>('');
 
   useEffect(() => {
-    // Skip search on initial mount (prevents showing suggestions when
-    // component mounts with pre-existing text from address field)
-    if (initialMountRef.current) {
-      initialMountRef.current = false;
-      return;
-    }
-
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
-    // Skip search if a place was just selected (value changed by selection, not typing)
+    // Skip search if value was just set by selection (avoid flicker)
     if (justSelectedRef.current) {
       justSelectedRef.current = false;
       return;
     }
+
+    // Avoid redundant search for unchanged value
+    if (value === lastSearchValue.current) return;
+    lastSearchValue.current = value;
 
     if (value.length < 3) {
       setSuggestions([]);
@@ -98,7 +95,6 @@ export default function AddressAutocomplete({
         );
         const found = results.slice(0, 5);
         setSuggestions(found);
-        // Solo mostrar dropdown si hay resultados — si no hay, no interrumpir al usuario
         setShowSuggestions(found.length > 0);
       } catch {
         setSuggestions([]);

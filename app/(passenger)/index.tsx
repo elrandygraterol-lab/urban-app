@@ -2431,10 +2431,15 @@ export default function PassengerHomeScreen() {
 
   // Calculate route and fare when destination changes
   useEffect(() => {
-    if (pickupLocation && destinationLocation) {
-      calculateRoute();
-      calculateFareWithZone();
-    }
+    if (!pickupLocation || !destinationLocation) return;
+    const pLoc = pickupLocation;
+    const dLoc = destinationLocation;
+    calculateRoute().catch(err =>
+      logError('PassengerHomeScreen', err, { context: 'Route calc effect' })
+    );
+    calculateFareWithZone().catch(err =>
+      logError('PassengerHomeScreen', err, { context: 'Fare calc effect' })
+    );
   }, [
     pickupLocation,
     destinationLocation,
