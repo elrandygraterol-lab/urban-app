@@ -46,7 +46,13 @@ export const useDriverStore = create<DriverState>((set, get) => ({
 
   addEarning: (amount: number, currency: Currency, rideId?: string, description?: string) => {
     const { balanceVES, balanceUSD, transactions } = get();
-    
+
+    // Dedup: skip if a transaction for this rideId already exists
+    if (rideId && transactions.some(t => t.rideId === rideId)) {
+      console.log('[DRIVER STORE] Earning already recorded for ride', rideId, '— skipping duplicate');
+      return;
+    }
+
     const newTransaction: Transaction = {
       id: Math.random().toString(36).substr(2, 9),
       amount,

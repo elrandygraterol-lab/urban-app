@@ -34,7 +34,7 @@ module.exports = ({ config }) => {
       },
     },
     android: {
-      versionCode: 10,
+      versionCode: 11,
       package: packageName,
       googleServicesFile: isFirebaseEnabled ? './google-services.json' : undefined,
       adaptiveIcon: {

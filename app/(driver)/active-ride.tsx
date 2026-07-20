@@ -140,6 +140,8 @@ export default function ActiveRideScreen() {
   const prevDriverPosRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const [driverHeading, setDriverHeading] = useState<number>(0);
   const locationBufferRef = useRef<Array<{ latitude: number; longitude: number; heading: number | null }>>([]);
+  const completionSoundPlayedRef = useRef(false);
+  const driverInitiatedCancelRef = useRef(false);
 
   // Keep rideRef and locationRef in sync
   useEffect(() => {
@@ -220,6 +222,8 @@ export default function ActiveRideScreen() {
     setRouteDuration(null);
     setBackendEtaMinutes(null);
     setBackendEtaDistance(null);
+    completionSoundPlayedRef.current = false;
+    driverInitiatedCancelRef.current = false;
 
     fetchRide();
     initializeLocation();
@@ -744,7 +748,18 @@ export default function ActiveRideScreen() {
         // Reset navigation progress on route recalculation
         setNearestRouteIndex(0);
         setNearestStepIndex(0);
-        announcedStepIndexRef.current = -1;
+        // Only reset announced steps if the route actually changed
+        const newSteps = routeData.steps ?? [];
+        const stepsChanged = routeSteps.length !== newSteps.length ||
+          routeSteps.some((s, i) => {
+            const ns = newSteps[i];
+            return !ns?.location ||
+              s.location?.latitude !== ns.location.latitude ||
+              s.location?.longitude !== ns.location.longitude;
+          });
+        if (stepsChanged) {
+          announcedStepIndexRef.current = -1;
+        }
 
         console.log('[ACTIVE_RIDE] Route loaded:', {
           points: routeCoords.length,
@@ -865,8 +880,11 @@ export default function ActiveRideScreen() {
         return;
       }
 
-      // Play notification sound
-      playNotificationSound();
+      // Play notification sound (guard against duplicate with API handler)
+      if (!completionSoundPlayedRef.current) {
+        playNotificationSound();
+        completionSoundPlayedRef.current = true;
+      }
 
       // Store final fare
       setFinalFare(data.finalFare);
@@ -905,6 +923,18 @@ export default function ActiveRideScreen() {
       // Only handle if this is the current ride
       if (data.rideId !== rideId) {
         console.log('[ACTIVE_RIDE] ⚠️ Cancelled ride does not match current ride, ignoring');
+        return;
+      }
+
+      // Skip notification if driver initiated the cancel — already shown toast + navigated
+      if (driverInitiatedCancelRef.current) {
+        console.log('[ACTIVE_RIDE] Driver initiated cancel — skipping duplicate notification');
+        driverInitiatedCancelRef.current = false;
+        setIsAvailable(true);
+        setRide(null);
+        setRouteCoordinates([]);
+        setRouteSteps([]);
+        setTimeout(() => router.replace('/(driver)'), 100);
         return;
       }
 
@@ -1193,7 +1223,10 @@ export default function ActiveRideScreen() {
           } else {
             setTimeout(() => router.replace('/(driver)'), 1500);
           }
-          playNotificationSound();
+          if (!completionSoundPlayedRef.current) {
+            playNotificationSound();
+            completionSoundPlayedRef.current = true;
+          }
         } else {
           fetchRide();
         }
@@ -1258,6 +1291,7 @@ export default function ActiveRideScreen() {
       return;
     }
 
+    driverInitiatedCancelRef.current = true;
     setIsCancelling(true);
     try {
       await rideAPI.cancelRide(rideId, {

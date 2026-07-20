@@ -35,6 +35,7 @@ export const useGlobalSocketListeners = ({
   const registerListenersRef = useRef<((s: any) => void) | null>(null);
   const setupDisconnectHandlerRef = useRef<((s: any) => void) | null>(null);
   const fetchingPendingRef = useRef(false);
+  const processedCompletedRidesRef = useRef<Set<string>>(new Set());
 
   // Handler for ride:request_created event (GLOBAL - works on any screen)
   const handleRideRequest = useCallback(
@@ -114,13 +115,6 @@ export const useGlobalSocketListeners = ({
           `${amountMsg}Recibiste ${currencySymbol} ${earnings.toFixed(2)}${dualMsg} por el viaje`,
           '¡Pago Recibido!',
           { rideId: data.rideId, amount: data.amount, currency: data.currency }
-        );
-        // Auto-update wallet balance in driver store
-        const driverStore = useDriverStore.getState();
-        driverStore.addEarning(
-          earnings,
-          data.currency === 'USD' ? 'USD' : 'VES',
-          data.rideId
         );
       }
       // Passenger: payment confirmation is shown inline in the payment modal
@@ -300,7 +294,25 @@ export const useGlobalSocketListeners = ({
       const earnings = data.driverEarnings || 0;
       const fare = data.finalFare || 0;
 
+      // Guard: skip if already processed this ride completion (prevents double wallet credit)
+      if (processedCompletedRidesRef.current.has(data.rideId)) {
+        console.log('[GLOBAL_SOCKET] Ride completion already processed for', data.rideId, '— skipping');
+        return;
+      }
+      processedCompletedRidesRef.current.add(data.rideId);
+      // Keep set bounded — trim to last 20 if it exceeds 25
+      if (processedCompletedRidesRef.current.size > 25) {
+        const entries = Array.from(processedCompletedRidesRef.current);
+        processedCompletedRidesRef.current = new Set(entries.slice(-20));
+      }
+
       if (user?.role === 'driver') {
+        // Credit wallet with actual earnings from the completed ride
+        if (earnings > 0) {
+          const driverStore = useDriverStore.getState();
+          driverStore.addEarning(earnings, curr === 'USD' ? 'USD' : 'VES', data.rideId);
+        }
+
         const distanceMsg = data.actualDistanceKm ? `Distancia: ${data.actualDistanceKm.toFixed(1)} km. ` : '';
         const earningsMsg = earnings > 0
           ? `| Ganancia: ${currencySymbol} ${earnings.toFixed(2)}`

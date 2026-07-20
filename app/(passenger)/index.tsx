@@ -210,7 +210,8 @@ export default function PassengerHomeScreen() {
   const [userInteractedWithMap, setUserInteractedWithMap] = useState(false);
 
   // Dynamic search context — resolves city/state from user location for precise geocoding
-  const [searchContext, setSearchContext] = useState<string>('Venezuela');
+  // Default: San Juan de los Morros, Guárico, Venezuela (prevails if reverse geocode fails)
+  const [searchContext, setSearchContext] = useState<string>('San Juan de los Morros, Guárico, Venezuela');
   const [vehicleType, setVehicleType] = useState<'taxi' | 'moto_taxi'>('taxi');
   const [motoQuantity, setMotoQuantity] = useState<1 | 2>(1);
   const [estimatedFare, setEstimatedFare] = useState<number | null>(null);
@@ -362,11 +363,13 @@ export default function PassengerHomeScreen() {
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeRideRef = useRef<any>(null);
   const paymentTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rideAutoResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const estimatedFareRef = useRef<number | null>(null);
   const currentInvitationRef = useRef<SharedRideInvitation | null>(null);
   const pickupLocationRef = useRef<LocationCoords | null>(null);
   const destinationLocationRef = useRef<LocationCoords | null>(null);
   const routeCoordinatesRef = useRef<RouteCoordinates[]>([]);
+  const driverArrivedNotifiedRef = useRef(false);
   const hasShownNearbyNotificationRef = useRef(false);
   const isDynamicRouteEnabledRef = useRef(true);
   const lastRouteUpdateRef = useRef<number>(0);
@@ -699,6 +702,7 @@ export default function PassengerHomeScreen() {
   const [driverComment, setDriverComment] = useState('');
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const isSubmittingRatingRef = useRef(false);
+  const hasInteractedWithRatingRef = useRef(false);
 
   // Contact modal states
   const [showContactModal, setShowContactModal] = useState(false);
@@ -1163,6 +1167,7 @@ export default function PassengerHomeScreen() {
       // Guard: prevent double processing from ride room + emitToUser
       if (acceptedRideIdRef.current === data.rideId) return;
       acceptedRideIdRef.current = data.rideId;
+      driverArrivedNotifiedRef.current = false;
 
       console.log('[PASSENGER] Ride accepted:', data);
 
@@ -1327,6 +1332,13 @@ export default function PassengerHomeScreen() {
     // Listen for driver arrived event (direct notification)
     const handleDriverArrived = (data: any) => {
       console.log('🚗 Driver arrived (direct event):', data);
+
+      // Guard: skip if already notified for this arrival
+      if (driverArrivedNotifiedRef.current) {
+        console.log('[PASSENGER] Driver arrival already notified — skipping duplicate');
+        return;
+      }
+      driverArrivedNotifiedRef.current = true;
 
       // Update ride status
       setActiveRide(prev => ({
@@ -1518,6 +1530,14 @@ export default function PassengerHomeScreen() {
       // Set ride status to completed (finalize immediately)
       setActiveRide((prev: any) => prev ? { ...prev, status: 'completed' } : null);
 
+      // Clear route from map and driver location immediately
+      setRouteCoordinates([]);
+      setNearestRouteIndex(0);
+      setDriverLocation(null);
+      setDisplayDistance(null);
+      setDisplayDuration(null);
+      setHasShownNearbyNotification(false);
+
       // Show text-only notification — no buttons
       const fb = fareBreakdownRef.current;
       const fc = fareCurrencyRef.current;
@@ -1538,6 +1558,16 @@ export default function PassengerHomeScreen() {
 
       console.log('[PASSENGER] Ride completed — opening rating modal directly');
       setShowRatingModal(true);
+
+      // Auto-redirect back to request ride after 8s if user hasn't interacted with modal
+      hasInteractedWithRatingRef.current = false;
+      if (rideAutoResetTimeoutRef.current) clearTimeout(rideAutoResetTimeoutRef.current);
+      rideAutoResetTimeoutRef.current = setTimeout(() => {
+        if (activeRideRef.current?.status === 'completed' && !hasInteractedWithRatingRef.current) {
+          console.log('[PASSENGER] Auto-redirecting to request ride after completion');
+          handleCloseRatingModal();
+        }
+      }, 8000);
     };
 
     // Register event listeners — store cleanup functions individually (no destructive socket.off)
@@ -1560,6 +1590,7 @@ export default function PassengerHomeScreen() {
 
     return () => {
       console.log('[PASSENGER] Cleaning up ride event listeners for ride:', activeRide.id);
+      if (rideAutoResetTimeoutRef.current) clearTimeout(rideAutoResetTimeoutRef.current);
       cleanupAll();
       if (activeRide) {
         leaveRide(activeRide.id);
@@ -1583,8 +1614,22 @@ export default function PassengerHomeScreen() {
         if (!currentId) return;
         const res = await rideAPI.getRide(currentId);
         const updated = res.data?.data || res.data;
-        if (updated && updated.status && updated.status !== currentStatus) {
+        const forwardStatusOrder = ['pending', 'accepted', 'arrived', 'in_progress', 'completed'];
+        const currentIdx = forwardStatusOrder.indexOf(currentStatus || '');
+        const newIdx = forwardStatusOrder.indexOf(updated?.status || '');
+        if (updated && updated.status && updated.status !== currentStatus && newIdx > currentIdx) {
           console.log('[PASSENGER] Polling caught status change:', currentStatus, '->', updated.status);
+
+          // If polling detects completed, clean up route and driver location
+          if (updated.status === 'completed') {
+            setRouteCoordinates([]);
+            setNearestRouteIndex(0);
+            setDriverLocation(null);
+            setDisplayDistance(null);
+            setDisplayDuration(null);
+            setHasShownNearbyNotification(false);
+          }
+
           setActiveRide(prev => prev ? {
             ...prev,
             status: updated.status || prev.status,
@@ -2115,16 +2160,22 @@ export default function PassengerHomeScreen() {
         const loc = await reverseGeocode(currentLocation.latitude, currentLocation.longitude);
         if (!cancelled && loc?.address) {
           // Extract state/region from address (e.g. "Avenida Bolívar, Valencia, Carabobo, 2001, Venezuela")
-          const parts = loc.address.split(', ');
+          const parts = loc.address.split(', ').filter(p => !/^\d+$/.test(p.trim()));
           const countryIdx = parts.findIndex(p => p.toLowerCase().includes('venezuela'));
           if (countryIdx > 0) {
+            // Include city (countryIdx-2) and state (countryIdx-1) for more precise context
+            // e.g. "San Juan de los Morros, Guárico, Venezuela"
+            const city = countryIdx >= 2 ? parts[countryIdx - 2] : null;
             const state = parts[countryIdx - 1];
-            const ctx = [state, 'Venezuela'].filter(Boolean).join(', ');
+            const ctx = city
+              ? [city, state, 'Venezuela'].filter(Boolean).join(', ')
+              : [state, 'Venezuela'].filter(Boolean).join(', ');
             setSearchContext(ctx);
+            console.log('[SEARCH_CONTEXT] Resolved:', ctx);
           }
         }
-      } catch {
-        // Keep default 'Venezuela' context
+      } catch (error) {
+        console.warn('[SEARCH_CONTEXT] Reverse geocode failed, keeping default:', error);
       }
     })();
 
@@ -3389,12 +3440,15 @@ export default function PassengerHomeScreen() {
 
   const handleCloseRatingModal = () => {
     if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
+    if (rideAutoResetTimeoutRef.current) clearTimeout(rideAutoResetTimeoutRef.current);
     setShowRatingModal(false);
     setDriverRating(0);
     setDriverComment('');
     setFinalFare(null);
     ratingShownForRideRef.current = null;
     acceptedRideIdRef.current = null;
+    driverArrivedNotifiedRef.current = false;
+    hasInteractedWithRatingRef.current = false;
 
     // Reset ride state completely - return to initial map view
     setActiveRide(null);
@@ -3716,7 +3770,8 @@ export default function PassengerHomeScreen() {
                   <Text style={styles.rideTitle}>
                     {activeRide.status === 'accepted' ? 'Conductor en camino' : 
                      activeRide.status === 'arrived' ? 'El conductor ha llegado' : 
-                     activeRide.status === 'in_progress' ? 'Viaje en curso' : ''}
+                     activeRide.status === 'in_progress' ? 'Viaje en curso' : 
+                     activeRide.status === 'completed' ? 'Viaje Completado' : ''}
                   </Text>
 
                   {/* Status badge */}
@@ -3806,7 +3861,7 @@ export default function PassengerHomeScreen() {
 
                   {/* Action buttons */}
                   <View style={styles.rideActionsRow}>
-                    {activeRide.status !== 'in_progress' && (
+                    {activeRide.status !== 'in_progress' && activeRide.status !== 'completed' && (
                       <TouchableOpacity style={styles.rideBtnCall} onPress={handleContactDriver}>
                         <Ionicons name="call-outline" size={16} color="#fff" />
                         <Text style={styles.rideBtnCallText}>Llamar</Text>
@@ -3816,6 +3871,13 @@ export default function PassengerHomeScreen() {
                     {(activeRide.status === 'pending' || activeRide.status === 'accepted' || activeRide.status === 'arrived') && (
                       <TouchableOpacity style={styles.rideBtnCancel} onPress={handleCancelRidePress}>
                         <Text style={styles.rideBtnCancelText}>Cancelar</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {activeRide.status === 'completed' && (
+                      <TouchableOpacity style={[styles.rideBtnCall, { backgroundColor: '#22c55e', flex: 1 }]} onPress={() => handleCloseRatingModal()}>
+                        <Ionicons name="add-circle-outline" size={16} color="#fff" />
+                        <Text style={styles.rideBtnCallText}>Solicitar nuevo viaje</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -5033,7 +5095,7 @@ export default function PassengerHomeScreen() {
               {/* Stars */}
               <View style={styles.ratingStarsRow}>
                 {[1, 2, 3, 4, 5].map(star => (
-                  <TouchableOpacity key={star} onPress={() => setDriverRating(star)}>
+                  <TouchableOpacity key={star} onPress={() => { setDriverRating(star); hasInteractedWithRatingRef.current = true; }}>
                     <Ionicons
                       name={star <= driverRating ? 'star' : 'star-outline'}
                       size={36}
@@ -5058,7 +5120,7 @@ export default function PassengerHomeScreen() {
                 placeholder="Comentario (opcional)"
                 placeholderTextColor="#9ca3af"
                 value={driverComment}
-                onChangeText={setDriverComment}
+                onChangeText={(text) => { setDriverComment(text); hasInteractedWithRatingRef.current = true; }}
                 multiline
                 numberOfLines={3}
                 maxLength={200}

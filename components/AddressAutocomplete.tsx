@@ -17,7 +17,7 @@ import { Colors } from '@/constants/theme';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const TAB_BAR_HEIGHT = 60; // Altura aproximada del tab bar
-const SUGGESTION_ITEM_HEIGHT = 44; // Altura aproximada de cada sugerencia
+const SUGGESTION_ITEM_HEIGHT = 40; // Altura aproximada de cada sugerencia
 const MAX_VISIBLE_SUGGESTIONS = 4; // Máximo de sugerencias visibles sin scroll
 
 export interface Place {
@@ -40,7 +40,7 @@ export interface AddressAutocompleteProps {
   style?: ViewStyle;
   /** When true, renders without its own border/background — for embedding inside a styled container */
   bare?: boolean;
-  /** Override styles for the suggestions dropdown (unused, kept for API compat) */
+  /** Override styles for the suggestions dropdown (applied with position: 'absolute') */
   suggestionsStyle?: ViewStyle;
 }
 
@@ -64,7 +64,7 @@ export default function AddressAutocomplete({
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const justSelectedRef = useRef(false);
   const isInputFocusedRef = useRef(false);
-  const lastSearchValue = useRef<string>('');
+  const lastSearchValue = useRef<string>(value);
 
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -163,13 +163,7 @@ export default function AddressAutocomplete({
   const handleInputBlur = () => {
     setIsInputFocused(false);
     isInputFocusedRef.current = false;
-    // Cerrar sugerencias con un pequeño delay para permitir que
-    // los toques en sugerencias se procesen antes de cerrar
-    setTimeout(() => {
-      if (!isInputFocusedRef.current) {
-        setShowSuggestions(false);
-      }
-    }, 250);
+    setShowSuggestions(false);
   };
 
   return (
@@ -207,8 +201,12 @@ export default function AddressAutocomplete({
       </View>
 
       {/* Inline suggestions — same for bare and non-bare modes */}
-      {showSuggestions && suggestions.length > 0 && (
-        <View style={[styles.suggestionsContainer, { maxHeight: maxDropdownHeight }]}>
+      {showSuggestions && isInputFocused && suggestions.length > 0 && (
+        <View style={[
+          styles.suggestionsContainer,
+          { maxHeight: maxDropdownHeight },
+          suggestionsStyle ? { position: 'absolute', ...suggestionsStyle } : {},
+        ]}>
           <ScrollView
             keyboardShouldPersistTaps="always"
             scrollEnabled={suggestions.length > 0}
@@ -221,15 +219,10 @@ export default function AddressAutocomplete({
                   style={styles.suggestionItem}
                   onPress={() => handleSelectPlace(item)}
                   activeOpacity={0.7}
-                  onPressIn={() => {
-                    if (inputRef.current && isInputFocused) {
-                      inputRef.current.focus();
-                    }
-                  }}
                 >
                   <Ionicons
                     name="location-outline"
-                    size={18}
+                    size={16}
                     color={Colors.mediumGray}
                     style={styles.suggestionIcon}
                   />
@@ -238,7 +231,7 @@ export default function AddressAutocomplete({
                       {item.name}
                     </Text>
                     {item.description ? (
-                      <Text style={styles.suggestionDescription} numberOfLines={2} ellipsizeMode="tail">
+                      <Text style={styles.suggestionDescription} numberOfLines={1} ellipsizeMode="tail">
                         {item.description}
                       </Text>
                     ) : null}
@@ -303,18 +296,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    minHeight: 44,
+    paddingVertical: 8,
+    minHeight: 40,
   },
   suggestionIcon: {
-    marginRight: 10,
+    marginRight: 8,
     flexShrink: 0,
   },
   suggestionTextContainer: {
     flex: 1,
   },
   suggestionName: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: Colors.textPrimary,
   },
@@ -322,11 +315,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.mediumGray,
     marginTop: 1,
-    lineHeight: 15,
+    lineHeight: 14,
   },
   separator: {
     height: 1,
     backgroundColor: Colors.border,
-    marginHorizontal: 12,
+    marginHorizontal: 8,
   },
 });

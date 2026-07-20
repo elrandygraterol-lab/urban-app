@@ -46,6 +46,8 @@ const places: FallbackPlace[] = [
   { id: 'fb-br-san-jose', name: 'Barrio San José', description: 'Barrio San José, San Juan de los Morros, Guárico', latitude: 9.9080, longitude: -67.3520, type: 'other', fullAddress: 'Barrio San José, San Juan de los Morros, Guárico', source: 'custom' },
   { id: 'fb-urb-morera', name: 'Urbanización La Morera', description: 'Urb. La Morera, San Juan de los Morros, Guárico', latitude: 9.9095, longitude: -67.3620, type: 'other', fullAddress: 'Urb. La Morera, San Juan de los Morros, Guárico', source: 'custom' },
   { id: 'fb-br-carmen', name: 'Barrio El Carmen', description: 'Barrio El Carmen, San Juan de los Morros, Guárico', latitude: 9.9160, longitude: -67.3570, type: 'other', fullAddress: 'Barrio El Carmen, San Juan de los Morros, Guárico', source: 'custom' },
+  { id: 'fb-sec-palmas', name: 'Sector Las Palmas', description: 'Sector Las Palmas, San Juan de los Morros, Guárico', latitude: 9.9175, longitude: -67.3610, type: 'other', fullAddress: 'Sector Las Palmas, San Juan de los Morros, Guárico', source: 'custom' },
+  { id: 'fb-pj-palmas', name: 'Pasaje Las Palmas', description: 'Pasaje Las Palmas, San Juan de los Morros, Guárico', latitude: 9.9132, longitude: -67.3575, type: 'other', fullAddress: 'Pasaje Las Palmas, San Juan de los Morros, Guárico', source: 'custom' },
 
   // Landmarks
   { id: 'fb-plaza-bolivar', name: 'Plaza Bolívar', description: 'Plaza Bolívar, San Juan de los Morros, Guárico', latitude: 9.9110, longitude: -67.3535, type: 'landmark', fullAddress: 'Plaza Bolívar, San Juan de los Morros, Guárico', source: 'custom' },
