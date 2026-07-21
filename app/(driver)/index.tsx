@@ -354,7 +354,10 @@ export default function DriverHomeScreen() {
       // Notification handled by active-ride.tsx (screen-level) and
       // useGlobalSocketListeners (global) — this handler restores availability
       // for the edge case where driver accepted a ride but navigation never completed
-      setIsAvailable(true);
+      // Only restore availability if the cancellation was not initiated by the driver
+      if (data.cancelledBy !== 'driver') {
+        setIsAvailable(true);
+      }
     },
     [setIsAvailable]
   );
@@ -446,55 +449,12 @@ export default function DriverHomeScreen() {
 
       // Evento 'ride:payment_completed' ahora se maneja globalmente en useGlobalSocketListeners
 
-      // Add connection status listeners for debugging (store refs for targeted cleanup)
-      if (connectHandlerRef.current) {
-        socket.off('connect', connectHandlerRef.current);
-      }
-      connectHandlerRef.current = () => {
-        console.log('[DRIVER] ========================================');
-        console.log('[DRIVER] ✅ SOCKET CONNECTED EVENT');
-        console.log('[DRIVER]    Socket ID:', socket.id);
-        console.log('[DRIVER]    Timestamp:', new Date().toISOString());
-        console.log('[DRIVER] ========================================');
-      };
-      socket.on('connect', connectHandlerRef.current);
-
-      if (disconnectHandlerRef.current) {
-        socket.off('disconnect', disconnectHandlerRef.current);
-      }
-      disconnectHandlerRef.current = (reason: string) => {
-        console.log('[DRIVER] ========================================');
-        console.log('[DRIVER] ❌ SOCKET DISCONNECTED EVENT');
-        console.log('[DRIVER]    Reason:', reason);
-        console.log('[DRIVER]    Socket ID:', socket.id);
-        console.log('[DRIVER]    Timestamp:', new Date().toISOString());
-        console.log('[DRIVER] ========================================');
-      };
-      socket.on('disconnect', disconnectHandlerRef.current);
-
-      if (errorHandlerRef.current) {
-        socket.off('error', errorHandlerRef.current);
-      }
-      errorHandlerRef.current = (error: any) => {
-        console.error('[DRIVER] ========================================');
-        console.error('[DRIVER] ❌ SOCKET ERROR EVENT');
-        console.error('[DRIVER]    Socket ID:', socket.id);
-        console.error('[DRIVER]    Error Message:', error?.message || error);
-        console.error('[DRIVER]    Error Details:', JSON.stringify(error, null, 2));
-        console.error('[DRIVER]    Timestamp:', new Date().toISOString());
-        console.error('[DRIVER] ========================================');
-      };
-      socket.on('error', errorHandlerRef.current);
-
       console.log('[DRIVER] ========================================');
       console.log('[DRIVER] ✅ LISTENERS REGISTERED (Local)');
       console.log('[DRIVER]    - ride:cancelled (local - via onRideCancelled helper)');
       console.log(
         '[DRIVER]    - driver:availability_changed (local - via onDriverAvailabilityChanged helper)'
       );
-      console.log('[DRIVER]    - connect');
-      console.log('[DRIVER]    - disconnect');
-      console.log('[DRIVER]    - error');
       console.log('[DRIVER]    Note: ride:payment_completed handled globally');
       console.log('[DRIVER] ========================================');
 
@@ -535,11 +495,18 @@ export default function DriverHomeScreen() {
 
       setSocketInstance(socket);
 
+      // Reset and re-register local listeners
+      localListenersRegisteredRef.current = false;
       setupSocketListeners(socket);
 
       // ride:request_created is handled by the global listener (useGlobalSocketListeners)
       // No need for a direct handler — the global one is more reliable across reconnects
 
+      // Register reconnect handler that re-registers all local listeners
+      // Remove old handler first to prevent duplicates across reconnections
+      if (reconnectHandlerRef.current) {
+        socket.off('connect', reconnectHandlerRef.current);
+      }
       reconnectHandlerRef.current = () => {
         console.log('[DRIVER] ========================================');
         console.log('[DRIVER] 🔄 SOCKET RECONNECTED');
@@ -547,18 +514,20 @@ export default function DriverHomeScreen() {
         console.log('[DRIVER]    Re-registering listeners with fresh callbacks...');
         console.log('[DRIVER] ========================================');
         localListenersRegisteredRef.current = false;
-        setSocketInstance(socket);
         setupSocketListeners(socket);
       };
       socket.on('connect', reconnectHandlerRef.current);
 
+      // Register disconnect log handler — remove old to prevent duplicates
+      if (disconnectLogHandlerRef.current) {
+        socket.off('disconnect', disconnectLogHandlerRef.current);
+      }
       disconnectLogHandlerRef.current = (reason: string) => {
         console.log('[DRIVER] ========================================');
         console.log('[DRIVER] ❌ SOCKET DISCONNECTED');
         console.log('[DRIVER]    Reason:', reason);
         console.log('[DRIVER]    Socket ID:', socket.id);
         console.log('[DRIVER] ========================================');
-        setSocketInstance(socket);
       };
       socket.on('disconnect', disconnectLogHandlerRef.current);
 
@@ -615,6 +584,7 @@ export default function DriverHomeScreen() {
     };
 
     loadDriverAvailability();
+    useDriverStore.getState().fetchWalletData();
 
     // Add connection state listener
     const connectionListener = (connected: boolean) => {
@@ -661,15 +631,6 @@ export default function DriverHomeScreen() {
         }
         if (disconnectLogHandlerRef.current) {
           socket.off('disconnect', disconnectLogHandlerRef.current);
-        }
-        if (connectHandlerRef.current) {
-          socket.off('connect', connectHandlerRef.current);
-        }
-        if (disconnectHandlerRef.current) {
-          socket.off('disconnect', disconnectHandlerRef.current);
-        }
-        if (errorHandlerRef.current) {
-          socket.off('error', errorHandlerRef.current);
         }
       }
       // Don't disconnect socket here - keep it alive for the session

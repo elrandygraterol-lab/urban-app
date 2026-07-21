@@ -100,6 +100,13 @@ export default function ActiveRideScreen() {
   const { setIsAvailable } = useDriverStore();
   const rideId = params.rideId as string;
   const isManualFlow = params.source === 'manual';
+
+  // Guard: if rideId is missing or invalid, redirect back to driver home
+  if (!rideId || typeof rideId !== 'string' || rideId.trim() === '') {
+    console.warn('[ACTIVE_RIDE] Invalid rideId — redirecting to home');
+    setTimeout(() => router.replace('/(driver)'), 0);
+    return null;
+  }
   const { playNotificationSound } = useSound();
   const { convertToUsd, convertToBs } = useExchangeRate();
   const { showToast, showStatus } = useUnifiedNotifications();
@@ -217,7 +224,7 @@ export default function ActiveRideScreen() {
     setPassengerRating(0);
     setPassengerComment('');
     setIsSubmittingRating(false);
-    setPassengerPaymentMode('cash');
+    setPassengerPaymentMode(null);
     setRouteDistance(null);
     setRouteDuration(null);
     setBackendEtaMinutes(null);
@@ -479,14 +486,28 @@ export default function ActiveRideScreen() {
         return;
       }
 
-      // Guard: if first fetch after mount returns completed, the data is stale
+      // Guard: if first fetch after mount returns completed, treat it as background completion
       if (isFirstFetchRef.current && rideData?.status === 'completed') {
-        const correctedStatus = isManualFlow ? 'accepted' : 'in_progress';
-        console.warn(
-          '[ACTIVE_RIDE] ⚠️ First fetch returned completed — overriding to',
-          correctedStatus
-        );
-        setRide(prev => (prev ? { ...prev, status: correctedStatus } : null));
+        console.log('[ACTIVE_RIDE] ⚠️ First fetch returned completed — treating as background completion');
+        if (ratingShownForRideRef.current === rideId) {
+          console.log('[ACTIVE_RIDE] Rating already shown for this ride — skipping duplicate');
+          isFirstFetchRef.current = false;
+          return;
+        }
+        playNotificationSound();
+        const fareValue = rideData.finalFare ?? rideData.estimatedFare ?? 0;
+        if (fareValue > 0) {
+          setFinalFare(fareValue);
+        }
+        if (!isManualFlow) {
+          ratingShownForRideRef.current = rideId;
+          setShowRatingModal(true);
+        } else {
+          setIsAvailable(true);
+          setTimeout(() => router.replace('/(driver)'), 1500);
+        }
+        isFirstFetchRef.current = false;
+        return;
       }
       isFirstFetchRef.current = false;
 
@@ -934,7 +955,7 @@ export default function ActiveRideScreen() {
         setRide(null);
         setRouteCoordinates([]);
         setRouteSteps([]);
-        setTimeout(() => router.replace('/(driver)'), 100);
+        setTimeout(() => router.replace('/(driver)'), 1500);
         return;
       }
 
@@ -1149,8 +1170,31 @@ export default function ActiveRideScreen() {
         const currentIdx = STATUS_ORDER.indexOf(currentStatus);
         const newIdx = STATUS_ORDER.indexOf(updated.status);
         if (newIdx > currentIdx) {
+          // Guard against invalid status jumps (e.g. accepted→completed)
+          if (currentIdx < STATUS_ORDER.indexOf('in_progress') && updated.status === 'completed') {
+            console.log('[ACTIVE_RIDE] ⚡ Polling ignoring invalid jump:', currentStatus, '→', updated.status);
+            return;
+          }
           console.log('[ACTIVE_RIDE] ⚡ Polling caught status change:', currentStatus, '→', updated.status);
           setRide(prev => prev ? { ...prev, ...updated } : null);
+          // Sync derived payment states from updated ride data
+          if (updated.payment?.status === 'completed') {
+            setIsPaymentConfirmed(true);
+          }
+          if (updated.payment?.paymentMode) {
+            setPassengerPaymentMode(updated.payment.paymentMode as 'cash' | 'pago_movil' | 'dual');
+          }
+          // If server reports completed, show rating modal
+          if (updated.status === 'completed' && ratingShownForRideRef.current !== rideRef.current?.id) {
+            const fareValue = updated.finalFare ?? rideRef.current?.estimatedFare ?? 0;
+            if (fareValue > 0) setFinalFare(fareValue);
+            ratingShownForRideRef.current = rideRef.current?.id ?? null;
+            setShowRatingModal(true);
+            if (!completionSoundPlayedRef.current) {
+              playNotificationSound();
+              completionSoundPlayedRef.current = true;
+            }
+          }
         }
       } catch {
         // Silently ignore polling errors — next poll will retry
@@ -1308,6 +1352,7 @@ export default function ActiveRideScreen() {
     } catch (error: any) {
       const msg = error?.response?.data?.error?.message || 'No se pudo cancelar el viaje';
       showToast(msg, 'error');
+      driverInitiatedCancelRef.current = false;
     } finally {
       setIsCancelling(false);
       setCancelReason('');

@@ -36,6 +36,8 @@ export const useGlobalSocketListeners = ({
   const setupDisconnectHandlerRef = useRef<((s: any) => void) | null>(null);
   const fetchingPendingRef = useRef(false);
   const processedCompletedRidesRef = useRef<Set<string>>(new Set());
+  const processedPaymentRidesRef = useRef<Set<string>>(new Set());
+  const debugOnAnyRef = useRef<((...args: any[]) => void) | null>(null);
 
   // Handler for ride:request_created event (GLOBAL - works on any screen)
   const handleRideRequest = useCallback(
@@ -103,6 +105,19 @@ export const useGlobalSocketListeners = ({
       if (user?.role === 'driver') {
         const earnings = data.driverEarnings;
         const amount = data.amount;
+
+        // Credit wallet as fallback if ride:completed hasn't done it yet
+        if (earnings > 0 && !processedPaymentRidesRef.current.has(data.rideId)) {
+          processedPaymentRidesRef.current.add(data.rideId);
+          // Keep set bounded
+          if (processedPaymentRidesRef.current.size > 25) {
+            const entries = Array.from(processedPaymentRidesRef.current);
+            processedPaymentRidesRef.current = new Set(entries.slice(-20));
+          }
+          const driverStore = useDriverStore.getState();
+          driverStore.addEarning(earnings, (data.currency || 'VES') === 'USD' ? 'USD' : 'VES', data.rideId);
+        }
+
         const dualMsg = data.currency === 'USD'
           ? `${convertToBs(earnings) !== '—' ? ` (≈ Bs. ${convertToBs(earnings)})` : ''}`
           : `${convertToUsd(earnings) !== '—' ? ` (≈ $ ${convertToUsd(earnings)})` : ''}`;
@@ -414,7 +429,12 @@ export const useGlobalSocketListeners = ({
         socket.off('connect', connectHandlerRef.current);
         console.log('[GLOBAL_SOCKET]    Removed previous connect handler');
       }
-      socket.offAny(); // Remove debug listener
+      // Remove only the debug onAny listener, not all onAny listeners from other sources
+      if (debugOnAnyRef.current) {
+        socket.offAny(debugOnAnyRef.current);
+        debugOnAnyRef.current = null;
+        console.log('[GLOBAL_SOCKET]    Removed previous debug onAny listener');
+      }
       console.log('[GLOBAL_SOCKET]    Existing listeners cleared');
 
       // Register listeners (shared + role-specific)
@@ -451,11 +471,11 @@ export const useGlobalSocketListeners = ({
       }
 
       // DEBUG: Listen to ALL events to see what's coming
-      const debugAllEvents = (eventName: string, ...args: any[]) => {
+      debugOnAnyRef.current = (eventName: string, ...args: any[]) => {
         console.log('[GLOBAL_SOCKET] DEBUG: Event received:', eventName, '| role:', user.role);
       };
 
-      socket.onAny(debugAllEvents);
+      socket.onAny(debugOnAnyRef.current);
       console.log('[GLOBAL_SOCKET]    onAny debug listener registered');
 
       // Verify listeners were registered
@@ -692,7 +712,9 @@ export const useGlobalSocketListeners = ({
         if (disconnectHandlerRef.current) {
           currentSocket.off('disconnect', disconnectHandlerRef.current);
         }
-        currentSocket.offAny();
+        if (debugOnAnyRef.current) {
+          currentSocket.offAny(debugOnAnyRef.current);
+        }
         
         const afterCount = currentSocket.listeners('ride:payment_completed').length;
         console.log('[GLOBAL_SOCKET]    Listeners after cleanup:', afterCount);

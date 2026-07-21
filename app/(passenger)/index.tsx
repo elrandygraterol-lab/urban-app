@@ -357,11 +357,20 @@ export default function PassengerHomeScreen() {
   const insets = useSafeAreaInsets();
 
   // Restaurar viaje activo al montar, cuando el token esta listo, y al volver a primer plano
+  const mountedRef = useRef(true);
+
+  // Track mounted state for async guards
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const ratingShownForRideRef = useRef<string | null>(null);
   const acceptedRideIdRef = useRef<string | null>(null);
   const rideCleanupRefs = useRef<Record<string, () => void>>({});
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeRideRef = useRef<any>(null);
+
   const paymentTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rideAutoResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const estimatedFareRef = useRef<number | null>(null);
@@ -479,6 +488,14 @@ export default function PassengerHomeScreen() {
             // preserve state so the rating modal stays visible when user returns
             if (activeRideRef.current.status === 'completed') {
               console.log('[PASSENGER] Ride completed while in background — preserving state for rating');
+              // Restart auto-reset in case it was cleared by effect cleanup (listenerVersion change)
+              if (rideAutoResetTimeoutRef.current) clearTimeout(rideAutoResetTimeoutRef.current);
+              rideAutoResetTimeoutRef.current = setTimeout(() => {
+                if (activeRideRef.current?.status === 'completed' && !hasInteractedWithRatingRef.current) {
+                  console.log('[PASSENGER] Auto-redirecting to request ride after completion (restore)');
+                  handleCloseRatingModal();
+                }
+              }, 8000);
               return;
             }
 
@@ -689,6 +706,10 @@ export default function PassengerHomeScreen() {
   const [paymentMethod, setPaymentMethod] = useState<
     'cash' | 'card' | 'digital_wallet' | 'pago_movil' | 'bank_transfer'
   >('cash');
+  const paymentMethodRef = useRef(paymentMethod);
+  useEffect(() => {
+    paymentMethodRef.current = paymentMethod;
+  }, [paymentMethod]);
   const [selectedPlatformMethod, setSelectedPlatformMethod] = useState<any>(null);
   const [platformPaymentMethods, setPlatformPaymentMethods] = useState<any[]>([]);
 
@@ -1163,7 +1184,7 @@ export default function PassengerHomeScreen() {
     socket?.on('connect', handleReconnect);
 
     // Listen for ride accepted event
-    const handleRideAccepted = (data: any) => {
+    const handleRideAccepted = async (data: any) => {
       // Guard: prevent double processing from ride room + emitToUser
       if (acceptedRideIdRef.current === data.rideId) return;
       acceptedRideIdRef.current = data.rideId;
@@ -1190,13 +1211,51 @@ export default function PassengerHomeScreen() {
         setDriverLocation(data.driver.currentLocation);
       }
 
-      // Open payment modal after 3 seconds
+      // Store final fare
       setFinalFare(estimatedFareRef.current || 0);
-      if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
-      paymentTimeoutRef.current = setTimeout(() => {
-        if (activeRideRef.current?.paymentMode === 'cash') return;
+
+      // Show payment form immediately based on selected method
+      // Use ref to avoid stale closure — paymentMethod state may be stale inside socket handlers
+      const method = paymentMethodRef.current;
+      if (method === 'cash') {
+        setPaymentCompleted(true);
+        // Notify backend that cash payment is confirmed
+        try {
+          await paymentAPI.completePayment(data.rideId, {
+            method: 'cash',
+            amount: estimatedFareRef.current || 0,
+          });
+          console.log('[PASSENGER] Cash payment confirmed on backend');
+        } catch (error) {
+          console.warn('[PASSENGER] Could not confirm cash payment on backend:', error);
+          showStatus(
+            'warning',
+            'No se pudo confirmar el pago en efectivo con el servidor. El conductor aún puede iniciar el viaje.',
+            'Pago en Efectivo'
+          );
+        }
+        showStatus(
+          'success',
+          'Pagarás en efectivo al conductor al finalizar el viaje.',
+          'Pago en Efectivo',
+          undefined,
+          undefined,
+          4000
+        );
+      } else if (method === 'pago_movil' || method === 'bank_transfer') {
+        // Auto-select the first matching platform method for the chosen type
+        const match = platformPaymentMethods.find((pm: any) => pm.type === paymentMethodRef.current);
+        if (match) {
+          setSelectedPlatformMethod(match);
+        } else {
+          // Fallback: select first available method of any type so modal shows destination info
+          const fallback = platformPaymentMethods.length > 0 ? platformPaymentMethods[0] : null;
+          if (fallback) {
+            setSelectedPlatformMethod(fallback);
+          }
+        }
         setShowMobilePaymentModal(true);
-      }, 3000);
+      }
     };
 
     // Listen for ride status changes
@@ -1387,6 +1446,17 @@ export default function PassengerHomeScreen() {
         setShowRatingModal(false);
         setFinalFare(null);
         setPaymentMethod('cash');
+        setFareCurrency('VES');
+        setShowSecondPickup(false);
+        setSecondPickupLocation(null);
+        setSecondPickupAddress('');
+        setSecondPickupFullAddress('');
+        setSecondPickupLocationSource(null);
+        setShowSecondDestination(false);
+        setSecondDestinationLocation(null);
+        setSecondDestinationAddress('');
+        setSecondDestinationFullAddress('');
+        setSecondDestinationLocationSource(null);
         setCancelReason('');
         setRouteCoordinates([]);
         setNearestRouteIndex(0);
@@ -1417,6 +1487,17 @@ export default function PassengerHomeScreen() {
         setShowRatingModal(false);
         setFinalFare(null);
         setPaymentMethod('cash');
+        setFareCurrency('VES');
+        setShowSecondPickup(false);
+        setSecondPickupLocation(null);
+        setSecondPickupAddress('');
+        setSecondPickupFullAddress('');
+        setSecondPickupLocationSource(null);
+        setShowSecondDestination(false);
+        setSecondDestinationLocation(null);
+        setSecondDestinationAddress('');
+        setSecondDestinationFullAddress('');
+        setSecondDestinationLocationSource(null);
         setCancelReason('');
         setRouteCoordinates([]);
         setNearestRouteIndex(0);
@@ -1482,6 +1563,7 @@ export default function PassengerHomeScreen() {
         setDestinationFullAddress('');
         setEstimatedFare(null);
         setFareBreakdown(null);
+        setFareCurrency('VES');
         setIsCalculatingFare(false);
         setZoneInfo(null);
         setHasShownNearbyNotification(false);
@@ -1491,6 +1573,16 @@ export default function PassengerHomeScreen() {
         setShowRatingModal(false);
         setFinalFare(null);
         setPaymentMethod('cash');
+        setShowSecondPickup(false);
+        setSecondPickupLocation(null);
+        setSecondPickupAddress('');
+        setSecondPickupFullAddress('');
+        setSecondPickupLocationSource(null);
+        setShowSecondDestination(false);
+        setSecondDestinationLocation(null);
+        setSecondDestinationAddress('');
+        setSecondDestinationFullAddress('');
+        setSecondDestinationLocationSource(null);
         setCancelReason('');
         acceptedRideIdRef.current = null;
       }
@@ -1563,6 +1655,7 @@ export default function PassengerHomeScreen() {
       hasInteractedWithRatingRef.current = false;
       if (rideAutoResetTimeoutRef.current) clearTimeout(rideAutoResetTimeoutRef.current);
       rideAutoResetTimeoutRef.current = setTimeout(() => {
+        if (!mountedRef.current) return;
         if (activeRideRef.current?.status === 'completed' && !hasInteractedWithRatingRef.current) {
           console.log('[PASSENGER] Auto-redirecting to request ride after completion');
           handleCloseRatingModal();
@@ -1628,6 +1721,23 @@ export default function PassengerHomeScreen() {
             setDisplayDistance(null);
             setDisplayDuration(null);
             setHasShownNearbyNotification(false);
+
+            // Trigger completion flow (rating modal + auto-reset) if not already done via socket
+            if (ratingShownForRideRef.current !== currentId) {
+              console.log('[PASSENGER] Polling triggered completion flow for ride', currentId);
+              ratingShownForRideRef.current = currentId;
+              if (updated.finalFare) setFinalFare(updated.finalFare);
+              playNotificationSound();
+              setShowRatingModal(true);
+              hasInteractedWithRatingRef.current = false;
+              if (rideAutoResetTimeoutRef.current) clearTimeout(rideAutoResetTimeoutRef.current);
+              rideAutoResetTimeoutRef.current = setTimeout(() => {
+                if (activeRideRef.current?.status === 'completed' && !hasInteractedWithRatingRef.current) {
+                  console.log('[PASSENGER] Auto-redirecting to request ride after completion (polling)');
+                  handleCloseRatingModal();
+                }
+              }, 8000);
+            }
           }
 
           setActiveRide(prev => prev ? {
@@ -2952,7 +3062,7 @@ export default function PassengerHomeScreen() {
         });
       }
 
-      // For now, use cash as default payment method
+      // Send selected payment method
       const response = await rideAPI.requestRide({
         pickupLatitude: pickupLocation.latitude,
         pickupLongitude: pickupLocation.longitude,
@@ -2961,7 +3071,7 @@ export default function PassengerHomeScreen() {
         destinationLongitude: destinationLocation.longitude,
         destinationAddress: destinationFullAddress || destinationAddress, // Use full address for precision
         vehicleType: vehicleType,
-        paymentMethodId: 'cash', // Default to cash
+        paymentMethodId: paymentMethod,
         pickupPoints, // Req. 6.5, 6.7
         destinationPoints, // Req. 6.5, 6.7
       });
@@ -3445,6 +3555,9 @@ export default function PassengerHomeScreen() {
     setDriverRating(0);
     setDriverComment('');
     setFinalFare(null);
+    setPaymentCompleted(false);
+    setPaymentMethod('cash');
+    setFareCurrency('VES');
     ratingShownForRideRef.current = null;
     acceptedRideIdRef.current = null;
     driverArrivedNotifiedRef.current = false;
@@ -3763,8 +3876,8 @@ export default function PassengerHomeScreen() {
               bounces={false}
               overScrollMode="never"
             >
-              {/* Active Ride - Driver Info */}
-              {activeRide && activeRide.driver && (
+              {/* Active Ride - Driver Info (or completed fallback) */}
+              {activeRide && (activeRide.driver || activeRide.status === 'completed') && (
                 <View style={styles.ridePanel}>
                   {/* Dynamic title based on status */}
                   <Text style={styles.rideTitle}>
@@ -3783,30 +3896,32 @@ export default function PassengerHomeScreen() {
                     </View>
                   </View>
 
-                  {/* Driver header row */}
-                  <View style={styles.rideDriverRow}>
-                    <View style={styles.rideDriverAvatar}>
-                      {resolveFileUrl(activeRide.driver.profilePhotoUrl) ? (
-                        <Image source={{ uri: resolveFileUrl(activeRide.driver.profilePhotoUrl) }} style={styles.rideDriverAvatarImg} />
-                      ) : (
-                        <Text style={styles.rideDriverAvatarLetter}>{activeRide.driver.name.charAt(0).toUpperCase()}</Text>
+                  {/* Driver header row — only when driver info exists */}
+                  {activeRide.driver && (
+                    <View style={styles.rideDriverRow}>
+                      <View style={styles.rideDriverAvatar}>
+                        {resolveFileUrl(activeRide.driver.profilePhotoUrl) ? (
+                          <Image source={{ uri: resolveFileUrl(activeRide.driver.profilePhotoUrl) }} style={styles.rideDriverAvatarImg} />
+                        ) : (
+                          <Text style={styles.rideDriverAvatarLetter}>{activeRide.driver.name.charAt(0).toUpperCase()}</Text>
+                        )}
+                      </View>
+                      <View style={styles.rideDriverInfo}>
+                        <Text style={styles.rideDriverName} numberOfLines={1}>{activeRide.driver.name}</Text>
+                        <Text style={styles.rideDriverVehicle} numberOfLines={1}>
+                          {activeRide.driver.vehicleModel || 'Vehículo'}
+                          {activeRide.driver.vehicleColor ? ` · ${activeRide.driver.vehicleColor}` : ''}
+                          {activeRide.driver.licensePlate ? ` · ${activeRide.driver.licensePlate}` : ''}
+                        </Text>
+                      </View>
+                      {typeof activeRide.driver.rating === 'number' && activeRide.driver.rating > 0 && (
+                        <View style={styles.rideDriverRatingBox}>
+                          <Ionicons name="star" size={12} color="#f59e0b" />
+                          <Text style={styles.rideDriverRating}>{activeRide.driver.rating.toFixed(1)}</Text>
+                        </View>
                       )}
                     </View>
-                    <View style={styles.rideDriverInfo}>
-                      <Text style={styles.rideDriverName} numberOfLines={1}>{activeRide.driver.name}</Text>
-                      <Text style={styles.rideDriverVehicle} numberOfLines={1}>
-                        {activeRide.driver.vehicleModel || 'Vehículo'}
-                        {activeRide.driver.vehicleColor ? ` · ${activeRide.driver.vehicleColor}` : ''}
-                        {activeRide.driver.licensePlate ? ` · ${activeRide.driver.licensePlate}` : ''}
-                      </Text>
-                    </View>
-                    {typeof activeRide.driver.rating === 'number' && activeRide.driver.rating > 0 && (
-                      <View style={styles.rideDriverRatingBox}>
-                        <Ionicons name="star" size={12} color="#f59e0b" />
-                        <Text style={styles.rideDriverRating}>{activeRide.driver.rating.toFixed(1)}</Text>
-                      </View>
-                    )}
-                  </View>
+                  )}
 
                   {/* Trip info: fare + addresses */}
                   <View style={styles.rideTripInfo}>
@@ -3861,7 +3976,7 @@ export default function PassengerHomeScreen() {
 
                   {/* Action buttons */}
                   <View style={styles.rideActionsRow}>
-                    {activeRide.status !== 'in_progress' && activeRide.status !== 'completed' && (
+                    {activeRide.driver && activeRide.status !== 'in_progress' && activeRide.status !== 'completed' && (
                       <TouchableOpacity style={styles.rideBtnCall} onPress={handleContactDriver}>
                         <Ionicons name="call-outline" size={16} color="#fff" />
                         <Text style={styles.rideBtnCallText}>Llamar</Text>
@@ -4600,6 +4715,79 @@ export default function PassengerHomeScreen() {
                     </View>
                   )}
 
+                  {/* Payment Method Selector */}
+                  <Text style={styles.sectionTitle}>Método de pago</Text>
+                  <View style={styles.paymentMethodSelector}>
+                    <TouchableOpacity
+                      style={[
+                        styles.paymentMethodButton,
+                        paymentMethod === 'cash' && styles.paymentMethodButtonActive,
+                      ]}
+                      onPress={() => setPaymentMethod('cash')}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name="cash-outline"
+                        size={18}
+                        color={paymentMethod === 'cash' ? '#fff' : '#6B7280'}
+                      />
+                      <Text
+                        style={[
+                          styles.paymentMethodButtonText,
+                          paymentMethod === 'cash' && styles.paymentMethodButtonTextActive,
+                        ]}
+                      >
+                        Efectivo
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.paymentMethodButton,
+                        paymentMethod === 'pago_movil' && styles.paymentMethodButtonActive,
+                      ]}
+                      onPress={() => setPaymentMethod('pago_movil')}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name="phone-portrait-outline"
+                        size={18}
+                        color={paymentMethod === 'pago_movil' ? '#fff' : '#6B7280'}
+                      />
+                      <Text
+                        style={[
+                          styles.paymentMethodButtonText,
+                          paymentMethod === 'pago_movil' && styles.paymentMethodButtonTextActive,
+                        ]}
+                      >
+                        Pago Móvil
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.paymentMethodButton,
+                        paymentMethod === 'bank_transfer' && styles.paymentMethodButtonActive,
+                      ]}
+                      onPress={() => setPaymentMethod('bank_transfer')}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name="swap-horizontal-outline"
+                        size={18}
+                        color={paymentMethod === 'bank_transfer' ? '#fff' : '#6B7280'}
+                      />
+                      <Text
+                        style={[
+                          styles.paymentMethodButtonText,
+                          paymentMethod === 'bank_transfer' && styles.paymentMethodButtonTextActive,
+                        ]}
+                      >
+                        Transferencia
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
                   {/* Request Ride Button */}
                   <TouchableOpacity
                     style={[
@@ -4819,258 +5007,152 @@ export default function PassengerHomeScreen() {
                   )}
 
                   {/* Payment Method Selector */}
-                  <View style={styles.paymentMethodSelector}>
+                  <View style={styles.paymentMethodSelectorPost}>
                     <Text style={styles.paymentMethodSelectorTitle}>Método de Pago</Text>
-
-                    <View style={styles.paymentMethodOptions}>
-                      {/* Cash Option */}
-                      <TouchableOpacity
+                    <TouchableOpacity
+                      style={[
+                        styles.paymentMethodOption,
+                        paymentMethod === 'cash' && styles.paymentMethodOptionSelected,
+                      ]}
+                      onPress={() => {
+                        setPaymentMethod('cash');
+                      }}
+                    >
+                      <View
                         style={[
-                          styles.paymentMethodOption,
-                          paymentMethod === 'cash' && styles.paymentMethodOptionSelected,
+                          styles.paymentMethodIconCircle,
+                          paymentMethod === 'cash' && styles.paymentMethodIconCircleSelected,
                         ]}
-                        onPress={() => {
-                          setPaymentMethod('cash');
-                          setSelectedPlatformMethod(null);
-                        }}
                       >
-                        <View
-                          style={[
-                            styles.paymentMethodIconCircle,
-                            paymentMethod === 'cash' && styles.paymentMethodIconCircleSelected,
-                          ]}
-                        >
-                          <Ionicons
-                            name="cash"
-                            size={28}
-                            color={paymentMethod === 'cash' ? '#22c55e' : '#8E8E93'}
-                          />
-                        </View>
-                        <Text
-                          style={[
-                            styles.paymentMethodOptionText,
-                            paymentMethod === 'cash' && styles.paymentMethodOptionTextSelected,
-                          ]}
-                        >
-                          Efectivo
-                        </Text>
-                        {paymentMethod === 'cash' && (
-                          <View style={styles.paymentMethodCheckmark}>
-                            <Ionicons name="checkmark-circle" size={24} color="#22c55e" />
-                          </View>
-                        )}
-                      </TouchableOpacity>
-
-                      {/* Platform Payment Method Options - from admin config */}
-                      {platformPaymentMethods.map((pm: any) => {
-                        const isSelected = selectedPlatformMethod?.id === pm.id;
-                        const isPagoMovil = pm.type === 'pago_movil';
-                        const methodType = isPagoMovil ? 'pago_movil' : 'bank_transfer';
-                        return (
-                          <TouchableOpacity
-                            key={pm.id}
-                            style={[
-                              styles.paymentMethodOption,
-                              isSelected && styles.paymentMethodOptionSelected,
-                            ]}
-                            onPress={() => {
-                              setPaymentMethod(methodType);
-                              setSelectedPlatformMethod(pm);
-                            }}
-                          >
-                            <View
-                              style={[
-                                styles.paymentMethodIconCircle,
-                                isSelected && styles.paymentMethodIconCircleSelected,
-                              ]}
-                            >
-                              <Ionicons
-                                name={isPagoMovil ? 'phone-portrait' : 'business'}
-                                size={28}
-                                color={isSelected ? '#22c55e' : '#8E8E93'}
-                              />
-                            </View>
-                            <View style={styles.paymentMethodOptionTextContainer}>
-                              <Text
-                                style={[
-                                  styles.paymentMethodOptionText,
-                                  isSelected && styles.paymentMethodOptionTextSelected,
-                                ]}
-                              >
-                                {isPagoMovil ? 'Pago Móvil' : 'Transferencia'}
-                              </Text>
-                              <Text style={styles.paymentMethodOptionSubtext}>
-                                {isPagoMovil ? pm.mobileBank : pm.transferBank}
-                              </Text>
-                            </View>
-                            {isSelected && (
-                              <View style={styles.paymentMethodCheckmark}>
-                                <Ionicons name="checkmark-circle" size={24} color="#22c55e" />
-                              </View>
-                            )}
-                          </TouchableOpacity>
-                        );
-                      })}
-
-                      {/* Card Option */}
-                      <TouchableOpacity
+                        <Ionicons
+                          name="cash"
+                          size={28}
+                          color={paymentMethod === 'cash' ? '#22c55e' : '#8E8E93'}
+                        />
+                      </View>
+                      <Text
                         style={[
-                          styles.paymentMethodOption,
-                          paymentMethod === 'card' && styles.paymentMethodOptionSelected,
+                          styles.paymentMethodOptionText,
+                          paymentMethod === 'cash' && styles.paymentMethodOptionTextSelected,
                         ]}
-                        onPress={() => {
-                          setPaymentMethod('card');
-                          setSelectedPlatformMethod(null);
-                        }}
                       >
-                        <View
-                          style={[
-                            styles.paymentMethodIconCircle,
-                            paymentMethod === 'card' && styles.paymentMethodIconCircleSelected,
-                          ]}
-                        >
-                          <Ionicons
-                            name="card"
-                            size={28}
-                            color={paymentMethod === 'card' ? '#22c55e' : '#8E8E93'}
-                          />
-                        </View>
-                        <Text
-                          style={[
-                            styles.paymentMethodOptionText,
-                            paymentMethod === 'card' && styles.paymentMethodOptionTextSelected,
-                          ]}
-                        >
-                          Tarjeta
-                        </Text>
-                        {paymentMethod === 'card' && (
-                          <View style={styles.paymentMethodCheckmark}>
-                            <Ionicons name="checkmark-circle" size={24} color="#22c55e" />
-                          </View>
-                        )}
-                      </TouchableOpacity>
-
-                      {/* Digital Wallet Option */}
-                      <TouchableOpacity
-                        style={[
-                          styles.paymentMethodOption,
-                          paymentMethod === 'digital_wallet' && styles.paymentMethodOptionSelected,
-                        ]}
-                        onPress={() => {
-                          setPaymentMethod('digital_wallet');
-                          setSelectedPlatformMethod(null);
-                        }}
-                      >
-                        <View
-                          style={[
-                            styles.paymentMethodIconCircle,
-                            paymentMethod === 'digital_wallet' &&
-                              styles.paymentMethodIconCircleSelected,
-                          ]}
-                        >
-                          <Ionicons
-                            name="wallet"
-                            size={28}
-                            color={paymentMethod === 'digital_wallet' ? '#22c55e' : '#8E8E93'}
-                          />
-                        </View>
-                        <Text
-                          style={[
-                            styles.paymentMethodOptionText,
-                            paymentMethod === 'digital_wallet' &&
-                              styles.paymentMethodOptionTextSelected,
-                          ]}
-                        >
-                          Billetera
-                        </Text>
-                        {paymentMethod === 'digital_wallet' && (
-                          <View style={styles.paymentMethodCheckmark}>
-                            <Ionicons name="checkmark-circle" size={24} color="#22c55e" />
-                          </View>
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  {/* Cash Payment Instructions */}
-                  {paymentMethod === 'cash' && (
-                    <View style={styles.cashInstructionsContainer}>
-                      <Ionicons name="information-circle" size={20} color="#FF9500" />
-                      <Text style={styles.cashInstructionsText}>
-                        Por favor, paga al conductor en efectivo
+                        Efectivo
                       </Text>
-                    </View>
-                  )}
+                      {paymentMethod === 'cash' && (
+                        <View style={styles.paymentMethodCheckmark}>
+                          <Ionicons name="checkmark-circle" size={24} color="#22c55e" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.paymentMethodOption,
+                        paymentMethod === 'pago_movil' && styles.paymentMethodOptionSelected,
+                      ]}
+                      onPress={() => setPaymentMethod('pago_movil')}
+                    >
+                      <View
+                        style={[
+                          styles.paymentMethodIconCircle,
+                          paymentMethod === 'pago_movil' && styles.paymentMethodIconCircleSelected,
+                        ]}
+                      >
+                        <Ionicons
+                          name="phone-portrait"
+                          size={28}
+                          color={paymentMethod === 'pago_movil' ? '#22c55e' : '#8E8E93'}
+                        />
+                      </View>
+                      <Text
+                        style={[
+                          styles.paymentMethodOptionText,
+                          paymentMethod === 'pago_movil' && styles.paymentMethodOptionTextSelected,
+                        ]}
+                      >
+                        Pago Móvil
+                      </Text>
+                      {paymentMethod === 'pago_movil' && (
+                        <View style={styles.paymentMethodCheckmark}>
+                          <Ionicons name="checkmark-circle" size={24} color="#22c55e" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.paymentMethodOption,
+                        paymentMethod === 'bank_transfer' && styles.paymentMethodOptionSelected,
+                      ]}
+                      onPress={() => setPaymentMethod('bank_transfer')}
+                    >
+                      <View
+                        style={[
+                          styles.paymentMethodIconCircle,
+                          paymentMethod === 'bank_transfer' && styles.paymentMethodIconCircleSelected,
+                        ]}
+                      >
+                        <Ionicons
+                          name="swap-horizontal"
+                          size={28}
+                          color={paymentMethod === 'bank_transfer' ? '#22c55e' : '#8E8E93'}
+                        />
+                      </View>
+                      <Text
+                        style={[
+                          styles.paymentMethodOptionText,
+                          paymentMethod === 'bank_transfer' && styles.paymentMethodOptionTextSelected,
+                        ]}
+                      >
+                        Transferencia
+                      </Text>
+                      {paymentMethod === 'bank_transfer' && (
+                        <View style={styles.paymentMethodCheckmark}>
+                          <Ionicons name="checkmark-circle" size={24} color="#22c55e" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  </View>
 
                   {/* Process Payment Button */}
                   <TouchableOpacity
-                    style={[
-                      styles.processPaymentButton,
-                      isProcessingPayment && styles.processPaymentButtonDisabled,
-                    ]}
+                    style={[styles.processPaymentButton, paymentMethod !== 'cash' && { backgroundColor: '#2563eb' }]}
                     onPress={handleProcessPayment}
-                    disabled={isProcessingPayment}
+                    disabled={isProcessingPaymentRef.current}
                   >
                     {isProcessingPayment ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
-                      <>
-                        <Ionicons name="checkmark-done" size={22} color="#fff" />
-                        <Text style={styles.processPaymentButtonText}>
-                          {paymentMethod === 'cash'
-                            ? 'Confirmar Pago'
-                            : paymentMethod === 'pago_movil'
-                              ? 'Pagar con Pago Móvil'
-                              : paymentMethod === 'bank_transfer'
-                                ? 'Pagar con Transferencia'
-                                : 'Procesar Pago'}
-                        </Text>
-                      </>
+                      <Text style={styles.processPaymentButtonText}>
+                        {paymentMethod === 'cash' ? 'Confirmar Pago en Efectivo' : 'Pagar Ahora'}
+                      </Text>
                     )}
                   </TouchableOpacity>
+
+                  {paymentMethod === 'cash' && (
+                    <Text style={styles.confirmationMessage}>
+                      Entrega el efectivo al conductor al finalizar el viaje.
+                    </Text>
+                  )}
                 </>
               ) : (
                 <>
-                  {/* Payment Confirmation */}
                   <View style={styles.paymentConfirmationContainer}>
-                    <View style={styles.successIconContainer}>
-                    <Ionicons name="checkmark-circle" size={48} color="#22c55e" />
-                    </View>
-
-                    <Text style={styles.confirmationTitle}>¡Pago Confirmado!</Text>
-
+                    <Ionicons name="checkmark-circle" size={80} color="#22c55e" />
+                    <Text style={styles.confirmationTitle}>Pago {paymentMethod === 'cash' ? 'Confirmado' : 'Completado'}</Text>
                     <Text style={styles.confirmationMessage}>
                       {paymentMethod === 'cash'
-                        ? 'Gracias por tu pago en efectivo.'
-                        : 'Tu pago ha sido procesado exitosamente.'}
+                        ? 'Recuerda entregar el efectivo al conductor.'
+                        : 'Gracias por tu pago.'}
                     </Text>
-
-                    <View style={styles.confirmationFareContainer}>
-                      <Text style={styles.confirmationFareLabel}>Total Pagado</Text>
-                      <Text style={styles.confirmationFareAmount}>
-                        {formatCurrency(finalFare || estimatedFare || 0, fareCurrency)}
-                      </Text>
-                      {fareBreakdown?.exchangeRate && fareBreakdown.exchangeRate > 0 && (
-                        <Text style={styles.confirmationFareDual}>
-                          {fareCurrency === 'USD'
-                            ? `≈ Bs. ${((finalFare || estimatedFare || 0) * fareBreakdown.exchangeRate).toFixed(2)}`
-                            : `≈ $ ${((finalFare || estimatedFare || 0) / fareBreakdown.exchangeRate).toFixed(2)}`}
-                        </Text>
-                      )}
-                    </View>
-
-                    <Text style={styles.receiptNote}>
-                      Se ha enviado un recibo a tu correo electrónico
-                    </Text>
-
-                    {/* Continue Button */}
-                    <TouchableOpacity
-                      style={styles.continueButton}
-                      onPress={handleClosePaymentModal}
-                    >
-                      <Text style={styles.continueButtonText}>Continuar</Text>
-                    </TouchableOpacity>
                   </View>
+
+                  <TouchableOpacity
+                    style={styles.continueButton}
+                    onPress={handleClosePaymentModal}
+                  >
+                    <Text style={styles.continueButtonText}>Calificar Conductor</Text>
+                  </TouchableOpacity>
                 </>
               )}
             </View>
@@ -5425,6 +5507,37 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  paymentMethodSelector: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 8,
+  },
+  paymentMethodButton: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: '#F3F4F6',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  paymentMethodButtonActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  paymentMethodButtonText: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  paymentMethodButtonTextActive: {
+    color: '#fff',
+    fontWeight: '700',
   },
   vehicleSelector: {
     flexDirection: 'row',
@@ -6836,7 +6949,7 @@ const styles = StyleSheet.create({
     color: '#505050',
     fontWeight: '500',
   },
-  paymentMethodSelector: {
+  paymentMethodSelectorPost: {
     marginBottom: 20,
   },
   paymentMethodSelectorTitle: {

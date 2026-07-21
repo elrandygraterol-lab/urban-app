@@ -77,9 +77,42 @@ export const useDriverStore = create<DriverState>((set, get) => ({
   },
 
   fetchWalletData: async () => {
-    // In a real app, this would fetch from the API
-    // For now, we'll simulate it or just keep the local state
-    console.log('[DRIVER STORE] Fetching wallet data...');
+    try {
+      const { driverAPI } = await import('@/services/api');
+      const res = await driverAPI.getMyProfile();
+      const profile = res.data?.data;
+      if (profile) {
+        const { balanceVES, balanceUSD, transactions } = get();
+        // Only update from backend if local balance is zero (new session)
+        // This prevents overwriting in-memory accumulated earnings
+        if (balanceVES === 0 && balanceUSD === 0 && profile.walletBalanceVES != null) {
+          set({ balanceVES: Number(profile.walletBalanceVES) });
+        }
+        if (balanceUSD === 0 && profile.walletBalanceUSD != null) {
+          set({ balanceUSD: Number(profile.walletBalanceUSD) });
+        }
+        // Merge backend transactions with local ones (avoid duplicates by rideId)
+        if (profile.transactions && Array.isArray(profile.transactions)) {
+          const existingRideIds = new Set(transactions.map(t => t.rideId).filter(Boolean));
+          const newTransactions = profile.transactions
+            .filter((t: any) => t.rideId && !existingRideIds.has(t.rideId))
+            .map((t: any) => ({
+              id: t.id || Math.random().toString(36).substr(2, 9),
+              amount: Number(t.amount) || 0,
+              currency: (t.currency || 'VES') as Currency,
+              type: (t.type || 'credit') as 'credit' | 'debit',
+              description: t.description || '',
+              date: t.date || new Date().toISOString(),
+              rideId: t.rideId,
+            }));
+          if (newTransactions.length > 0) {
+            set({ transactions: [...newTransactions, ...transactions] });
+          }
+        }
+      }
+    } catch (error) {
+      console.log('[DRIVER STORE] Could not fetch wallet data:', error);
+    }
   },
   
   toggleAvailability: async (): Promise<{ success: boolean; newAvailability: boolean; error?: string }> => {
