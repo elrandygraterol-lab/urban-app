@@ -58,6 +58,7 @@ interface MobilePaymentModalProps {
     pagador?: string;
   }) => void;
   onCancel: () => void;
+  onBeforeCancel?: () => void;
 }
 
 const TEST_PAYMENT_DATA = {
@@ -314,6 +315,7 @@ export default function MobilePaymentModal({
   platformMethod,
   onPaymentComplete,
   onCancel,
+  onBeforeCancel,
 }: MobilePaymentModalProps) {
   const insets = useSafeAreaInsets();
   const { showToast, showStatus, dismissStatus } = useUnifiedNotifications();
@@ -332,6 +334,8 @@ export default function MobilePaymentModal({
   const [extensionsUsed, setExtensionsUsed] = useState(0);
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [isAutoCancelling, setIsAutoCancelling] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isPaymentCompletedRef = useRef(false);
 
@@ -341,6 +345,16 @@ export default function MobilePaymentModal({
 
   // Slide animation
   const slideAnim = useRef(new Animated.Value(0)).current;
+
+  // Reset processing states when modal opens
+  useEffect(() => {
+    if (visible) {
+      setIsProcessing(false);
+      setIsAutoCancelling(false);
+      setShowCancelConfirm(false);
+      setCancelError(null);
+    }
+  }, [visible]);
 
   // Auto-fill nombre del pasajero y fecha actual al abrir el modal
   useEffect(() => {
@@ -375,17 +389,17 @@ export default function MobilePaymentModal({
   const handleTimeoutCancel = useCallback(async () => {
     if (isPaymentCompletedRef.current) return;
     setIsAutoCancelling(true);
+    setCancelError(null);
     try {
       await rideAPI.cancelRide(rideId, { reason: 'payment_timeout' });
-      showToast('Tiempo agotado. El viaje ha sido cancelado.', 'error');
       resetForm();
       onCancel();
     } catch {
-      showToast('Error al cancelar el viaje por tiempo agotado.', 'error');
+      setCancelError('Tiempo agotado. Error al cancelar el viaje.');
     } finally {
       setIsAutoCancelling(false);
     }
-  }, [rideId, resetForm, onCancel, showToast]);
+  }, [rideId, resetForm, onCancel]);
 
   useEffect(() => {
     if (visible) {
@@ -610,29 +624,27 @@ export default function MobilePaymentModal({
   };
 
   const handleCancel = () => {
-    showStatus(
-      'warning',
-      '¿Estás seguro? El viaje se cancelará si no completas el pago.',
-      'Cancelar Pago',
-      undefined,
-      {
-        label: 'Sí, Cancelar',
-        onPress: async () => {
-          dismissStatus();
-          setIsAutoCancelling(true);
-          try {
-            await rideAPI.cancelRide(rideId, { reason: 'passenger_cancelled' });
-            resetForm();
-            onCancel();
-          } catch {
-            showToast('No se pudo cancelar el viaje. Intenta nuevamente.', 'error');
-          } finally {
-            setIsAutoCancelling(false);
-          }
-        },
-      },
-      12000
-    );
+    setShowCancelConfirm(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    setShowCancelConfirm(false);
+    setCancelError(null);
+    setIsAutoCancelling(true);
+    onBeforeCancel?.();
+    try {
+      await rideAPI.cancelRide(rideId, {});
+      resetForm();
+      onCancel();
+    } catch {
+      setCancelError('No se pudo cancelar el viaje. Intenta nuevamente.');
+    } finally {
+      setIsAutoCancelling(false);
+    }
+  };
+
+  const handleDismissCancel = () => {
+    setShowCancelConfirm(false);
   };
 
   const timerColor = getTimerColor(timeRemaining);
@@ -808,7 +820,7 @@ export default function MobilePaymentModal({
               {paymentMethod === 'cash' && (
                 <View style={styles.infoBox}>
                   <Ionicons name="information-circle" size={16} color={Colors.orange} />
-                  <Text style={styles.infoText}>Pagarás en efectivo al finalizar el viaje.</Text>
+                  <Text style={styles.infoText}>Pagarás en efectivo al conductor al subir al vehículo.</Text>
                 </View>
               )}
 
@@ -825,35 +837,80 @@ export default function MobilePaymentModal({
               {paymentMethod === 'mobile' && (
                 <>
                   {/* Cuenta destino */}
+                  <Text style={styles.sectionTitle}>Destino del pago</Text>
                   {platformMethod?.type === 'pago_movil' && (
                     <View style={styles.destCard}>
-                      <View style={styles.destHead}>
-                        <Ionicons name="phone-portrait" size={14} color={Colors.primary} />
-                        <Text style={styles.destTitle}>Paga a:</Text>
+                      <View style={styles.destAccent} />
+                      <View style={styles.destContent}>
+                        <View style={styles.destHead}>
+                          <View style={styles.destIconCircle}>
+                            <Ionicons name="phone-portrait" size={15} color={Colors.primary} />
+                          </View>
+                          <Text style={styles.destTitle}>Paga a:</Text>
+                        </View>
+                        <Text style={styles.destBank}>{platformMethod.mobileBank}</Text>
+                        <View style={styles.destDivider} />
+                        <View style={styles.destInfoRow}>
+                          <Ionicons name="call-outline" size={13} color="#6b7280" style={styles.destInfoIcon} />
+                          <Text style={styles.destInfoLabel}>Teléfono</Text>
+                          <Text style={styles.destInfoValue}>{platformMethod.mobilePhone}</Text>
+                        </View>
+                        <View style={styles.destInfoRow}>
+                          <Ionicons name="person-outline" size={13} color="#6b7280" style={styles.destInfoIcon} />
+                          <Text style={styles.destInfoLabel}>Cédula</Text>
+                          <Text style={styles.destInfoValue}>{platformMethod.mobileCedula}</Text>
+                        </View>
+                        {platformMethod.description && (
+                          <>
+                            <View style={styles.destDivider} />
+                            <View style={styles.destInfoRow}>
+                              <Ionicons name="information-circle-outline" size={13} color="#6b7280" style={styles.destInfoIcon} />
+                              <Text style={styles.destInfoLabel}>Ref.</Text>
+                              <Text style={styles.destInfoValueDesc}>{platformMethod.description}</Text>
+                            </View>
+                          </>
+                        )}
                       </View>
-                      <Text style={styles.destBank}>{platformMethod.mobileBank}</Text>
-                      <View style={styles.destRow}>
-                        <Text style={styles.destDetail}>Tel: {platformMethod.mobilePhone}</Text>
-                        <Text style={styles.destDetail}>Cédula: {platformMethod.mobileCedula}</Text>
-                      </View>
-                      {platformMethod.description && (
-                        <Text style={styles.destDesc}>{platformMethod.description}</Text>
-                      )}
                     </View>
                   )}
                   {platformMethod?.type === 'bank_transfer' && (
                     <View style={styles.destCard}>
-                      <View style={styles.destHead}>
-                        <Ionicons name="business" size={14} color={Colors.primary} />
-                        <Text style={styles.destTitle}>Transfiere a:</Text>
+                      <View style={styles.destAccent} />
+                      <View style={styles.destContent}>
+                        <View style={styles.destHead}>
+                          <View style={styles.destIconCircle}>
+                            <Ionicons name="business" size={15} color={Colors.primary} />
+                          </View>
+                          <Text style={styles.destTitle}>Transfiere a:</Text>
+                        </View>
+                        <Text style={styles.destBank}>{platformMethod.transferBank}</Text>
+                        <View style={styles.destDivider} />
+                        <View style={styles.destInfoRow}>
+                          <Ionicons name="card-outline" size={13} color="#6b7280" style={styles.destInfoIcon} />
+                          <Text style={styles.destInfoLabel}>N° Cuenta</Text>
+                          <Text style={styles.destInfoValue}>{platformMethod.accountNumber}</Text>
+                        </View>
+                        <View style={styles.destInfoRow}>
+                          <Ionicons name="receipt-outline" size={13} color="#6b7280" style={styles.destInfoIcon} />
+                          <Text style={styles.destInfoLabel}>Tipo</Text>
+                          <Text style={styles.destInfoValue}>{platformMethod.accountType || 'Corriente'}</Text>
+                        </View>
+                        <View style={styles.destInfoRow}>
+                          <Ionicons name="document-text-outline" size={13} color="#6b7280" style={styles.destInfoIcon} />
+                          <Text style={styles.destInfoLabel}>RIF</Text>
+                          <Text style={styles.destInfoValue}>{platformMethod.transferCedula}</Text>
+                        </View>
+                        {platformMethod.description && (
+                          <>
+                            <View style={styles.destDivider} />
+                            <View style={styles.destInfoRow}>
+                              <Ionicons name="information-circle-outline" size={13} color="#6b7280" style={styles.destInfoIcon} />
+                              <Text style={styles.destInfoLabel}>Ref.</Text>
+                              <Text style={styles.destInfoValueDesc}>{platformMethod.description}</Text>
+                            </View>
+                          </>
+                        )}
                       </View>
-                      <Text style={styles.destBank}>{platformMethod.transferBank}</Text>
-                      <Text style={styles.destDetail}>Cuenta: {platformMethod.accountNumber}</Text>
-                      <Text style={styles.destDetail}>Tipo: {platformMethod.accountType || 'Corriente'}</Text>
-                      <Text style={styles.destDetail}>RIF: {platformMethod.transferCedula}</Text>
-                      {platformMethod.description && (
-                        <Text style={styles.destDesc}>{platformMethod.description}</Text>
-                      )}
                     </View>
                   )}
 
@@ -943,6 +1000,16 @@ export default function MobilePaymentModal({
           </ScrollView>
 
           {/* ── Actions ── */}
+          {cancelError && (
+            <View style={[styles.cancelErrorBanner, {}]}>
+              <Ionicons name="alert-circle" size={14} color="#dc2626" />
+              <Text style={styles.cancelErrorText}>{cancelError}</Text>
+              <TouchableOpacity onPress={() => setCancelError(null)}>
+                <Ionicons name="close" size={16} color="#dc2626" />
+              </TouchableOpacity>
+            </View>
+          )}
+          {!showCancelConfirm && (
           <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom + 8, 24) }]}>
             <TouchableOpacity style={styles.btnCancel} onPress={handleCancel} disabled={isProcessing || isAutoCancelling}>
               <Text style={styles.btnCancelText}>Cancelar</Text>
@@ -962,7 +1029,35 @@ export default function MobilePaymentModal({
               )}
             </TouchableOpacity>
           </View>
+          )}
         </Animated.View>
+
+        {/* Cancel confirmation overlay */}
+        {showCancelConfirm && (
+          <View style={styles.cancelOverlayContainer}>
+            <TouchableOpacity
+              style={styles.cancelOverlayBackdrop}
+              activeOpacity={1}
+              onPress={handleDismissCancel}
+            />
+            <View style={styles.cancelConfirmCard}>
+              <Text style={styles.cancelConfirmTitle}>¿Cancelar viaje?</Text>
+              <Text style={styles.cancelConfirmMsg}>El viaje se cancelará si no completas el pago.</Text>
+              <View style={styles.cancelConfirmActions}>
+                <TouchableOpacity style={styles.cancelConfirmNo} onPress={handleDismissCancel} disabled={isAutoCancelling}>
+                  <Text style={styles.cancelConfirmNoText}>No</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.cancelConfirmYes} onPress={handleConfirmCancel} disabled={isAutoCancelling}>
+                  {isAutoCancelling ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.cancelConfirmYesText}>Sí, Cancelar</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
       </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -1272,45 +1367,80 @@ const styles = StyleSheet.create({
 
   // ── Destination account ──
   destCard: {
+    flexDirection: 'row',
     backgroundColor: '#f0fdf4',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#bbf7d0',
+  },
+  destAccent: {
+    width: 5,
+    backgroundColor: '#22c55e',
+  },
+  destContent: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
   },
   destHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginBottom: 5,
+    gap: 8,
+    marginBottom: 10,
+  },
+  destIconCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#dcfce7',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   destTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: Colors.primary,
   },
   destBank: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#111827',
-    marginBottom: 3,
+    marginBottom: 0,
   },
-  destRow: {
+  destDivider: {
+    height: 1,
+    backgroundColor: '#dcfce7',
+    marginVertical: 8,
+  },
+  destInfoRow: {
     flexDirection: 'row',
-    gap: 14,
-    marginTop: 1,
+    alignItems: 'center',
+    marginBottom: 4,
+    gap: 8,
   },
-  destDetail: {
-    fontSize: 11,
-    color: '#4b5563',
-    marginTop: 1,
+  destInfoIcon: {
+    width: 16,
+    textAlign: 'center',
   },
-  destDesc: {
-    fontSize: 11,
+  destInfoLabel: {
+    width: 72,
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  destInfoValue: {
+    fontSize: 13,
+    color: '#111827',
+    fontWeight: '600',
+    flex: 1,
+  },
+  destInfoValueDesc: {
+    fontSize: 13,
     color: '#6b7280',
     fontStyle: 'italic',
-    marginTop: 3,
+    flex: 1,
   },
 
   // ── Bank Selector (Dropdown) ──
@@ -1548,5 +1678,92 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#fff',
+  },
+
+  // ── Cancel confirmation overlay ──
+  cancelOverlayContainer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  cancelOverlayBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  cancelConfirmCard: {
+    width: '85%',
+    maxWidth: 340,
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    backgroundColor: '#fffbeb',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+  },
+  cancelConfirmTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#92400e',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  cancelConfirmMsg: {
+    fontSize: 13,
+    color: '#b45309',
+    marginBottom: 16,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  cancelConfirmActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  cancelConfirmNo: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  cancelConfirmNoText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  cancelConfirmYes: {
+    flex: 1,
+    backgroundColor: '#dc2626',
+    borderRadius: 10,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelConfirmYesText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  cancelErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    marginHorizontal: 20,
+    marginBottom: 8,
+    backgroundColor: '#fef2f2',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  cancelErrorText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#dc2626',
+    fontWeight: '500',
   },
 });

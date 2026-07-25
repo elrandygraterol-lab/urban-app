@@ -666,14 +666,18 @@ export default function DriverHomeScreen() {
       <MapView
         ref={mapRef}
         style={styles.map}
-        initialRegion={{
-          latitude: location.latitude,
-          longitude: location.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
+        initialCamera={{
+          center: {
+            latitude: location.latitude,
+            longitude: location.longitude,
+          },
+          pitch: 30,
+          heading: 0,
+          zoom: 16,
         }}
         showsUserLocation={false}
         showsMyLocationButton={false}
+        showsBuildings={true}
         scrollEnabled={true}
         zoomEnabled={true}
         rotateEnabled={true}

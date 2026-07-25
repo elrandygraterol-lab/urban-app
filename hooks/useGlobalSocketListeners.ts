@@ -37,6 +37,8 @@ export const useGlobalSocketListeners = ({
   const fetchingPendingRef = useRef(false);
   const processedCompletedRidesRef = useRef<Set<string>>(new Set());
   const processedPaymentRidesRef = useRef<Set<string>>(new Set());
+  const processedRideRequestIdsRef = useRef<Set<string>>(new Set());
+  const processedCancelledRideIdsRef = useRef<Set<string>>(new Set());
   const debugOnAnyRef = useRef<((...args: any[]) => void) | null>(null);
 
   // Handler for ride:request_created event (GLOBAL - works on any screen)
@@ -65,6 +67,18 @@ export const useGlobalSocketListeners = ({
       if (user?.role !== 'driver') {
         console.log('[GLOBAL_SOCKET] User is not a driver, ignoring ride request');
         return;
+      }
+
+      // Dedup: skip if this ride ID was already processed (e.g., after socket reconnect)
+      if (processedRideRequestIdsRef.current.has(data.id)) {
+        console.log('[GLOBAL_SOCKET] Ride request already processed for', data.id, '— skipping');
+        return;
+      }
+      processedRideRequestIdsRef.current.add(data.id);
+      // Keep set bounded
+      if (processedRideRequestIdsRef.current.size > 50) {
+        const entries = Array.from(processedRideRequestIdsRef.current);
+        processedRideRequestIdsRef.current = new Set(entries.slice(-40));
       }
 
       // Play notification sound
@@ -146,12 +160,29 @@ export const useGlobalSocketListeners = ({
       cancelledBy: 'passenger' | 'driver' | 'system';
       cancellationReason: string;
       cancellationFee: number;
+      refundAmount?: number;
+      currency?: string;
+      hasPaymentMethods?: boolean;
       cancelledAt: string;
       timestamp: string;
       driverId?: string;
       passengerId?: string;
     }) => {
       console.log('[GLOBAL_SOCKET] Ride cancelled event received:', data);
+
+      // Dedup: skip if already processed this cancellation (prevents duplicate from ride room + user room emit)
+      if (processedCancelledRideIdsRef.current.has(data.rideId)) {
+        console.log('[GLOBAL_SOCKET] Cancellation already processed for', data.rideId, '— skipping duplicate');
+        return;
+      }
+      processedCancelledRideIdsRef.current.add(data.rideId);
+      if (processedCancelledRideIdsRef.current.size > 25) {
+        const entries = Array.from(processedCancelledRideIdsRef.current);
+        processedCancelledRideIdsRef.current = new Set(entries.slice(-20));
+      }
+      setTimeout(() => {
+        processedCancelledRideIdsRef.current.delete(data.rideId);
+      }, 5000);
 
       // Check if this event is relevant for the current user
       if (!user) {
@@ -168,9 +199,11 @@ export const useGlobalSocketListeners = ({
         return;
       }
 
-      // Determine message based on who cancelled
+      // Determine message based on who cancelled and role
       let message = '';
-      if (data.cancelledBy === 'passenger') {
+      if (user?.role === 'driver' && data.cancelledBy === 'driver') {
+        message = 'Has cancelado el viaje';
+      } else if (data.cancelledBy === 'passenger') {
         message = 'El pasajero ha cancelado el viaje';
       } else if (data.cancelledBy === 'driver') {
         message = 'El conductor ha cancelado el viaje';
@@ -178,21 +211,35 @@ export const useGlobalSocketListeners = ({
         message = 'El viaje ha sido cancelado por el sistema';
       }
 
-      if (data.cancellationReason) {
+      if (data.cancellationReason && data.cancellationReason !== 'passenger_cancelled') {
         message += `\n\nMotivo: ${data.cancellationReason}`;
       }
 
       if (data.cancellationFee > 0) {
-        message += `\n\nCargo por cancelación: Bs. ${data.cancellationFee.toFixed(2)}`;
+        message += `\n\nCompensación: Bs. ${data.cancellationFee.toFixed(2)}`;
       }
 
       // Show status notification for both roles
       if (user?.role === 'driver') {
         showStatus('ride_cancelled', message, undefined, { rideId: data.rideId, cancelledBy: data.cancelledBy });
       } else if (user?.role === 'passenger') {
-        const who = data.cancelledBy === 'driver' ? 'El conductor' : 'El sistema';
-        showStatus('ride_cancelled', `${who} canceló el viaje.`, 'Viaje Cancelado', undefined, undefined, 5000);
-        playNotificationSound();
+        if (data.cancelledBy === 'passenger') {
+          const fee = data.cancellationFee || 0;
+          if (fee > 0) {
+            const refund = data.refundAmount || 0;
+            const currencySymbol = data.currency === 'USD' ? '$' : 'Bs.';
+            let refundMsg = `Se te reembolsará ${currencySymbol} ${refund.toFixed(2)} en un plazo de 24 horas.`;
+            if (data.hasPaymentMethods === false) {
+              refundMsg += `\n\nDebes configurar al menos un método de pago en tu perfil para recibir el reembolso.`;
+            }
+            showStatus('info', refundMsg, `Cancelación — Tarifa de ${currencySymbol} ${fee.toFixed(2)}`, undefined, undefined, 0);
+          }
+          // Fee === 0: no notification needed — state already cleared
+        } else {
+          const who = data.cancelledBy === 'driver' ? 'El conductor canceló el viaje' : 'El sistema canceló el viaje';
+          showStatus('ride_cancelled', who, 'Viaje Cancelado', undefined, undefined, 5000);
+          playNotificationSound();
+        }
       }
     },
     [user?.id, user?.role, showStatus, playNotificationSound]

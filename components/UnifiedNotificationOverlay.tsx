@@ -444,10 +444,12 @@ const StatusBanner: React.FC<{
       Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: false }),
     ]).start();
 
-    // Auto-dismiss
-    dismissTimer.current = setTimeout(() => {
-      animateOut();
-    }, status.durationMs || 5000);
+    // Auto-dismiss (durationMs === 0 means persistent — only closeable by user)
+    if (status.durationMs !== 0) {
+      dismissTimer.current = setTimeout(() => {
+        animateOut();
+      }, status.durationMs || 5000);
+    }
 
     return () => {
       if (dismissTimer.current) clearTimeout(dismissTimer.current);
@@ -693,7 +695,9 @@ export const UnifiedNotificationOverlay: React.FC = () => {
       router.push({ pathname: '/(driver)/active-ride', params: { rideId } } as any);
     } catch (error: any) {
       dismissRideRequest();
-      if (error?.response?.status === 409) {
+      if (error?.response?.status === 410) {
+        showToast('El viaje fue cancelado por el pasajero', 'warning');
+      } else if (error?.response?.status === 409) {
         showToast('El viaje ya fue tomado por otro conductor', 'warning');
       } else {
         showToast('Error al aceptar el viaje. Intenta de nuevo.', 'error');

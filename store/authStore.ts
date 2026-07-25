@@ -100,46 +100,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.log('[LOGIN] Email/Phone:', email);
       console.log('[LOGIN] Role:', role || 'not specified');
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emailOrPhone: email, password }),
-      });
+      const axiosResponse = await axios.post(url, { emailOrPhone: email, password }, { timeout: 15000 });
 
-      console.log('[LOGIN] Response status:', response.status);
+      console.log('[LOGIN] Response status:', axiosResponse.status);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('[LOGIN] Error response:', errorData);
-
-        // Extract error message
-        let errorMessage = 'Login failed';
-
-        if (errorData?.error) {
-          errorMessage = errorData.error.message || errorMessage;
-
-          // If there are validation details, format them
-          if (errorData.error.details && Array.isArray(errorData.error.details)) {
-            const validationErrors = errorData.error.details
-              .map((detail: any) => {
-                const field = detail.field || detail.path?.[0] || 'Campo';
-                const message = detail.message || 'inválido';
-                return `• ${field}: ${message}`;
-              })
-              .join('\n');
-
-            if (validationErrors) {
-              errorMessage = `Errores de validación:\n\n${validationErrors}`;
-            }
-          }
-        } else if (errorData?.message) {
-          errorMessage = errorData.message;
-        }
-
-        throw new Error(errorMessage);
-      }
-
-      const result = await response.json();
+      const result = axiosResponse.data;
       console.log('[LOGIN] Success! Full result:', JSON.stringify(result));
 
       // Extract data from response (handle both formats)

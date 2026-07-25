@@ -120,16 +120,22 @@ export default function DocumentsUploadScreen() {
 
       await driverAPI.uploadDocument(user!.id, doc.type, formData);
 
-      newDocuments[index].isUploading = false;
-      newDocuments[index].isUploaded = true;
-      setDocuments(newDocuments);
+      const successDocs = [...documents];
+      successDocs[index].isUploaded = true;
+      setDocuments(successDocs);
 
       showToast(`${doc.label} subido correctamente`, 'success');
     } catch (error) {
-      const newDocuments = [...documents];
-      newDocuments[index].isUploading = false;
-      setDocuments(newDocuments);
       showToast(error instanceof Error ? error.message : 'No se pudo subir el documento', 'error');
+    } finally {
+      setDocuments(prev => {
+        if (prev[index]?.isUploading) {
+          const updated = [...prev];
+          updated[index] = { ...updated[index], isUploading: false };
+          return updated;
+        }
+        return prev;
+      });
     }
   };
 

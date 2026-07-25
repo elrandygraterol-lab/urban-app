@@ -134,7 +134,7 @@ export default function ActiveRideScreen() {
   const [heading, setHeading] = useState<number>(0);
   const [routeBearing, setRouteBearing] = useState<number>(0);
   const lastRouteUpdateRef = useRef<number>(0); // Timestamp of last route update
-  const ROUTE_UPDATE_INTERVAL = 30000; // Update route every 30 seconds (30000ms)
+  const ROUTE_UPDATE_INTERVAL = 60000; // Update route every 60 seconds (60000ms)
 
   // Route deviation detection — recalculate immediately when driver leaves the route
   const DEVIATION_THRESHOLD_METERS = 50; // Distance from route that triggers reroute
@@ -167,7 +167,7 @@ export default function ActiveRideScreen() {
   // Payment state
   const [isPaymentConfirmed, setIsPaymentConfirmed] = useState(false);
   // Track passenger's current payment method (updated via WebSocket, Req. 3.4)
-  const [passengerPaymentMode, setPassengerPaymentMode] = useState<'cash' | 'pago_movil' | 'dual' | null>(
+  const [passengerPaymentMode, setPassengerPaymentMode] = useState<'cash' | 'pago_movil' | 'bank_transfer' | 'dual' | null>(
     null
   );
 
@@ -199,6 +199,7 @@ export default function ActiveRideScreen() {
   const [nearestStepIndex, setNearestStepIndex] = useState<number>(0);
   const [nearestRouteIndex, setNearestRouteIndex] = useState<number>(0);
   const announcedStepIndexRef = useRef<number>(-1);
+  const lastTtsTimeRef = useRef<number>(0);
 
   const tts = useTTS();
 
@@ -256,7 +257,7 @@ export default function ActiveRideScreen() {
     if (ride && location) {
       // Reset map interaction state only on status/payment change, not on location change
       setUserInteractedWithMap(false);
-      setIsInitialMapSetup(true);
+      initialMapSetupRef.current = true;
       // Reset rerouting flag to ensure fetchAndDrawRoute runs on status change
       isReroutingRef.current = false;
       fetchAndDrawRoute();
@@ -318,7 +319,7 @@ export default function ActiveRideScreen() {
 
       // Reset map interaction state so the camera re-centers on the driver
       setUserInteractedWithMap(false);
-      setIsInitialMapSetup(true);
+      initialMapSetupRef.current = true;
 
       // Reset throttle so route updates immediately after restore
       lastRouteUpdateRef.current = 0;
@@ -379,12 +380,12 @@ export default function ActiveRideScreen() {
 
   // State to track if user has manually interacted with map
   const [userInteractedWithMap, setUserInteractedWithMap] = useState(false);
-  const [isInitialMapSetup, setIsInitialMapSetup] = useState(true);
+  const initialMapSetupRef = useRef(true);
 
   // GPS tracking: smoothly follow driver on map during navigation
   // Only follows when the user has NOT manually interacted with the map.
   useEffect(() => {
-    if (location && mapRef.current && ride && !userInteractedWithMap) {
+    if (location && mapRef.current && ride && !userInteractedWithMap && !initialMapSetupRef.current) {
       if (
         ride.status === 'accepted' ||
         ride.status === 'arrived' ||
@@ -398,7 +399,7 @@ export default function ActiveRideScreen() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location?.latitude, location?.longitude, heading, routeBearing, ride, userInteractedWithMap]);
+  }, [location?.latitude, location?.longitude, userInteractedWithMap]);
 
   useEffect(() => {
     if (!location || routeCoordinates.length < 2) {
@@ -422,10 +423,17 @@ export default function ActiveRideScreen() {
       if (step?.location) {
         const distToManeuver = haversineDistance(location, step.location);
         if (distToManeuver <= 200 && stepIdx !== announcedStepIndexRef.current) {
+          // Time-based dedup: skip if spoken within last 10 seconds
+          const now = Date.now();
+          if (now - lastTtsTimeRef.current < 10000) {
+            console.log('[ACTIVE_RIDE] TTS dedup: skipping, last spoken', now - lastTtsTimeRef.current, 'ms ago');
+            return;
+          }
           // Last step: announce arrival
           const isLastStep = stepIdx === routeSteps.length - 1;
           tts.speak(isLastStep ? 'Has llegado a tu destino' : step.instruction);
           announcedStepIndexRef.current = stepIdx;
+          lastTtsTimeRef.current = now;
         }
       }
     }
@@ -779,7 +787,20 @@ export default function ActiveRideScreen() {
               s.location?.longitude !== ns.location.longitude;
           });
         if (stepsChanged) {
-          announcedStepIndexRef.current = -1;
+          // Preserve announced step if the new nearest step is close to the previously announced one
+          const prevAnnounced = announcedStepIndexRef.current;
+          const prevStep = routeSteps[prevAnnounced];
+          const newStep = newSteps[prevAnnounced];
+          if (prevAnnounced >= 0 && prevStep?.location && newStep?.location) {
+            const dist = haversineDistance(prevStep.location, newStep.location);
+            if (dist < 100) {
+              // Keep current index — don't re-announce
+            } else {
+              announcedStepIndexRef.current = -1;
+            }
+          } else {
+            announcedStepIndexRef.current = -1;
+          }
         }
 
         console.log('[ACTIVE_RIDE] Route loaded:', {
@@ -789,13 +810,13 @@ export default function ActiveRideScreen() {
         });
 
         // Only fit map to route on initial setup, not on updates
-        if (isInitialMapSetup && mapRef.current && routeCoords.length > 0) {
+        if (initialMapSetupRef.current && mapRef.current && routeCoords.length > 0) {
           programmaticMoveCountRef.current += 1;
           mapRef.current.fitToCoordinates(routeCoords, {
             edgePadding: { top: 100, right: 50, bottom: 300, left: 50 },
             animated: true,
           });
-          setIsInitialMapSetup(false);
+          initialMapSetupRef.current = false;
         }
       }
     } catch (error) {
@@ -947,15 +968,10 @@ export default function ActiveRideScreen() {
         return;
       }
 
-      // Skip notification if driver initiated the cancel — already shown toast + navigated
+      // Skip if driver initiated the cancel — already cleaned up in handleConfirmCancelRide
       if (driverInitiatedCancelRef.current) {
-        console.log('[ACTIVE_RIDE] Driver initiated cancel — skipping duplicate notification');
+        console.log('[ACTIVE_RIDE] Driver initiated cancel — skipping duplicate cleanup');
         driverInitiatedCancelRef.current = false;
-        setIsAvailable(true);
-        setRide(null);
-        setRouteCoordinates([]);
-        setRouteSteps([]);
-        setTimeout(() => router.replace('/(driver)'), 1500);
         return;
       }
 
@@ -972,7 +988,7 @@ export default function ActiveRideScreen() {
         message = 'El pasajero ha cancelado el viaje.';
       }
 
-      if (data.cancellationReason && data.cancellationReason !== 'payment_timeout') {
+      if (data.cancellationReason && data.cancellationReason !== 'payment_timeout' && data.cancellationReason !== 'passenger_cancelled') {
         message += `\n\nMotivo: ${data.cancellationReason}`;
       }
 
@@ -987,7 +1003,7 @@ export default function ActiveRideScreen() {
       setRouteCoordinates([]);
       setRouteSteps([]);
 
-      showStatus('ride_cancelled', message, 'Viaje Cancelado');
+      // Notification handled by useGlobalSocketListeners — avoid duplicate
 
       // Auto-redirect to home after notification shows
       setTimeout(() => router.replace('/(driver)'), 1500);
@@ -1182,7 +1198,7 @@ export default function ActiveRideScreen() {
             setIsPaymentConfirmed(true);
           }
           if (updated.payment?.paymentMode) {
-            setPassengerPaymentMode(updated.payment.paymentMode as 'cash' | 'pago_movil' | 'dual');
+            setPassengerPaymentMode(updated.payment.paymentMode as 'cash' | 'pago_movil' | 'bank_transfer' | 'dual');
           }
           // If server reports completed, show rating modal
           if (updated.status === 'completed' && ratingShownForRideRef.current !== rideRef.current?.id) {
@@ -1223,6 +1239,15 @@ export default function ActiveRideScreen() {
       }
     }).catch(() => {});
   });
+
+  const confirmCashAndStartRide = async () => {
+    if (!rideRef.current) return;
+    if (isUpdatingStatus) return;
+    setIsUpdatingStatus(true);
+    setIsPaymentConfirmed(true);
+    console.log('[ACTIVE_RIDE] Cash confirmed by driver, starting ride');
+    await updateRideStatus('in_progress');
+  };
 
   const updateRideStatus = async (newStatus: string) => {
     if (isUpdatingStatus) return;
@@ -1318,9 +1343,12 @@ export default function ActiveRideScreen() {
   const handleCancelRide = async () => {
     if (!ride || isCancelling) return;
 
-    // Block cancellation for pago_movil if passenger already paid
-    if (isPaymentConfirmed && passengerPaymentMode === 'pago_movil') {
-      showToast('No puedes cancelar: el pasajero ya realizó el pago móvil', 'warning');
+    // Block cancellation if passenger already paid via pago_movil or bank_transfer
+    if (isPaymentConfirmed && (passengerPaymentMode === 'pago_movil' || passengerPaymentMode === 'bank_transfer')) {
+      const msg = passengerPaymentMode === 'pago_movil'
+        ? 'No puedes cancelar: el pasajero ya realizó el pago móvil'
+        : 'No puedes cancelar: el pasajero ya realizó la transferencia';
+      showToast(msg, 'warning');
       return;
     }
 
@@ -1341,14 +1369,12 @@ export default function ActiveRideScreen() {
       await rideAPI.cancelRide(rideId, {
         reason: cancelReason,
       });
-      // Clean up state immediately on success — don't wait for socket event
+      // Clean up state immediately — socket event will handle navigation
       setShowCancelReasonModal(false);
-      showToast('Viaje cancelado exitosamente', 'success');
       setIsAvailable(true);
       setRide(null);
       setRouteCoordinates([]);
       setRouteSteps([]);
-      setTimeout(() => router.replace('/(driver)'), 1500);
     } catch (error: any) {
       const msg = error?.response?.data?.error?.message || 'No se pudo cancelar el viaje';
       showToast(msg, 'error');
@@ -1488,12 +1514,11 @@ export default function ActiveRideScreen() {
           rating: passengerRating,
           comment: passengerComment.trim() || undefined,
         });
-      }, 3, 1000);
+      }, 3, 1000, 30000);
 
       console.log('✅ Rating submitted successfully');
 
       setShowRatingModal(false);
-      setIsSubmittingRating(false);
 
       setRouteCoordinates([]);
       setRouteSteps([]);
@@ -1502,12 +1527,13 @@ export default function ActiveRideScreen() {
       setTimeout(() => router.replace('/(driver)'), 1500);
     } catch (error) {
       console.error('Failed to submit rating:', error);
-      setIsSubmittingRating(false);
 
       const msg = isNetworkError(error)
         ? 'Error de conexión. Verifica tu internet e intenta calificar de nuevo.'
         : 'No se pudo enviar la valoración. Por favor, intenta de nuevo.';
       showToast(msg, 'error');
+    } finally {
+      setIsSubmittingRating(false);
     }
   };
 
@@ -2490,13 +2516,13 @@ export default function ActiveRideScreen() {
                     <ActivityIndicator size="small" color="#FF8C00" />
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF8C00', marginBottom: 4 }}>
-                        Esperando pago del pasajero
+                        {passengerPaymentMode === 'cash' ? 'Esperando cobro en efectivo' : 'Esperando pago del pasajero'}
                       </Text>
                       <Text style={{ fontSize: 13, color: '#666' }}>
                         {passengerPaymentMode === 'pago_movil'
                           ? 'El pasajero debe confirmar el pago móvil antes de iniciar el viaje'
                           : passengerPaymentMode === 'cash'
-                          ? 'El pasajero debe confirmar el pago en efectivo antes de iniciar el viaje'
+                          ? 'Confirma que recibiste el efectivo del pasajero para iniciar el viaje'
                           : 'El pasajero aún no ha seleccionado el método de pago'}
                       </Text>
                     </View>
@@ -2518,15 +2544,22 @@ export default function ActiveRideScreen() {
                 {/* Buttons row */}
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TouchableOpacity
-                    onPress={() => updateRideStatus('in_progress')}
-                    disabled={!isPaymentConfirmed || isUpdatingStatus}
+                    onPress={() => {
+                      // For cash: auto-confirm payment, then start ride
+                      if (passengerPaymentMode === 'cash' && !isPaymentConfirmed) {
+                        confirmCashAndStartRide();
+                      } else {
+                        updateRideStatus('in_progress');
+                      }
+                    }}
+                    disabled={passengerPaymentMode !== 'cash' && (!isPaymentConfirmed || isUpdatingStatus)}
                     style={{
                       flex: 2,
-                      backgroundColor: isPaymentConfirmed ? colors.primary : '#D1D5DB',
+                      backgroundColor: passengerPaymentMode === 'cash' || isPaymentConfirmed ? colors.primary : '#D1D5DB',
                       paddingVertical: 12,
                       borderRadius: 10,
                       alignItems: 'center',
-                      opacity: isPaymentConfirmed ? 1 : 0.6,
+                      opacity: passengerPaymentMode === 'cash' || isPaymentConfirmed ? 1 : 0.6,
                       flexDirection: 'row',
                       justifyContent: 'center',
                       gap: 6,
@@ -2536,17 +2569,17 @@ export default function ActiveRideScreen() {
                       <ActivityIndicator size="small" color="#fff" />
                     ) : (
                       <Ionicons
-                        name={isPaymentConfirmed ? 'play-circle' : 'time-outline'}
+                        name={passengerPaymentMode === 'cash' || isPaymentConfirmed ? 'play-circle' : 'time-outline'}
                         size={18} color="#fff"
                       />
                     )}
                     <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>
-                      {isUpdatingStatus ? 'Iniciando...' : isPaymentConfirmed ? 'Iniciar' : 'Esperando Pago'}
+                      {isUpdatingStatus ? 'Iniciando...' : passengerPaymentMode === 'cash' || isPaymentConfirmed ? 'Iniciar' : 'Esperando Pago'}
                     </Text>
                   </TouchableOpacity>
 
-                  {/* Cancel button — cash: always visible; pago_movil: only if not paid */}
-                  {!(isPaymentConfirmed && passengerPaymentMode === 'pago_movil') && (
+                  {/* Cancel button — cash: always visible; pago_movil/bank_transfer: only if not paid */}
+                  {!(isPaymentConfirmed && (passengerPaymentMode === 'pago_movil' || passengerPaymentMode === 'bank_transfer')) && (
                     <TouchableOpacity
                       onPress={handleCancelRide}
                       disabled={isCancelling}

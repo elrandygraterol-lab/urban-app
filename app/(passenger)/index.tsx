@@ -34,7 +34,7 @@ import {
 import { computeBearing, bearingAlongRoute, animateNavigationCamera, computeNearestRouteIndex } from '@/src/utils/mapNav';
 import { useAuthStore } from '@/store/authStore';
 import { rideAPI, paymentAPI, ratingAPI, passengerAPI } from '@/services/api';
-import { reverseGeocode, getRoute, geocodeAddress } from '@/services/mapsService';
+import { reverseGeocode, getRoute, geocodeAddress, getIpLocation, searchPlaces } from '@/services/mapsService';
 import {
   connectSocket,
   getSocket,
@@ -67,6 +67,7 @@ import { resolveFileUrl } from '@/services/fileUrl';
 
 const MobilePaymentModal = React.lazy(() => import('@/components/MobilePaymentModal'));
 const AddressAutocomplete = React.lazy(() => import('@/components/AddressAutocomplete'));
+type Place = import('@/components/AddressAutocomplete').Place;
 const SharedRideInvitationModal = React.lazy(() => import('@/components/SharedRideInvitationModal'));
 
 // const WalkthroughView = walkthroughable(View);
@@ -202,6 +203,54 @@ export default function PassengerHomeScreen() {
   >('none');
   const [, setTempMarkerLocation] = useState<LocationCoords | null>(null);
 
+  // Shared suggestions state
+  const [searchSuggestions, setSearchSuggestions] = useState<Place[]>([]);
+  const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
+  const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
+  const [activeSuggestionField, setActiveSuggestionField] = useState<'pickup' | 'destination' | null>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const justSelectedSuggestionRef = useRef(false);
+
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+
+    // Skip search if value was just set by selecting a suggestion
+    if (justSelectedSuggestionRef.current) {
+      justSelectedSuggestionRef.current = false;
+      return;
+    }
+
+    const val = activeSuggestionField === 'pickup' ? pickupAddress : destinationAddress;
+    if (!val || val.length < 3) {
+      setSearchSuggestions([]);
+      setShowSearchSuggestions(false);
+      return;
+    }
+
+    searchDebounceRef.current = setTimeout(async () => {
+      setIsSearchingPlaces(true);
+      try {
+        const results = await searchPlaces(
+          val,
+          currentLocation?.latitude,
+          currentLocation?.longitude
+        );
+        const found = results.slice(0, 5);
+        setSearchSuggestions(found);
+        setShowSearchSuggestions(found.length > 0);
+      } catch {
+        setSearchSuggestions([]);
+        setShowSearchSuggestions(false);
+      } finally {
+        setIsSearchingPlaces(false);
+      }
+    }, 700);
+
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, [pickupAddress, destinationAddress, activeSuggestionField, currentLocation]);
+
   // UI states
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
   const [isRequestingRide, setIsRequestingRide] = useState(false);
@@ -289,7 +338,8 @@ export default function PassengerHomeScreen() {
   ];
   const [isCancelling, setIsCancelling] = useState(false);
   const isCancellingRef = useRef(false);
-  const [, setCancellationFeeWarning] = useState<string | null>(null);
+  const passengerInitiatedCancelRef = useRef(false);
+  const calculateRouteVersionRef = useRef(0);
 
   const driverCoord = useMemo(
     () => (driverLocation ? { latitude: Number(driverLocation.latitude), longitude: Number(driverLocation.longitude) } : null),
@@ -368,7 +418,6 @@ export default function PassengerHomeScreen() {
   const ratingShownForRideRef = useRef<string | null>(null);
   const acceptedRideIdRef = useRef<string | null>(null);
   const rideCleanupRefs = useRef<Record<string, () => void>>({});
-  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeRideRef = useRef<any>(null);
 
   const paymentTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -584,10 +633,6 @@ export default function PassengerHomeScreen() {
     }
     try {
       await rideAPI.cancelRide(activeRide.id, { reason: 'search_timeout' });
-      showToast(
-        'No encontramos conductores disponibles en tu zona en este momento. Por favor intenta nuevamente.',
-        'info'
-      );
       setActiveRide(null);
       setIsSearchingDriver(false);
       setDriverLocation(null);
@@ -691,7 +736,7 @@ export default function PassengerHomeScreen() {
 
   // Use cancellation policy hook - only fetch when ride is in a cancellable state AND user is authenticated
   const canFetchPolicy =
-    !!token && !!activeRide && ['pending', 'accepted', 'arrived'].includes(activeRide.status);
+    !!token && !!activeRide && ['pending', 'accepted', 'arrived', 'in_progress'].includes(activeRide.status);
   const { policy: cancellationPolicy } = useCancellationPolicy(activeRide?.id || null, {
     enabled: canFetchPolicy,
   });
@@ -806,21 +851,6 @@ export default function PassengerHomeScreen() {
 
         logInfo('PassengerHomeScreen', 'Location permission status', { status });
 
-        if (status !== 'granted') {
-          logWarning('PassengerHomeScreen', 'Location permission denied');
-          showStatus(
-            'error',
-            'Esta app necesita acceso a tu ubicación para funcionar. Por favor activa el permiso en Configuración.',
-            'Permiso de ubicación requerido',
-            undefined,
-            { label: 'Abrir Configuración', onPress: () => Linking.openSettings() }
-          );
-          setIsLoadingLocation(false);
-          return;
-        }
-
-        logInfo('PassengerHomeScreen', 'Getting current location...');
-
         // Helper: apply coords and resolve address
         const applyLocation = async (coords: LocationCoords) => {
           setCurrentLocation(coords);
@@ -837,6 +867,48 @@ export default function PassengerHomeScreen() {
             setPickupAddress(`${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`);
           }
         };
+
+        // Helper: apply IP geolocation coordinates as approximate fallback
+        const applyIpLocation = (ipLoc: { city: string; regionName: string; latitude: number; longitude: number }) => {
+          const coords: LocationCoords = { latitude: ipLoc.latitude, longitude: ipLoc.longitude };
+          setCurrentLocation(coords);
+          setPickupLocation(coords);
+          const ctx = [ipLoc.city, ipLoc.regionName, 'Venezuela'].filter(Boolean).join(', ');
+          setSearchContext(ctx);
+          setPickupAddress(`${ipLoc.city}, ${ipLoc.regionName}`);
+          setIsLoadingLocation(false);
+          logInfo('PassengerHomeScreen', 'IP location fallback applied', { coords, ctx });
+        };
+
+        if (status !== 'granted') {
+          logWarning('PassengerHomeScreen', 'Location permission denied');
+          // Try IP geolocation as fallback before showing permission error
+          const ipLoc = await getIpLocation();
+          if (ipLoc?.latitude && ipLoc?.longitude) {
+            logInfo('PassengerHomeScreen', 'IP geolocation fallback applied after GPS denied', ipLoc);
+            applyIpLocation(ipLoc);
+            showStatus(
+              'info',
+              'Usando ubicación aproximada por IP. La precisión puede ser menor que la del GPS.',
+              'GPS no disponible',
+              undefined,
+              undefined,
+              5000
+            );
+            return;
+          }
+          showStatus(
+            'error',
+            'Esta app necesita acceso a tu ubicación para funcionar. Por favor activa el permiso en Configuración.',
+            'Permiso de ubicación requerido',
+            undefined,
+            { label: 'Abrir Configuración', onPress: () => Linking.openSettings() }
+          );
+          setIsLoadingLocation(false);
+          return;
+        }
+
+        logInfo('PassengerHomeScreen', 'Getting current location...');
 
         // Step 1: Last known position (instant — avoids GPS cold-start delay)
         let lastKnownApplied = false;
@@ -911,6 +983,26 @@ export default function PassengerHomeScreen() {
             }
 
             if (!anyLastKnown) {
+              // Try IP geolocation as last resort fallback before showing GPS error
+              try {
+                const ipLoc = await getIpLocation();
+                if (ipLoc?.latitude && ipLoc?.longitude) {
+                  logInfo('PassengerHomeScreen', 'IP geolocation last-resort fallback applied', ipLoc);
+                  applyIpLocation(ipLoc);
+                  showStatus(
+                    'info',
+                    'No se pudo obtener tu ubicación precisa. Usando ubicación aproximada por IP.',
+                    'Ubicación aproximada',
+                    undefined,
+                    undefined,
+                    5000
+                  );
+                  return;
+                }
+              } catch {
+                // IP fallback also failed — continue to error display
+              }
+
               // Absolutely no position available — classify the error
               const msg: string = freshError?.message ?? String(freshError);
               const isNetwork =
@@ -1214,48 +1306,13 @@ export default function PassengerHomeScreen() {
       // Store final fare
       setFinalFare(estimatedFareRef.current || 0);
 
-      // Show payment form immediately based on selected method
-      // Use ref to avoid stale closure — paymentMethod state may be stale inside socket handlers
-      const method = paymentMethodRef.current;
-      if (method === 'cash') {
-        setPaymentCompleted(true);
-        // Notify backend that cash payment is confirmed
-        try {
-          await paymentAPI.completePayment(data.rideId, {
-            method: 'cash',
-            amount: estimatedFareRef.current || 0,
-          });
-          console.log('[PASSENGER] Cash payment confirmed on backend');
-        } catch (error) {
-          console.warn('[PASSENGER] Could not confirm cash payment on backend:', error);
-          showStatus(
-            'warning',
-            'No se pudo confirmar el pago en efectivo con el servidor. El conductor aún puede iniciar el viaje.',
-            'Pago en Efectivo'
-          );
-        }
-        showStatus(
-          'success',
-          'Pagarás en efectivo al conductor al finalizar el viaje.',
-          'Pago en Efectivo',
-          undefined,
-          undefined,
-          4000
-        );
-      } else if (method === 'pago_movil' || method === 'bank_transfer') {
-        // Auto-select the first matching platform method for the chosen type
-        const match = platformPaymentMethods.find((pm: any) => pm.type === paymentMethodRef.current);
-        if (match) {
-          setSelectedPlatformMethod(match);
-        } else {
-          // Fallback: select first available method of any type so modal shows destination info
-          const fallback = platformPaymentMethods.length > 0 ? platformPaymentMethods[0] : null;
-          if (fallback) {
-            setSelectedPlatformMethod(fallback);
-          }
-        }
-        setShowMobilePaymentModal(true);
+      // Show payment form for the user to choose their payment method
+      // Auto-select the first available platform method so MobilePaymentModal shows destination info
+      const firstMethod = platformPaymentMethods.length > 0 ? platformPaymentMethods[0] : null;
+      if (firstMethod) {
+        setSelectedPlatformMethod(firstMethod);
       }
+      setShowMobilePaymentModal(true);
     };
 
     // Listen for ride status changes
@@ -1436,6 +1493,7 @@ export default function PassengerHomeScreen() {
       // Notification handled globally via useGlobalSocketListeners
       if (data.cancelledBy === 'system') {
         if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
+        setShowCancelModal(false);
         // Reset ride state
         setActiveRide(null);
         setDriverLocation(null);
@@ -1474,9 +1532,20 @@ export default function PassengerHomeScreen() {
         setIsCalculatingFare(false);
         setZoneInfo(null);
         setHasShownNearbyNotification(false);
+        setMapSelectionMode('none');
+        setIsEditingPickup(false);
+        setIsEditingSecondPickup(false);
+        setIsEditingSecondDestination(false);
         acceptedRideIdRef.current = null;
+
+        // Auto-set pickup to current location so user can start a new request immediately
+        const systemLoc = currentLocationRef.current;
+        if (systemLoc) {
+          setPickupLocation(systemLoc);
+        }
       } else if (data.cancelledBy === 'driver') {
         if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
+        setShowCancelModal(false);
         // Full reset — passenger goes back to the initial state (same as passenger-initiated cancel)
         setActiveRide(null);
         setDriverLocation(null);
@@ -1516,6 +1585,10 @@ export default function PassengerHomeScreen() {
         setIsCalculatingFare(false);
         setZoneInfo(null);
         setHasShownNearbyNotification(false);
+        setMapSelectionMode('none');
+        setIsEditingPickup(false);
+        setIsEditingSecondPickup(false);
+        setIsEditingSecondDestination(false);
 
         // Center map on user's current location
         const loc = currentLocationRef.current;
@@ -1537,14 +1610,18 @@ export default function PassengerHomeScreen() {
         }
         acceptedRideIdRef.current = null;
       } else if (data.cancelledBy === 'passenger') {
-        if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
-        // Show cancellation fee if applicable
-        const feeMessage =
-          data.cancellationFee > 0
-            ? `\n\nTarifa de cancelación aplicada: ${formatCurrency(data.cancellationFee, fareCurrencyRef.current)}`
-            : '';
+        // If passenger initiated the cancel, skip the toast (cleanup already handled or will be handled)
+        if (passengerInitiatedCancelRef.current) {
+          passengerInitiatedCancelRef.current = false;
+        } else {
+          // Show cancellation fee if applicable
+          const feeMessage =
+            data.cancellationFee > 0
+              ? `\n\nTarifa de cancelación aplicada: ${formatCurrency(data.cancellationFee, fareCurrencyRef.current)}`
+              : '';
 
-        showToast(`Tu viaje ha sido cancelado exitosamente.${feeMessage}`, 'info');
+          showToast(`Tu viaje ha sido cancelado exitosamente.${feeMessage}`, 'info');
+        }
 
         // Reset ride state
         setActiveRide(null);
@@ -1567,6 +1644,10 @@ export default function PassengerHomeScreen() {
         setIsCalculatingFare(false);
         setZoneInfo(null);
         setHasShownNearbyNotification(false);
+        setMapSelectionMode('none');
+        setIsEditingPickup(false);
+        setIsEditingSecondPickup(false);
+        setIsEditingSecondDestination(false);
         setPaymentCompleted(false);
         setShowMobilePaymentModal(false);
         setShowPaymentModal(false);
@@ -1585,6 +1666,12 @@ export default function PassengerHomeScreen() {
         setSecondDestinationLocationSource(null);
         setCancelReason('');
         acceptedRideIdRef.current = null;
+
+        // Auto-set pickup to current location so user can start a new request immediately
+        const passengerLoc = currentLocationRef.current;
+        if (passengerLoc) {
+          setPickupLocation(passengerLoc);
+        }
       }
     };
 
@@ -1609,6 +1696,9 @@ export default function PassengerHomeScreen() {
         return;
       }
       ratingShownForRideRef.current = data.rideId;
+
+      // Close cancellation modal if open — ride is no longer cancellable
+      setShowCancelModal(false);
 
       // Clear payment timeout — ride is done, no modal needed
       if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
@@ -1732,6 +1822,7 @@ export default function PassengerHomeScreen() {
               hasInteractedWithRatingRef.current = false;
               if (rideAutoResetTimeoutRef.current) clearTimeout(rideAutoResetTimeoutRef.current);
               rideAutoResetTimeoutRef.current = setTimeout(() => {
+                if (!mountedRef.current) return;
                 if (activeRideRef.current?.status === 'completed' && !hasInteractedWithRatingRef.current) {
                   console.log('[PASSENGER] Auto-redirecting to request ride after completion (polling)');
                   handleCloseRatingModal();
@@ -2088,6 +2179,9 @@ export default function PassengerHomeScreen() {
   const calculateRoute = useCallback(async () => {
     if (!pickupLocation || !destinationLocation) return;
 
+    const version = ++calculateRouteVersionRef.current;
+    console.log('[ROUTE] calculateRoute called', { pickupLocation, destinationLocation, currentLocation, version });
+
     // Build ordered waypoints: Current location → Pickup → Destination
     const waypoints: LocationCoords[] = [];
 
@@ -2123,6 +2217,10 @@ export default function PassengerHomeScreen() {
       if (waypoints.length === 2) {
         // Simple single-segment route
         const routeData = await getRoute(waypoints[0], waypoints[1]);
+        if (version !== calculateRouteVersionRef.current) return;
+        if (!routeData.polyline || routeData.polyline.length === 0) {
+          throw new Error('Empty polyline from API');
+        }
         allRouteCoords = routeData.polyline.map((coord: [number, number]) => ({
           latitude: coord[1],
           longitude: coord[0],
@@ -2132,6 +2230,10 @@ export default function PassengerHomeScreen() {
         for (let i = 0; i < waypoints.length - 1; i++) {
           try {
             const segmentData = await getRoute(waypoints[i], waypoints[i + 1]);
+            if (version !== calculateRouteVersionRef.current) return;
+            if (!segmentData.polyline || segmentData.polyline.length === 0) {
+              throw new Error('Empty polyline from API');
+            }
             const segmentCoords: RouteCoordinates[] = segmentData.polyline.map(
               (coord: [number, number]) => ({
                 latitude: coord[1],
@@ -2145,12 +2247,15 @@ export default function PassengerHomeScreen() {
               allRouteCoords = [...allRouteCoords, ...segmentCoords];
             }
           } catch {
+            if (version !== calculateRouteVersionRef.current) return;
             // Fallback: straight line for this segment
             allRouteCoords = [...allRouteCoords, waypoints[i], waypoints[i + 1]];
           }
         }
       }
 
+      if (version !== calculateRouteVersionRef.current) return;
+      console.log('[ROUTE] setting routeCoordinates', allRouteCoords.length, 'points');
       setRouteCoordinates(allRouteCoords);
 
       logInfo('PassengerHomeScreen', 'Route calculated successfully', {
@@ -2168,6 +2273,7 @@ export default function PassengerHomeScreen() {
         });
       }
     } catch (error) {
+      if (version !== calculateRouteVersionRef.current) return;
       logError('PassengerHomeScreen', error, { context: 'Calculating route with OSRM' });
 
       // Fallback to straight line if OSRM fails
@@ -2183,7 +2289,7 @@ export default function PassengerHomeScreen() {
         });
       }
     }
-  }, [pickupLocation, destinationLocation, secondPickupLocation, secondDestinationLocation]);
+  }, [pickupLocation, destinationLocation, secondPickupLocation, secondDestinationLocation, currentLocation]);
 
   // ========== MEJORA 1: Actualización Dinámica de Ruta ==========
   const updateDynamicRoute = useCallback(
@@ -2592,6 +2698,7 @@ export default function PassengerHomeScreen() {
 
   // Calculate route and fare when destination changes
   useEffect(() => {
+    console.log('[ROUTE_EFFECT] firing', { pickupLocation, destinationLocation });
     if (!pickupLocation || !destinationLocation) return;
     const pLoc = pickupLocation;
     const dLoc = destinationLocation;
@@ -2730,7 +2837,7 @@ export default function PassengerHomeScreen() {
       console.log('[GEOCODING] User input:', userInput);
       console.log('[GEOCODING] Search query:', searchQuery);
 
-      const location = await geocodeAddress(searchQuery);
+      const location = await geocodeAddress(searchQuery, currentLocation?.latitude, currentLocation?.longitude);
 
       if (!location || !location.latitude || !location.longitude) {
         showStatus(
@@ -2784,7 +2891,7 @@ export default function PassengerHomeScreen() {
       console.log('[PICKUP GEOCODING] User input:', userInput);
       console.log('[PICKUP GEOCODING] Search query:', searchQuery);
 
-      const location = await geocodeAddress(searchQuery);
+      const location = await geocodeAddress(searchQuery, currentLocation?.latitude, currentLocation?.longitude);
 
       if (!location || !location.latitude || !location.longitude) {
         showStatus(
@@ -3062,7 +3169,8 @@ export default function PassengerHomeScreen() {
         });
       }
 
-      // Send selected payment method
+      // Send ride request with default cash payment
+      // Payment method will be selected after driver accepts the ride
       const response = await rideAPI.requestRide({
         pickupLatitude: pickupLocation.latitude,
         pickupLongitude: pickupLocation.longitude,
@@ -3071,7 +3179,7 @@ export default function PassengerHomeScreen() {
         destinationLongitude: destinationLocation.longitude,
         destinationAddress: destinationFullAddress || destinationAddress, // Use full address for precision
         vehicleType: vehicleType,
-        paymentMethodId: paymentMethod,
+        paymentMethodId: 'cash',
         pickupPoints, // Req. 6.5, 6.7
         destinationPoints, // Req. 6.5, 6.7
       });
@@ -3150,9 +3258,51 @@ export default function PassengerHomeScreen() {
       setActiveRide(null);
       setIsSearchingDriver(false);
       setDriverLocation(null);
+      setRouteCoordinates([]);
+      setNearestRouteIndex(0);
+      setDisplayDistance(null);
+      setDisplayDuration(null);
+      prevDriverLocationRef.current = null;
+      setPickupLocation(null);
+      setPickupAddress('');
+      setPickupFullAddress('');
+      setDestinationLocation(null);
+      setDestinationAddress('');
+      setDestinationFullAddress('');
+      setEstimatedFare(null);
+      setFareBreakdown(null);
+      setIsCalculatingFare(false);
+      setZoneInfo(null);
+      setHasShownNearbyNotification(false);
+      setMapSelectionMode('none');
+      setIsEditingPickup(false);
+      setIsEditingSecondPickup(false);
+      setIsEditingSecondDestination(false);
+      setShowSecondPickup(false);
+      setSecondPickupLocation(null);
+      setSecondPickupAddress('');
+      setSecondPickupFullAddress('');
+      setSecondPickupLocationSource(null);
+      setShowSecondDestination(false);
+      setSecondDestinationLocation(null);
+      setSecondDestinationAddress('');
+      setSecondDestinationFullAddress('');
+      setSecondDestinationLocationSource(null);
+      acceptedRideIdRef.current = null;
 
-      // Show cancellation alert
-      showToast('Has cancelado la búsqueda de conductor', 'info');
+      // Auto-set pickup to current location so user can start a new request immediately
+      if (currentLocation) {
+        setPickupLocation(currentLocation);
+        reverseGeocode(currentLocation.latitude, currentLocation.longitude)
+          .then(loc => {
+            if (loc?.address) {
+              setPickupAddress(loc.address);
+              setPickupFullAddress(loc.address);
+            }
+          })
+          .catch(() => {});
+      }
+
       return;
     }
 
@@ -3162,29 +3312,114 @@ export default function PassengerHomeScreen() {
     setIsCancelling(true);
     try {
       console.log('Cancelling ride:', activeRide.id);
+      passengerInitiatedCancelRef.current = true;
       await rideAPI.cancelRide(activeRide.id, { reason: 'passenger_cancelled' });
 
       // Reset states
       setActiveRide(null);
       setIsSearchingDriver(false);
-
-      // Show cancellation confirmation
-      showToast('Has cancelado la búsqueda de conductor', 'info');
       setDriverLocation(null);
+      setRouteCoordinates([]);
+      setNearestRouteIndex(0);
+      setDisplayDistance(null);
+      setDisplayDuration(null);
+      prevDriverLocationRef.current = null;
+      setPickupLocation(null);
+      setPickupAddress('');
+      setPickupFullAddress('');
+      setDestinationLocation(null);
+      setDestinationAddress('');
+      setDestinationFullAddress('');
+      setEstimatedFare(null);
+      setFareBreakdown(null);
+      setIsCalculatingFare(false);
+      setZoneInfo(null);
+      setHasShownNearbyNotification(false);
+      setMapSelectionMode('none');
+      setIsEditingPickup(false);
+      setIsEditingSecondPickup(false);
+      setIsEditingSecondDestination(false);
+      setShowSecondPickup(false);
+      setSecondPickupLocation(null);
+      setSecondPickupAddress('');
+      setSecondPickupFullAddress('');
+      setSecondPickupLocationSource(null);
+      setShowSecondDestination(false);
+      setSecondDestinationLocation(null);
+      setSecondDestinationAddress('');
+      setSecondDestinationFullAddress('');
+      setSecondDestinationLocationSource(null);
+      acceptedRideIdRef.current = null;
+
+      // Auto-set pickup to current location so user can start a new request immediately
+      if (currentLocation) {
+        setPickupLocation(currentLocation);
+        reverseGeocode(currentLocation.latitude, currentLocation.longitude)
+          .then(loc => {
+            if (loc?.address) {
+              setPickupAddress(loc.address);
+              setPickupFullAddress(loc.address);
+            }
+          })
+          .catch(() => {});
+      }
 
       console.log('✅ Ride search cancelled');
-
-  
 
     } catch (error: any) {
       console.error('Cancel search error:', error);
 
       // If ride not found (404), it might have been auto-cancelled
       if (error.response?.status === 404) {
-        // Just reset the states
+        // Reset states
         setActiveRide(null);
         setIsSearchingDriver(false);
         setDriverLocation(null);
+        setRouteCoordinates([]);
+        setNearestRouteIndex(0);
+        setDisplayDistance(null);
+        setDisplayDuration(null);
+        prevDriverLocationRef.current = null;
+        setPickupLocation(null);
+        setPickupAddress('');
+        setPickupFullAddress('');
+        setDestinationLocation(null);
+        setDestinationAddress('');
+        setDestinationFullAddress('');
+        setEstimatedFare(null);
+        setFareBreakdown(null);
+        setIsCalculatingFare(false);
+        setZoneInfo(null);
+        setHasShownNearbyNotification(false);
+        setMapSelectionMode('none');
+        setIsEditingPickup(false);
+        setIsEditingSecondPickup(false);
+        setIsEditingSecondDestination(false);
+        setShowSecondPickup(false);
+        setSecondPickupLocation(null);
+        setSecondPickupAddress('');
+        setSecondPickupFullAddress('');
+        setSecondPickupLocationSource(null);
+        setShowSecondDestination(false);
+        setSecondDestinationLocation(null);
+        setSecondDestinationAddress('');
+        setSecondDestinationFullAddress('');
+        setSecondDestinationLocationSource(null);
+        acceptedRideIdRef.current = null;
+
+        // Auto-set pickup to current location so user can start a new request immediately
+        if (currentLocation) {
+          setPickupLocation(currentLocation);
+          reverseGeocode(currentLocation.latitude, currentLocation.longitude)
+            .then(loc => {
+              if (loc?.address) {
+                setPickupAddress(loc.address);
+                setPickupFullAddress(loc.address);
+              }
+            })
+            .catch(() => {});
+        }
+
         showToast('La búsqueda ya ha sido cancelada.', 'info');
       } else {
         showToast('No se pudo cancelar la búsqueda. Por favor, intenta nuevamente.', 'error');
@@ -3221,6 +3456,7 @@ export default function PassengerHomeScreen() {
     if (isCancelling) return;
     if (isCancellingRef.current) return;
     isCancellingRef.current = true;
+    passengerInitiatedCancelRef.current = true;
 
     // If there's a cancellation fee, warn if passenger has no payment methods registered
     if (cancellationPolicy && cancellationPolicy.fee > 0) {
@@ -3257,10 +3493,63 @@ export default function PassengerHomeScreen() {
       setIsSearchingDriver(false);
       setShowCancelModal(false);
       setIsCancelling(false);
+      setPaymentCompleted(false);
+      setPaymentMethod('cash');
+      setFareCurrency('VES');
+      setFinalFare(null);
+      setShowRatingModal(false);
+      setShowPaymentModal(false);
+      setShowMobilePaymentModal(false);
+      setShowSecondPickup(false);
+      setSecondPickupLocation(null);
+      setSecondPickupAddress('');
+      setSecondPickupFullAddress('');
+      setSecondPickupLocationSource(null);
+      setShowSecondDestination(false);
+      setSecondDestinationLocation(null);
+      setSecondDestinationAddress('');
+      setSecondDestinationFullAddress('');
+      setSecondDestinationLocationSource(null);
+      setCancelReason('');
+      setRouteCoordinates([]);
+      setNearestRouteIndex(0);
+      setDisplayDistance(null);
+      setDisplayDuration(null);
+      setPickupLocation(null);
+      setPickupAddress('');
+      setPickupFullAddress('');
+      setDestinationLocation(null);
+      setDestinationAddress('');
+      setDestinationFullAddress('');
+      setEstimatedFare(null);
+      setFareBreakdown(null);
+      setIsCalculatingFare(false);
+      setZoneInfo(null);
+      setHasShownNearbyNotification(false);
+      setMapSelectionMode('none');
+      setIsEditingPickup(false);
+      setIsEditingSecondPickup(false);
+      setIsEditingSecondDestination(false);
+      prevDriverLocationRef.current = null;
+      acceptedRideIdRef.current = null;
+
+      // Auto-set pickup to current location so user can start a new request immediately
+      if (currentLocation) {
+        setPickupLocation(currentLocation);
+        reverseGeocode(currentLocation.latitude, currentLocation.longitude)
+          .then(loc => {
+            if (loc?.address) {
+              setPickupAddress(loc.address);
+              setPickupFullAddress(loc.address);
+            }
+          })
+          .catch(() => {});
+      }
     } catch (error: any) {
       console.error('Cancel ride error:', error);
       logError('PassengerHomeScreen', error, { context: 'Cancel ride' });
       setIsCancelling(false);
+      passengerInitiatedCancelRef.current = false;
 
       // Show user-friendly error message
       const errorMessage = error.response?.data?.error?.message
@@ -3275,7 +3564,6 @@ export default function PassengerHomeScreen() {
 
   const handleCloseCancelModal = () => {
     setShowCancelModal(false);
-    setCancellationFeeWarning(null);
     setCancelReason('');
   };
 
@@ -3377,6 +3665,8 @@ export default function PassengerHomeScreen() {
       // Cerrar modal y mostrar loading
       setShowMobilePaymentModal(false);
       setIsRequestingRide(true); // Usar el estado de loading existente
+      isProcessingPaymentRef.current = false;
+      setIsProcessingPayment(false);
 
       if (paymentData.method === 'mobile_payment' && paymentData.referencia) {
         // P2C payment - already verified by the modal, just show success
@@ -3389,8 +3679,21 @@ export default function PassengerHomeScreen() {
         setPaymentCompleted(true);
 
         // Confirmation shown by MobilePaymentModal — no duplicate toast here
+      } else if (paymentData.method === 'cash') {
+        await retryWithBackoff(async () => {
+          const response = await paymentAPI.completePayment(activeRide.id, {
+            method: 'cash',
+            amount: finalFare || estimatedFare || 0,
+          });
+          return response;
+        }, 3, 1500);
+
+        console.log('✅ Cash payment confirmed');
+
+        setIsRequestingRide(false);
+
+        setPaymentCompleted(true);
       } else {
-        // Legacy payment methods (transfer, cash) — retry on network failure
         await retryWithBackoff(async () => {
           const response = await paymentAPI.completePayment(activeRide.id, {
             method: paymentData.method,
@@ -3405,13 +3708,10 @@ export default function PassengerHomeScreen() {
 
         console.log('✅ Payment processed successfully');
 
-        // Ocultar loading
         setIsRequestingRide(false);
 
-        // Mark payment as completed so ride completion doesn't show payment modal again
         setPaymentCompleted(true);
 
-        // Mostrar confirmación de éxito
         showToast(
           'Tu pago ha sido procesado exitosamente. El conductor ha sido notificado.',
           'success'
@@ -3441,6 +3741,67 @@ export default function PassengerHomeScreen() {
 
   const handleMobilePaymentCancel = () => {
     setShowMobilePaymentModal(false);
+    isProcessingPaymentRef.current = false;
+    setIsProcessingPayment(false);
+    // Full state cleanup — same as handleConfirmCancellation
+    if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
+    setActiveRide(null);
+    setDriverLocation(null);
+    setIsSearchingDriver(false);
+    setPaymentCompleted(false);
+    setPaymentMethod('cash');
+    setFareCurrency('VES');
+    setFinalFare(null);
+    setShowRatingModal(false);
+    setShowPaymentModal(false);
+    setShowSecondPickup(false);
+    setSecondPickupLocation(null);
+    setSecondPickupAddress('');
+    setSecondPickupFullAddress('');
+    setSecondPickupLocationSource(null);
+    setShowSecondDestination(false);
+    setSecondDestinationLocation(null);
+    setSecondDestinationAddress('');
+    setSecondDestinationFullAddress('');
+    setSecondDestinationLocationSource(null);
+    setCancelReason('');
+    setRouteCoordinates([]);
+    setNearestRouteIndex(0);
+    setDisplayDistance(null);
+    setDisplayDuration(null);
+    setPickupLocation(null);
+    setPickupAddress('');
+    setPickupFullAddress('');
+    setDestinationLocation(null);
+    setDestinationAddress('');
+    setDestinationFullAddress('');
+    setEstimatedFare(null);
+    setFareBreakdown(null);
+    setIsCalculatingFare(false);
+    setZoneInfo(null);
+    setHasShownNearbyNotification(false);
+    setMapSelectionMode('none');
+    setIsEditingPickup(false);
+    setIsEditingSecondPickup(false);
+    setIsEditingSecondDestination(false);
+    prevDriverLocationRef.current = null;
+    acceptedRideIdRef.current = null;
+    // Auto-set pickup to current location so user can start a new request immediately
+    if (currentLocation) {
+      setPickupLocation(currentLocation);
+      reverseGeocode(currentLocation.latitude, currentLocation.longitude)
+        .then(loc => {
+          if (loc?.address) {
+            setPickupAddress(loc.address);
+            setPickupFullAddress(loc.address);
+          }
+        })
+        .catch(() => {});
+    }
+  };
+
+  const handleBeforeMobilePaymentCancel = () => {
+    passengerInitiatedCancelRef.current = true;
   };
 
   /**
@@ -3510,7 +3871,7 @@ export default function PassengerHomeScreen() {
     try {
       await retryWithBackoff(async () => {
         await ratingAPI.rateDriver(activeRide!.id, driverRating, driverComment.trim() || undefined);
-      }, 3, 1000);
+      }, 3, 1000, 30000);
 
       console.log('✅ Rating submitted successfully');
 
@@ -3565,6 +3926,7 @@ export default function PassengerHomeScreen() {
 
     // Reset ride state completely - return to initial map view
     setActiveRide(null);
+    activeRideRef.current = null; // Sync ref immediately to prevent duplicate socket events
     setDriverLocation(null);
     setPickupLocation(null);
     setPickupAddress('');
@@ -3596,6 +3958,10 @@ export default function PassengerHomeScreen() {
     setHasShownNearbyNotification(false);
     setZoneInfo(null);
     setIsCalculatingFare(false);
+    setMapSelectionMode('none');
+    setIsEditingPickup(false);
+    setIsEditingSecondPickup(false);
+    setIsEditingSecondDestination(false);
 
     // Center map on user's current location
     if (currentLocation && mapRef.current) {
@@ -3659,16 +4025,20 @@ export default function PassengerHomeScreen() {
           <MapView
             ref={mapRef}
             style={styles.map}
-            initialRegion={{
-              latitude: Number(currentLocation.latitude),
-              longitude: Number(currentLocation.longitude),
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
+            initialCamera={{
+              center: {
+                latitude: Number(currentLocation.latitude),
+                longitude: Number(currentLocation.longitude),
+              },
+              pitch: 30,
+              heading: 0,
+              zoom: 16,
             }}
             showsUserLocation={false}
             showsMyLocationButton={false}
             followsUserLocation={false}
             showsCompass={false}
+            showsBuildings={true}
             onPress={handleMapPress}
             onLongPress={handleMapLongPress}
             scrollEnabled={true}
@@ -3758,6 +4128,7 @@ export default function PassengerHomeScreen() {
             {/* Route line — shown before ride request, driver approaching, and during trip */}
             {(!activeRide || activeRide.status === 'pending' || activeRide.status === 'accepted' || activeRide.status === 'arrived' || activeRide.status === 'in_progress' || activeRide.status === 'completed') && routeCoordinates.length > 1 && (
               <MemoizedPolyline
+                key={`route-${routeCoordinates.length}-${nearestRouteIndex}`}
                 coordinates={slicedRouteCoords}
                 strokeColor={
                   !activeRide || activeRide.status === 'pending' || activeRide.status === 'accepted'
@@ -3983,7 +4354,7 @@ export default function PassengerHomeScreen() {
                       </TouchableOpacity>
                     )}
 
-                    {(activeRide.status === 'pending' || activeRide.status === 'accepted' || activeRide.status === 'arrived') && (
+                    {(activeRide.status === 'pending' || activeRide.status === 'accepted' || activeRide.status === 'arrived' || activeRide.status === 'in_progress') && (
                       <TouchableOpacity style={styles.rideBtnCancel} onPress={handleCancelRidePress}>
                         <Text style={styles.rideBtnCancelText}>Cancelar</Text>
                       </TouchableOpacity>
@@ -4205,25 +4576,34 @@ export default function PassengerHomeScreen() {
                       <View style={styles.routeRowContent}>
                         {isEditingPickup ? (
                           <Suspense fallback={<View style={styles.routeAutocomplete} />}>
-                            <AddressAutocomplete
-                              value={pickupAddress}
-                              onChangeText={setPickupAddress}
-                              onSelectPlace={place => {
-                                setPickupLocation({
-                                  latitude: place.latitude,
-                                  longitude: place.longitude,
-                                });
-                                setPickupAddress(place.name); // Show short name in input
-                                setPickupFullAddress(place.description || place.name); // Save full address internally
-                                setPickupLocationSource(place.source ?? null);
-                                setIsEditingPickup(false);
-                              }}
-                              placeholder="Punto de recogida"
-                              currentLocation={currentLocation ?? undefined}
-                              bare
-                              style={styles.routeAutocomplete}
-                              suggestionsStyle={styles.routeSuggestionsDropdown}
-                            />
+                              <AddressAutocomplete
+                                value={pickupAddress}
+                                onChangeText={setPickupAddress}
+                                onSelectPlace={place => {
+                                  justSelectedSuggestionRef.current = true;
+                                  setPickupLocation({
+                                    latitude: place.latitude,
+                                    longitude: place.longitude,
+                                  });
+                                  setPickupAddress(place.name);
+                                  setPickupFullAddress(place.description || place.name);
+                                  setPickupLocationSource(place.source ?? null);
+                                  setShowSearchSuggestions(false);
+                                  setSearchSuggestions([]);
+                                  setIsEditingPickup(false);
+                                }}
+                                placeholder="Punto de recogida"
+                                currentLocation={currentLocation ?? undefined}
+                                bare
+                                style={styles.routeAutocomplete}
+                                hideSuggestions
+                                onFocus={() => setActiveSuggestionField('pickup')}
+                                onBlur={() => {
+                                  setActiveSuggestionField(null);
+                                  setShowSearchSuggestions(false);
+                                  setSearchSuggestions([]);
+                                }}
+                              />
                           </Suspense>
                         ) : (
                           <TouchableOpacity
@@ -4292,7 +4672,7 @@ export default function PassengerHomeScreen() {
                                   currentLocation={currentLocation ?? undefined}
                                   bare
                                   style={styles.routeAutocomplete}
-                                  suggestionsStyle={styles.routeSuggestionsDropdown}
+                                  hideSuggestions
                                 />
                               </Suspense>
                             ) : (
@@ -4376,19 +4756,28 @@ export default function PassengerHomeScreen() {
                             value={destinationAddress}
                             onChangeText={setDestinationAddress}
                             onSelectPlace={place => {
+                              justSelectedSuggestionRef.current = true;
                               setDestinationLocation({
                                 latitude: place.latitude,
                                 longitude: place.longitude,
                               });
-                              setDestinationAddress(place.name); // Show short name in input
-                              setDestinationFullAddress(place.description || place.name); // Save full address internally
+                              setDestinationAddress(place.name);
+                              setDestinationFullAddress(place.description || place.name);
                               setDestinationLocationSource(place.source ?? null);
+                              setShowSearchSuggestions(false);
+                              setSearchSuggestions([]);
                             }}
                             placeholder="¿A dónde vas?"
                             currentLocation={currentLocation ?? undefined}
                             bare
                             style={styles.routeAutocomplete}
-                            suggestionsStyle={styles.routeSuggestionsDropdown}
+                            hideSuggestions
+                            onFocus={() => setActiveSuggestionField('destination')}
+                            onBlur={() => {
+                              setActiveSuggestionField(null);
+                              setShowSearchSuggestions(false);
+                              setSearchSuggestions([]);
+                            }}
                           />
                         </Suspense>
                       </View>
@@ -4407,6 +4796,78 @@ export default function PassengerHomeScreen() {
                         </TouchableOpacity>
                       </View>
                     </View>
+
+                    {/* Shared suggestions panel — below all route rows */}
+                    {showSearchSuggestions && searchSuggestions.length > 0 && (
+                      <View style={styles.sharedSuggestionsPanel}>
+                        <ScrollView
+                          keyboardShouldPersistTaps="always"
+                          scrollEnabled={searchSuggestions.length > 0}
+                          showsVerticalScrollIndicator={searchSuggestions.length > 0}
+                          nestedScrollEnabled
+                        >
+                          {searchSuggestions.map((item, index) => (
+                            <React.Fragment key={item.id}>
+                              {index > 0 && <View style={styles.sharedSuggestionsSeparator} />}
+                              <TouchableOpacity
+                                style={styles.sharedSuggestionsItem}
+                                onPress={() => {
+                                  justSelectedSuggestionRef.current = true;
+                                  if (activeSuggestionField === 'pickup') {
+                                    setPickupLocation({
+                                      latitude: item.latitude,
+                                      longitude: item.longitude,
+                                    });
+                                    setPickupAddress(item.name);
+                                    setPickupFullAddress(item.description || item.name);
+                                    setPickupLocationSource(item.source ?? null);
+                                    setIsEditingPickup(false);
+                                  } else {
+                                    setDestinationLocation({
+                                      latitude: item.latitude,
+                                      longitude: item.longitude,
+                                    });
+                                    setDestinationAddress(item.name);
+                                    setDestinationFullAddress(item.description || item.name);
+                                    setDestinationLocationSource(item.source ?? null);
+                                  }
+                                  setShowSearchSuggestions(false);
+                                  setSearchSuggestions([]);
+                                  setActiveSuggestionField(null);
+                                  Keyboard.dismiss();
+                                }}
+                                activeOpacity={0.7}
+                              >
+                                <Ionicons
+                                  name="location-outline"
+                                  size={16}
+                                  color="#9CA3AF"
+                                  style={styles.sharedSuggestionsIcon}
+                                />
+                                <View style={styles.sharedSuggestionsTextContainer}>
+                                  <Text
+                                    style={styles.sharedSuggestionsName}
+                                    numberOfLines={1}
+                                    ellipsizeMode="tail"
+                                  >
+                                    {item.name}
+                                  </Text>
+                                  {item.description ? (
+                                    <Text
+                                      style={styles.sharedSuggestionsDescription}
+                                      numberOfLines={1}
+                                      ellipsizeMode="tail"
+                                    >
+                                      {item.description}
+                                    </Text>
+                                  ) : null}
+                                </View>
+                              </TouchableOpacity>
+                            </React.Fragment>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    )}
 
                     {/* Second Destination Row — Oculto para v1.0.0 */}
                     {false && showSecondDestination && (
@@ -4440,7 +4901,7 @@ export default function PassengerHomeScreen() {
                                   currentLocation={currentLocation ?? undefined}
                                   bare
                                   style={styles.routeAutocomplete}
-                                  suggestionsStyle={styles.routeSuggestionsDropdown}
+                                  hideSuggestions
                                 />
                               </Suspense>
                             ) : (
@@ -4715,79 +5176,6 @@ export default function PassengerHomeScreen() {
                     </View>
                   )}
 
-                  {/* Payment Method Selector */}
-                  <Text style={styles.sectionTitle}>Método de pago</Text>
-                  <View style={styles.paymentMethodSelector}>
-                    <TouchableOpacity
-                      style={[
-                        styles.paymentMethodButton,
-                        paymentMethod === 'cash' && styles.paymentMethodButtonActive,
-                      ]}
-                      onPress={() => setPaymentMethod('cash')}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons
-                        name="cash-outline"
-                        size={18}
-                        color={paymentMethod === 'cash' ? '#fff' : '#6B7280'}
-                      />
-                      <Text
-                        style={[
-                          styles.paymentMethodButtonText,
-                          paymentMethod === 'cash' && styles.paymentMethodButtonTextActive,
-                        ]}
-                      >
-                        Efectivo
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.paymentMethodButton,
-                        paymentMethod === 'pago_movil' && styles.paymentMethodButtonActive,
-                      ]}
-                      onPress={() => setPaymentMethod('pago_movil')}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons
-                        name="phone-portrait-outline"
-                        size={18}
-                        color={paymentMethod === 'pago_movil' ? '#fff' : '#6B7280'}
-                      />
-                      <Text
-                        style={[
-                          styles.paymentMethodButtonText,
-                          paymentMethod === 'pago_movil' && styles.paymentMethodButtonTextActive,
-                        ]}
-                      >
-                        Pago Móvil
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.paymentMethodButton,
-                        paymentMethod === 'bank_transfer' && styles.paymentMethodButtonActive,
-                      ]}
-                      onPress={() => setPaymentMethod('bank_transfer')}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons
-                        name="swap-horizontal-outline"
-                        size={18}
-                        color={paymentMethod === 'bank_transfer' ? '#fff' : '#6B7280'}
-                      />
-                      <Text
-                        style={[
-                          styles.paymentMethodButtonText,
-                          paymentMethod === 'bank_transfer' && styles.paymentMethodButtonTextActive,
-                        ]}
-                      >
-                        Transferencia
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
                   {/* Request Ride Button */}
                   <TouchableOpacity
                     style={[
@@ -4834,7 +5222,7 @@ export default function PassengerHomeScreen() {
                       ? 'La cancelación es gratuita en este momento'
                       : cancellationPolicy.type === 'standard'
                         ? 'Se aplicará la tarifa de cancelación configurada'
-                        : 'Se aplicará una penalización del 50%'}
+                        : 'Se aplicará una penalización'}
                   </Text>
                 )}
               </View>
@@ -4893,8 +5281,12 @@ export default function PassengerHomeScreen() {
                   <Text style={styles.cancelPolicyRowText}>Con tarifa después de 2 minutos</Text>
                 </View>
                 <View style={styles.cancelPolicyRow}>
-                  <Ionicons name="warning-outline" size={18} color="#6b7280" />
+                  <Ionicons name="warning-outline" size={18} color="#d97706" />
                   <Text style={styles.cancelPolicyRowText}>50% si el conductor ya llegó al punto</Text>
+                </View>
+                <View style={styles.cancelPolicyRow}>
+                  <Ionicons name="alert-circle-outline" size={18} color="#dc2626" />
+                  <Text style={styles.cancelPolicyRowText}>70% si el viaje está en progreso</Text>
                 </View>
               </View>
 
@@ -5131,7 +5523,7 @@ export default function PassengerHomeScreen() {
 
                   {paymentMethod === 'cash' && (
                     <Text style={styles.confirmationMessage}>
-                      Entrega el efectivo al conductor al finalizar el viaje.
+                      Paga en efectivo al conductor al subir al vehículo.
                     </Text>
                   )}
                 </>
@@ -5142,7 +5534,7 @@ export default function PassengerHomeScreen() {
                     <Text style={styles.confirmationTitle}>Pago {paymentMethod === 'cash' ? 'Confirmado' : 'Completado'}</Text>
                     <Text style={styles.confirmationMessage}>
                       {paymentMethod === 'cash'
-                        ? 'Recuerda entregar el efectivo al conductor.'
+                        ? 'El conductor iniciará el viaje al confirmar que recibió el efectivo.'
                         : 'Gracias por tu pago.'}
                     </Text>
                   </View>
@@ -5234,6 +5626,7 @@ export default function PassengerHomeScreen() {
             platformMethod={selectedPlatformMethod}
             onPaymentComplete={handleMobilePaymentComplete}
             onCancel={handleMobilePaymentCancel}
+            onBeforeCancel={handleBeforeMobilePaymentCancel}
           />
         </Suspense>
 
@@ -5245,6 +5638,8 @@ export default function PassengerHomeScreen() {
             currency={fareCurrency}
             exchangeRate={fareBreakdown?.exchangeRate}
             rideId={activeRide?.id || ''}
+            passengerName={user?.name || ""}
+            platformMethod={selectedPlatformMethod}
             onPaymentComplete={handleChangePaymentComplete}
             onCancel={handleChangePaymentCancel}
           />
@@ -5435,7 +5830,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
     maxHeight: '65%',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   panelContainerCollapsed: {
     maxHeight: 50,
@@ -5695,11 +6090,56 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   routeSuggestionsDropdown: {
-    // Expandir el dropdown para cubrir el ancho completo del routeCard
-    // compensando: ícono izquierdo (20px) + padding izquierdo (14px) = 34px
-    // y botones derecha (60px) + gap (6px) + padding derecho (14px) = 80px
-    left: -34,
+    elevation: 10,
+    zIndex: 100,
+    left: -48,
     right: -80,
+  },
+  sharedSuggestionsPanel: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    marginTop: 4,
+    marginHorizontal: 0,
+    overflow: 'hidden',
+    maxHeight: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 10,
+    zIndex: 100,
+  },
+  sharedSuggestionsItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minHeight: 44,
+  },
+  sharedSuggestionsIcon: {
+    marginRight: 10,
+    flexShrink: 0,
+  },
+  sharedSuggestionsTextContainer: {
+    flex: 1,
+  },
+  sharedSuggestionsName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  sharedSuggestionsDescription: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  sharedSuggestionsSeparator: {
+    height: 1,
+    backgroundColor: '#D1D5DB',
+    marginHorizontal: 12,
   },
   routeActions: {
     flexDirection: 'row',

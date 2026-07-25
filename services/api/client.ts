@@ -87,7 +87,7 @@ api.interceptors.response.use(
           return Promise.reject(error);
         }
 
-        const response = await axios.post(`${API_URL}/api/auth/refresh`, { refreshToken });
+        const response = await axios.post(`${API_URL}/api/auth/refresh`, { refreshToken }, { timeout: DEFAULT_TIMEOUT });
         const { accessToken, refreshToken: newRefreshToken } = response.data?.data || {};
 
         if (!accessToken) {

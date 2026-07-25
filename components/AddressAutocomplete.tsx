@@ -42,6 +42,10 @@ export interface AddressAutocompleteProps {
   bare?: boolean;
   /** Override styles for the suggestions dropdown (applied with position: 'absolute') */
   suggestionsStyle?: ViewStyle;
+  /** When true, suppress built-in suggestions rendering — parent manages its own */
+  hideSuggestions?: boolean;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
 
 export default function AddressAutocomplete({
@@ -53,6 +57,9 @@ export default function AddressAutocomplete({
   style,
   bare = false,
   suggestionsStyle,
+  hideSuggestions = false,
+  onFocus,
+  onBlur,
 }: AddressAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<Place[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -78,6 +85,13 @@ export default function AddressAutocomplete({
     // Avoid redundant search for unchanged value
     if (value === lastSearchValue.current) return;
     lastSearchValue.current = value;
+
+    // When hideSuggestions is true, the parent manages its own suggestions — skip search
+    if (hideSuggestions) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
 
     if (value.length < 3) {
       setSuggestions([]);
@@ -107,7 +121,7 @@ export default function AddressAutocomplete({
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
-  }, [value, currentLocation]);
+  }, [value, currentLocation, hideSuggestions]);
 
   // Re-measure container when keyboard appears/disappears
   // (KeyboardAwareScrollView scrolls the panel, changing input position)
@@ -158,12 +172,19 @@ export default function AddressAutocomplete({
     setIsInputFocused(true);
     isInputFocusedRef.current = true;
     measureContainer();
+    onFocus?.();
   };
 
   const handleInputBlur = () => {
     setIsInputFocused(false);
     isInputFocusedRef.current = false;
     setShowSuggestions(false);
+    onBlur?.();
+  };
+
+  const handleSubmitEditing = () => {
+    setShowSuggestions(false);
+    inputRef.current?.blur();
   };
 
   return (
@@ -188,6 +209,7 @@ export default function AddressAutocomplete({
           }}
           onFocus={handleInputFocus}
           onBlur={handleInputBlur}
+          onSubmitEditing={handleSubmitEditing}
           placeholder={placeholder}
           placeholderTextColor={Colors.placeholder}
           autoCorrect={false}
@@ -201,7 +223,7 @@ export default function AddressAutocomplete({
       </View>
 
       {/* Inline suggestions — same for bare and non-bare modes */}
-      {showSuggestions && isInputFocused && suggestions.length > 0 && (
+      {showSuggestions && isInputFocused && suggestions.length > 0 && !hideSuggestions && (
         <View style={[
           styles.suggestionsContainer,
           { maxHeight: maxDropdownHeight },

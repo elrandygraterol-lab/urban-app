@@ -68,10 +68,18 @@ export async function getEstimate(
 
 /**
  * Geocodificar una dirección
+ * Opcionalmente envía lat/lng para scoping regional del viewbox de Nominatim
  */
-export async function geocodeAddress(address: string): Promise<Location> {
+export async function geocodeAddress(
+  address: string,
+  latitude?: number,
+  longitude?: number
+): Promise<Location> {
   try {
-    const response = await api.post('/maps/geocode', { address });
+    const body: any = { address };
+    if (latitude !== undefined) body.latitude = latitude;
+    if (longitude !== undefined) body.longitude = longitude;
+    const response = await api.post('/maps/geocode', body);
     return response.data.data;
   } catch (error) {
     console.error('Error geocodificando dirección:', error);
@@ -283,6 +291,30 @@ export async function getMapsStatus(): Promise<any> {
   }
 }
 
+/**
+ * Obtener ubicación aproximada por IP pública (respaldado por Redis 7d TTL).
+ * Útil como fallback cuando el GPS no está disponible o es denegado.
+ */
+export async function getIpLocation(): Promise<{
+  city: string;
+  region: string;
+  regionName: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+} | null> {
+  try {
+    const response = await api.get('/maps/ip-location', { timeout: 8000 });
+    if (response.data?.success && response.data?.data) {
+      return response.data.data;
+    }
+    return null;
+  } catch (error) {
+    console.warn('Error obteniendo IP geolocation:', error);
+    return null;
+  }
+}
+
 export default {
   getEstimate,
   geocodeAddress,
@@ -292,4 +324,5 @@ export default {
   findNearbyDrivers,
   getRoute,
   getMapsStatus,
+  getIpLocation,
 };

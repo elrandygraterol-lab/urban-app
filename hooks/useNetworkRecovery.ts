@@ -38,29 +38,50 @@ export function useNetworkRecovery(onRecover: () => void | Promise<void>) {
 
 /**
  * Retry helper — calls fn with exponential backoff up to maxRetries times.
- * Returns true if succeeded, false if all attempts failed.
+ * If timeoutMs is specified, the entire retry cycle will reject if it takes longer.
+ * Returns the resolved value if succeeded, throws last error if all attempts failed.
  */
 export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   maxRetries: number = 3,
-  baseDelayMs: number = 1000
+  baseDelayMs: number = 1000,
+  timeoutMs?: number
 ): Promise<T> {
   let lastError: any;
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      if (attempt > 0) {
-        const delay = Math.pow(2, attempt - 1) * baseDelayMs;
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-      return await fn();
-    } catch (error) {
-      lastError = error;
-      if (attempt < maxRetries - 1) {
-        console.log(`[RETRY] Attempt ${attempt + 1} failed, retrying in ${Math.pow(2, attempt) * baseDelayMs}ms...`);
+  let timedOut = false;
+
+  const timeoutPromise = timeoutMs
+    ? new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          timedOut = true;
+          reject(new Error('La operación tardó demasiado. Intenta de nuevo.'));
+        }, timeoutMs);
+      })
+    : null;
+
+  const execute = async (): Promise<T> => {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      if (timedOut) throw lastError || new Error('Operación cancelada por tiempo de espera');
+      try {
+        if (attempt > 0) {
+          const delay = Math.pow(2, attempt - 1) * baseDelayMs;
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+        return await fn();
+      } catch (error) {
+        lastError = error;
+        if (attempt < maxRetries - 1) {
+          console.log(`[RETRY] Attempt ${attempt + 1} failed, retrying in ${Math.pow(2, attempt) * baseDelayMs}ms...`);
+        }
       }
     }
+    throw lastError;
+  };
+
+  if (timeoutPromise) {
+    return await Promise.race([execute(), timeoutPromise]);
   }
-  throw lastError;
+  return await execute();
 }
 
 /**
