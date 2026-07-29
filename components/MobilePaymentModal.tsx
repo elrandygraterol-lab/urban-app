@@ -61,17 +61,6 @@ interface MobilePaymentModalProps {
   onBeforeCancel?: () => void;
 }
 
-const TEST_PAYMENT_DATA = {
-  mobile: {
-    referencia: '123456',
-    fecha: '15/12/2024',
-    banco: '0102',
-    telefonoP: '04125317509',
-    identificacion: 'V25213842',
-    pagador: 'Juan Pérez',
-  },
-};
-
 type PaymentMethod = 'mobile' | 'cash';
 
 const INITIAL_TIME = 5 * 60;
@@ -322,8 +311,6 @@ export default function MobilePaymentModal({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mobile');
   const [selectedBank, setSelectedBank] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showTestData, setShowTestData] = useState(true);
-
   const [referencia, setReferencia] = useState('');
   const [fecha, setFecha] = useState('');
   const [telefonoP, setTelefonoP] = useState('');
@@ -470,16 +457,6 @@ export default function MobilePaymentModal({
     if (extensionsUsed >= MAX_EXTENSIONS) return;
     setTimeRemaining((p) => p + EXTENSION_TIME);
     setExtensionsUsed((p) => p + 1);
-  };
-
-  const handleUseTestData = () => {
-    setReferencia(TEST_PAYMENT_DATA.mobile.referencia);
-    setFecha(TEST_PAYMENT_DATA.mobile.fecha);
-    setSelectedBank(TEST_PAYMENT_DATA.mobile.banco);
-    setTelefonoP(TEST_PAYMENT_DATA.mobile.telefonoP);
-    setIdentificacion(TEST_PAYMENT_DATA.mobile.identificacion);
-    setPagador(TEST_PAYMENT_DATA.mobile.pagador);
-    setShowTestData(false);
   };
 
   const handleSubmitPayment = async () => {
@@ -822,15 +799,6 @@ export default function MobilePaymentModal({
                   <Ionicons name="information-circle" size={16} color={Colors.orange} />
                   <Text style={styles.infoText}>Pagarás en efectivo al conductor al subir al vehículo.</Text>
                 </View>
-              )}
-
-              {/* ── Test data ── */}
-              {paymentMethod === 'mobile' && showTestData && (
-                <TouchableOpacity style={styles.testBanner} onPress={handleUseTestData}>
-                  <Ionicons name="flask" size={15} color={Colors.primary} />
-                  <Text style={styles.testBannerText}>Usar datos de prueba</Text>
-                  <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
-                </TouchableOpacity>
               )}
 
               {/* ── Formulario Pago Móvil ── */}
@@ -1346,23 +1314,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#92400e',
     lineHeight: 16,
-  },
-
-  // ── Test data ──
-  testBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f0fdf4',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 12,
-    gap: 6,
-  },
-  testBannerText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.primary,
   },
 
   // ── Destination account ──

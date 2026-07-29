@@ -204,7 +204,13 @@ export default function ActiveRideScreen() {
   const tts = useTTS();
 
   // GPS tracking hook — sends location to backend during active rides (accepted, arrived, in_progress)
-  const { isTracking: isGpsTracking, permissionDenied: gpsPermissionDenied } = useRideTracking(
+  const {
+    isTracking: isGpsTracking,
+    permissionDenied: gpsPermissionDenied,
+    showBackgroundDisclosure,
+    confirmBackgroundDisclosure,
+    cancelBackgroundDisclosure,
+  } = useRideTracking(
     rideId || null,
     ride?.status ?? ''
   );
@@ -3008,6 +3014,69 @@ export default function ActiveRideScreen() {
             >
               <Text style={{ fontSize: 14, color: '#9ca3af', fontWeight: '600' }}>Cancelar</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Prominent Disclosure for Background Location (Google Play req.) */}
+      <Modal
+        visible={showBackgroundDisclosure}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelBackgroundDisclosure}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 20, padding: 24, width: '100%', maxWidth: 340, alignItems: 'center' }}>
+            <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#f0fdf4', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+              <Ionicons name="location-outline" size={28} color="#22c55e" />
+            </View>
+
+            <Text style={{ fontSize: 19, fontWeight: '700', color: '#1f2937', textAlign: 'center', marginBottom: 12 }}>
+              Ubicación en segundo plano
+            </Text>
+
+            <Text style={{ fontSize: 14, color: '#4b5563', textAlign: 'center', lineHeight: 20, marginBottom: 8 }}>
+              UrbanTaxi SJ necesita acceso a tu ubicación{' '}
+              <Text style={{ fontWeight: '600' }}>incluso cuando la aplicación esté en segundo plano</Text>
+              {' '}para:
+            </Text>
+
+            <View style={{ width: '100%', marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
+                <Ionicons name="checkmark-circle" size={18} color="#22c55e" style={{ marginRight: 8, marginTop: 2 }} />
+                <Text style={{ fontSize: 14, color: '#374151', flex: 1 }}>
+                  Compartir tu posición en tiempo real con el pasajero durante el viaje
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                <Ionicons name="checkmark-circle" size={18} color="#22c55e" style={{ marginRight: 8, marginTop: 2 }} />
+                <Text style={{ fontSize: 14, color: '#374151', flex: 1 }}>
+                  Garantizar un servicio seguro y preciso
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9fafb', padding: 12, borderRadius: 10, marginBottom: 20, width: '100%' }}>
+              <Ionicons name="shield-checkmark-outline" size={18} color="#6b7280" style={{ marginRight: 8 }} />
+              <Text style={{ fontSize: 12, color: '#6b7280', flex: 1 }}>
+                Tus datos de ubicación no se comparten con terceros y solo se usan mientras el viaje está activo.
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
+              <TouchableOpacity
+                onPress={cancelBackgroundDisclosure}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center', backgroundColor: '#f3f4f6' }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#6b7280' }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={confirmBackgroundDisclosure}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center', backgroundColor: '#22c55e' }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>Aceptar</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>

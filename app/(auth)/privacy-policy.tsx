@@ -47,12 +47,13 @@ export default function PrivacyPolicyScreen() {
           número de teléfono, foto de perfil y contraseña encriptada al registrarte.
           También puedes iniciar sesión mediante Google Sign-In.
           {'\n\n'}
-          <Bold>2.2 Datos de ubicación:</Bold> Recopilamos tu ubicación GPS en tiempo real 
-          para:
+          <Bold>2.2 Datos de ubicación:</Bold> Recopilamos tu ubicación GPS en tiempo real, 
+          incluso cuando la aplicación está en segundo plano, para:
           {'\n'}• Mostrar tu posición en el mapa
           {'\n'}• Conectar pasajeros con conductores cercanos
           {'\n'}• Calcular tarifas basadas en distancia
           {'\n'}• Compartir tu ubicación con el conductor durante el viaje (pasajero)
+          {'\n'}• Compartir tu ubicación con el pasajero durante el viaje (conductor)
           {'\n'}• Registrar la ruta del viaje para facturación y seguridad
           {'\n\n'}
           <Bold>2.3 Datos de vehículo (conductores):</Bold> Tipo de vehículo, modelo, 

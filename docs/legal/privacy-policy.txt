@@ -22,7 +22,8 @@ foto de perfil y contraseña encriptada al registrarte. También puedes iniciar
 sesión mediante Google Sign-In, en cuyo caso recibimos tu nombre y correo
 electrónico asociados a tu cuenta de Google.
 
-2.2 Datos de ubicación: Recopilamos tu ubicación GPS en tiempo real para:
+2.2 Datos de ubicación: Recopilamos tu ubicación GPS en tiempo real, incluso cuando la
+   aplicación está en segundo plano, para:
    - Mostrar tu posición en el mapa
    - Conectar pasajeros con conductores cercanos
    - Calcular tarifas basadas en zonas y rutas

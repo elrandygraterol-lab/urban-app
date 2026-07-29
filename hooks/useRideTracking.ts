@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import * as Location from 'expo-location';
 import { rideAPI } from '@/services/api';
 
@@ -6,41 +6,92 @@ export function useRideTracking(rideId: string | null, rideStatus: string) {
   const subscriptionRef = useRef<Location.LocationSubscription | null>(null);
   const [isTracking, setIsTracking] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [showBackgroundDisclosure, setShowBackgroundDisclosure] = useState(false);
+  const pendingRideIdRef = useRef<string | null>(null);
+  const cancelledRef = useRef(false);
 
   const isActive = rideStatus === 'accepted' || rideStatus === 'arrived' || rideStatus === 'in_progress';
 
+  // Cleanup on deactivation
   useEffect(() => {
     if (!rideId || !isActive) {
       subscriptionRef.current?.remove();
       subscriptionRef.current = null;
       setIsTracking(false);
-      return;
+      setShowBackgroundDisclosure(false);
+      setPermissionDenied(false);
+      pendingRideIdRef.current = null;
     }
+  }, [rideId, isActive]);
+
+  // Step 1: Request foreground permission when ride becomes active
+  useEffect(() => {
+    if (!rideId || !isActive) return;
 
     let cancelled = false;
+    cancelledRef.current = false;
 
     (async () => {
-      // Solicitar permiso de ubicación en segundo plano (necesario para tracking con Waze)
       const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+      if (cancelled) return;
+
       if (fgStatus !== 'granted') {
         setPermissionDenied(true);
         return;
       }
 
-      // Solicitar permiso de background para tracking continuo
-      try {
-        const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
-        if (bgStatus === 'granted') {
-          console.log('[RIDE_TRACKING] Background location permission granted');
-        }
-      } catch {
-        console.log('[RIDE_TRACKING] Background location permission not available (requires native build)');
-      }
-
+      // Check if background permission is already granted
+      const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
       if (cancelled) return;
 
-      setPermissionDenied(false);
+      if (bgStatus === 'granted') {
+        startTracking(rideId);
+      } else {
+        pendingRideIdRef.current = rideId;
+        setShowBackgroundDisclosure(true);
+      }
+    })();
 
+    return () => {
+      cancelled = true;
+      cancelledRef.current = true;
+    };
+  }, [rideId, isActive]);
+
+  // Step 2: After user accepts disclosure, request background permission and start tracking
+  const confirmBackgroundDisclosure = useCallback(async () => {
+    const rideId = pendingRideIdRef.current;
+    if (!rideId) return;
+    setShowBackgroundDisclosure(false);
+
+    try {
+      const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+      if (cancelledRef.current) return;
+
+      if (bgStatus === 'granted') {
+        console.log('[RIDE_TRACKING] Background location permission granted');
+      } else {
+        setPermissionDenied(true);
+        return;
+      }
+    } catch {
+      console.log('[RIDE_TRACKING] Background location permission not available (requires native build)');
+    }
+
+    startTracking(rideId);
+  }, []);
+
+  const cancelBackgroundDisclosure = useCallback(() => {
+    setShowBackgroundDisclosure(false);
+    setPermissionDenied(true);
+    pendingRideIdRef.current = null;
+  }, []);
+
+  async function startTracking(rideId: string) {
+    if (cancelledRef.current) return;
+    setPermissionDenied(false);
+
+    try {
       subscriptionRef.current = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
@@ -64,18 +115,20 @@ export function useRideTracking(rideId: string | null, rideStatus: string) {
         }
       );
 
-      if (!cancelled) {
+      if (!cancelledRef.current) {
         setIsTracking(true);
       }
-    })();
+    } catch (error) {
+      console.error('[RIDE_TRACKING] Error starting tracking:', error);
+      setPermissionDenied(true);
+    }
+  }
 
-    return () => {
-      cancelled = true;
-      subscriptionRef.current?.remove();
-      subscriptionRef.current = null;
-      setIsTracking(false);
-    };
-  }, [rideId, rideStatus]);
-
-  return { isTracking, permissionDenied };
+  return {
+    isTracking,
+    permissionDenied,
+    showBackgroundDisclosure,
+    confirmBackgroundDisclosure,
+    cancelBackgroundDisclosure,
+  };
 }

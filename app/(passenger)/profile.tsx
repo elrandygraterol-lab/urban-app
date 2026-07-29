@@ -8,10 +8,11 @@ import {
   TextInput,
   Switch,
   ActivityIndicator,
-  StatusBar,
+
   Image,
   Linking,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -301,7 +302,7 @@ export default function PassengerProfileScreen() {
   if (isLoading) {
     return (
       <View style={[styles.safeArea, { paddingTop: insets.top }]}>
-        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+        <StatusBar style="dark" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
@@ -311,7 +312,7 @@ export default function PassengerProfileScreen() {
 
   return (
     <View style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      <StatusBar style="dark" />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.contentContainer, { paddingBottom: 16 }]}

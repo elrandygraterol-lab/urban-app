@@ -7,21 +7,27 @@ module.exports = ({ config }) => {
     : profile === 'preview' ? '.preview'
     : '.dev';
   const packageName = `com.urbantaxi.app${suffix}`;
-  const isFirebaseEnabled = profile === 'production';
+  const isFirebaseEnabled = profile === 'production' || profile === 'preview';
+  const androidGoogleServices = profile === 'production' ? './google-services.json'
+    : profile === 'preview' ? './google-services-preview.json'
+    : undefined;
+  const iosGoogleServices = profile === 'production' ? './GoogleService-Info.plist'
+    : profile === 'preview' ? './GoogleService-Info-preview.plist'
+    : undefined;
 
   return {
     ...config,
     name: appName,
     slug: 'app-taxis',
     version: '1.0.0',
-    orientation: 'portrait',
+
     icon: './assets/images/icon.png',
     scheme: 'apptaxis',
     userInterfaceStyle: 'automatic',
     ios: {
       supportsTablet: true,
       bundleIdentifier: packageName,
-      googleServicesFile: isFirebaseEnabled ? './GoogleService-Info.plist' : undefined,
+      googleServicesFile: iosGoogleServices,
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
           `${appName} necesita acceso a tu ubicación para mostrarte en el mapa, encontrar conductores cercanos, calcular tarifas y rutas.`,
@@ -34,9 +40,9 @@ module.exports = ({ config }) => {
       },
     },
     android: {
-      versionCode: 13,
+      versionCode: 17,
       package: packageName,
-      googleServicesFile: isFirebaseEnabled ? './google-services.json' : undefined,
+      googleServicesFile: androidGoogleServices,
       adaptiveIcon: {
         backgroundColor: '#E6F4FE',
         foregroundImage: './assets/images/android-icon-foreground.png',
@@ -45,10 +51,12 @@ module.exports = ({ config }) => {
       permissions: [
         'ACCESS_COARSE_LOCATION',
         'ACCESS_FINE_LOCATION',
+        'ACCESS_BACKGROUND_LOCATION',
         'FOREGROUND_SERVICE',
         'FOREGROUND_SERVICE_LOCATION',
         'android.permission.ACCESS_COARSE_LOCATION',
         'android.permission.ACCESS_FINE_LOCATION',
+        'android.permission.ACCESS_BACKGROUND_LOCATION',
       ],
       config: {
         googleMaps: {
@@ -103,7 +111,7 @@ module.exports = ({ config }) => {
       [
         'expo-notifications',
         {
-          icon: './assets/images/icon.png',
+          icon: './assets/images/notification-icon.png',
           color: '#22c55e',
           androidCollapsedTitle: appName,
         },
@@ -111,6 +119,7 @@ module.exports = ({ config }) => {
       ...(isFirebaseEnabled ? ['@react-native-firebase/app'] : []),
       'expo-audio',
       './plugins/withRemoveRecordAudioPermission',
+      './plugins/withEdgeToEdge',
     ],
     experiments: {
       typedRoutes: true,

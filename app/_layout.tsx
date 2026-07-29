@@ -29,6 +29,10 @@ import { UnifiedNotificationOverlay } from '@/components/UnifiedNotificationOver
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNetworkAlerts } from '@/hooks/useNetworkAlerts';
+import ProminentLocationDisclosure from '@/components/ProminentLocationDisclosure';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const LOCATION_DISCLOSURE_KEY = 'LOCATION_DISCLOSURE_ACCEPTED';
 
 /** Sólo monta los hooks de socket global cuando el usuario está autenticado.
  *  Esto evita que useSound(), useExchangeRate() y el import de socket.io
@@ -47,6 +51,8 @@ function AppContent() {
   const segments = useSegments();
   const router = useRouter();
   const [isNavigationReady, setIsNavigationReady] = useState(false);
+  const [disclosureLoaded, setDisclosureLoaded] = useState(false);
+  const [disclosureAccepted, setDisclosureAccepted] = useState(false);
 
   // Initialize notifications
   const { expoPushToken, error: notificationError } = useNotifications();
@@ -60,6 +66,19 @@ function AppContent() {
     logInfo('App Initialization', 'Loading stored authentication...');
     loadStoredAuth();
   }, [loadStoredAuth]);
+
+  // Check if location disclosure has been accepted
+  useEffect(() => {
+    AsyncStorage.getItem(LOCATION_DISCLOSURE_KEY).then((value) => {
+      setDisclosureAccepted(value === 'true');
+      setDisclosureLoaded(true);
+    });
+  }, []);
+
+  const handleDisclosureAccept = async () => {
+    await AsyncStorage.setItem(LOCATION_DISCLOSURE_KEY, 'true');
+    setDisclosureAccepted(true);
+  };
 
   // Log notification setup status
   useEffect(() => {
@@ -102,8 +121,8 @@ function AppContent() {
 
   // Handle navigation based on authentication and role
   useEffect(() => {
-    // Wait for navigation to be ready and segments to be available
-    if (!isNavigationReady || !segments || !segments[0]) {
+    // Wait for navigation to be ready, segments to be available, and disclosure accepted
+    if (!isNavigationReady || !segments || !segments[0] || !disclosureAccepted) {
       return;
     }
 
@@ -186,14 +205,24 @@ function AppContent() {
 
   return (
     <>
-      <Stack initialRouteName="(auth)" screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(passenger)" />
-        <Stack.Screen name="(driver)" />
-      </Stack>
-      <UnifiedNotificationOverlay />
-      <OfflineBanner />
-      {showSocketGuard && <GlobalSocketGuard user={user} isAuthenticated={isAuthenticated} />}
+      {disclosureLoaded && !disclosureAccepted ? (
+        <ProminentLocationDisclosure
+          visible={true}
+          onAccept={handleDisclosureAccept}
+        />
+      ) : null}
+      {disclosureLoaded && disclosureAccepted && (
+        <Stack initialRouteName="(auth)" screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(passenger)" />
+          <Stack.Screen name="(driver)" />
+        </Stack>
+      )}
+      {disclosureLoaded && <UnifiedNotificationOverlay />}
+      {disclosureLoaded && <OfflineBanner />}
+      {disclosureLoaded && showSocketGuard && (
+        <GlobalSocketGuard user={user} isAuthenticated={isAuthenticated} />
+      )}
       <ExpoStatusBar style="auto" />
     </>
   );
