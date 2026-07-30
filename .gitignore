@@ -10,6 +10,7 @@ web-build/
 expo-env.d.ts
 @zhetazioas__app-taxis.jks
 keystore-creds.txt
+credentials.json
 # Native
 .kotlin/
 *.orig.*

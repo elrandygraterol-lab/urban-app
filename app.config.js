@@ -14,7 +14,7 @@ module.exports = ({ config }) => {
   const isFirebaseEnabled = profile === 'production' || profile === 'preview' || profile === 'development' || !profile;
   const androidGoogleServices = profile === 'production' ? './google-services.json'
     : profile === 'preview' ? './google-services-preview.json'
-    : './google-services.json'; // development: reuse production file (same Firebase project)
+    : './google-services-dev.json';
   const iosGoogleServices = profile === 'production' ? './GoogleService-Info.plist'
     : profile === 'preview' ? './GoogleService-Info-preview.plist'
     : undefined;
@@ -141,7 +141,7 @@ module.exports = ({ config }) => {
     extra: {
       router: {},
       eas: {
-      projectId:'30ef3cd5-fa02-47c3-9994-c57eeb7860be',
+      projectId:'2f0a1436-e1de-4a63-bf42-78a033c62cb9',
       },
       // Store Management System Configuration
       storeImageMaxSizeMB: 5,

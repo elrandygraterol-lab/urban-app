@@ -436,6 +436,8 @@ export default function PassengerHomeScreen() {
   const fareCurrencyRef = useRef<Currency>('VES');
   const fareBreakdownRef = useRef<{ exchangeRate?: number } | null>(null);
   const currentLocationRef = useRef<LocationCoords | null>(null);
+  const calculateRouteRef = useRef<() => Promise<void>>(async () => {});
+  const calculateFareWithZoneRef = useRef<() => Promise<void>>(async () => {});
 
   // Keep refs in sync with state — avoids stale closures in socket handlers
   useEffect(() => {
@@ -1720,6 +1722,34 @@ export default function PassengerHomeScreen() {
       setDisplayDuration(null);
       setHasShownNearbyNotification(false);
 
+      // Full cleanup of ride request state — like handleRideCancelled does
+      setPickupLocation(null);
+      setPickupAddress('');
+      setPickupFullAddress('');
+      setPickupLocationSource(null);
+      setDestinationLocation(null);
+      setDestinationAddress('');
+      setDestinationFullAddress('');
+      setDestinationLocationSource(null);
+      setEstimatedFare(null);
+      setFareBreakdown(null);
+      setIsCalculatingFare(false);
+      setZoneInfo(null);
+      setShowSecondPickup(false);
+      setSecondPickupLocation(null);
+      setSecondPickupAddress('');
+      setSecondPickupFullAddress('');
+      setSecondPickupLocationSource(null);
+      setShowSecondDestination(false);
+      setSecondDestinationLocation(null);
+      setSecondDestinationAddress('');
+      setSecondDestinationFullAddress('');
+      setSecondDestinationLocationSource(null);
+      setMapSelectionMode('none');
+      setIsEditingPickup(false);
+      setIsEditingSecondPickup(false);
+      setIsEditingSecondDestination(false);
+
       // Show text-only notification — no buttons
       const fb = fareBreakdownRef.current;
       const fc = fareCurrencyRef.current;
@@ -2290,6 +2320,7 @@ export default function PassengerHomeScreen() {
       }
     }
   }, [pickupLocation, destinationLocation, secondPickupLocation, secondDestinationLocation, currentLocation]);
+  calculateRouteRef.current = calculateRoute;
 
   // ========== MEJORA 1: Actualización Dinámica de Ruta ==========
   const updateDynamicRoute = useCallback(
@@ -2561,6 +2592,8 @@ export default function PassengerHomeScreen() {
       }
 
       // Use the full fare estimation engine (zone matrix + time surcharge)
+      const fareController = new AbortController();
+      const fareTimeoutId = setTimeout(() => fareController.abort(), 15000);
       const response = await fetch(`${apiUrl}/api/fares/estimate`, {
         method: 'POST',
         headers: {
@@ -2568,7 +2601,9 @@ export default function PassengerHomeScreen() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(requestBody),
+        signal: fareController.signal,
       });
+      clearTimeout(fareTimeoutId);
 
       if (!response.ok) {
         throw new Error(`Fare estimate API returned ${response.status}`);
@@ -2695,26 +2730,30 @@ export default function PassengerHomeScreen() {
     showSecondDestination,
     token,
   ]);
+  calculateFareWithZoneRef.current = calculateFareWithZone;
 
   // Calculate route and fare when destination changes
+  const isCalculatingRouteRef = useRef(false);
   useEffect(() => {
     console.log('[ROUTE_EFFECT] firing', { pickupLocation, destinationLocation });
     if (!pickupLocation || !destinationLocation) return;
-    const pLoc = pickupLocation;
-    const dLoc = destinationLocation;
-    calculateRoute().catch(err =>
-      logError('PassengerHomeScreen', err, { context: 'Route calc effect' })
-    );
-    calculateFareWithZone().catch(err =>
-      logError('PassengerHomeScreen', err, { context: 'Fare calc effect' })
-    );
+    if (isCalculatingRouteRef.current) return;
+    isCalculatingRouteRef.current = true;
+    Promise.all([
+      calculateRouteRef.current().catch(err =>
+        logError('PassengerHomeScreen', err, { context: 'Route calc effect' })
+      ),
+      calculateFareWithZoneRef.current().catch(err =>
+        logError('PassengerHomeScreen', err, { context: 'Fare calc effect' })
+      ),
+    ]).finally(() => {
+      isCalculatingRouteRef.current = false;
+    });
   }, [
     pickupLocation,
     destinationLocation,
     secondPickupLocation,
     secondDestinationLocation,
-    calculateRoute,
-    calculateFareWithZone,
   ]);
 
   const toRad = (value: number) => (value * Math.PI) / 180;
@@ -4126,7 +4165,7 @@ export default function PassengerHomeScreen() {
             )}
 
             {/* Route line — shown before ride request, driver approaching, and during trip */}
-            {(!activeRide || activeRide.status === 'pending' || activeRide.status === 'accepted' || activeRide.status === 'arrived' || activeRide.status === 'in_progress' || activeRide.status === 'completed') && routeCoordinates.length > 1 && (
+            {(!activeRide || activeRide.status === 'pending' || activeRide.status === 'accepted' || activeRide.status === 'arrived' || activeRide.status === 'in_progress') && routeCoordinates.length > 1 && (
               <MemoizedPolyline
                 key={`route-${routeCoordinates.length}-${nearestRouteIndex}`}
                 coordinates={slicedRouteCoords}
