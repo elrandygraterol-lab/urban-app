@@ -359,7 +359,7 @@ export default function MobilePaymentModal({
 
   const resetForm = useCallback(() => {
     setSelectedBank('');
-    setShowTestData(true);
+    // setShowTestData(true); // REMOVED - this state doesn't exist
     setPaymentMethod('mobile');
     setTimeRemaining(INITIAL_TIME);
     setExtensionsUsed(0);
@@ -756,7 +756,7 @@ export default function MobilePaymentModal({
               <View style={styles.methodRow}>
                 <TouchableOpacity
                   style={[styles.methodPill, paymentMethod === 'mobile' && styles.methodPillActive]}
-                  onPress={() => { setPaymentMethod('mobile'); setShowTestData(true); }}
+                  onPress={() => setPaymentMethod('mobile')}
                 >
                   <View style={[styles.pillIconWrap, paymentMethod === 'mobile' && styles.pillIconWrapActive]}>
                     <Ionicons

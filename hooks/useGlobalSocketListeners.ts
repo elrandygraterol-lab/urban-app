@@ -256,18 +256,40 @@ export const useGlobalSocketListeners = ({
       acceptedAt: string;
       timestamp: string;
     }) => {
-      console.log('[GLOBAL_SOCKET] Ride accepted event received (passenger):', data);
-      if (user?.role !== 'passenger') return;
-      playNotificationSound();
-      const driverName = data.driver?.name || 'Un conductor';
-      showStatus(
-        'ride_accepted',
-        `${driverName} ha aceptado tu viaje y se dirige al punto de recogida.`,
-        '¡Viaje Aceptado!',
-        undefined,
-        undefined,
-        5000
-      );
+      try {
+        console.log('[GLOBAL_SOCKET] Ride accepted event received (passenger):', JSON.stringify(data));
+        if (user?.role !== 'passenger') return;
+        
+        // Safe extraction with defensive checks
+        const driverName = data?.driver?.name || 'Un conductor';
+        console.log('[GLOBAL_SOCKET] Driver name extracted:', driverName);
+        
+        playNotificationSound();
+        showStatus(
+          'ride_accepted',
+          `${driverName} ha aceptado tu viaje y se dirige al punto de recogida.`,
+          '¡Viaje Aceptado!',
+          undefined,
+          undefined,
+          5000
+        );
+      } catch (error) {
+        console.error('[GLOBAL_SOCKET] Error in handleRideAccepted:', error);
+        // Still show a generic notification even if there's an error
+        try {
+          playNotificationSound();
+          showStatus(
+            'ride_accepted',
+            'Un conductor ha aceptado tu viaje y se dirige al punto de recogida.',
+            '¡Viaje Aceptado!',
+            undefined,
+            undefined,
+            5000
+          );
+        } catch (fallbackError) {
+          console.error('[GLOBAL_SOCKET] Critical error in handleRideAccepted fallback:', fallbackError);
+        }
+      }
     },
     [user?.role, playNotificationSound, showStatus]
   );
@@ -284,20 +306,24 @@ export const useGlobalSocketListeners = ({
       finalFare?: number;
       timestamp: string;
     }) => {
-      console.log('[GLOBAL_SOCKET] Ride status changed event received:', data);
-      if (user?.role !== 'passenger') return;
-      // 'arrived' handled by dedicated ride:driver_arrived handler (screen-level)
-      if (data.status === 'arrived') return;
-      if (data.status === 'in_progress') {
-        playNotificationSound();
-        showStatus(
-          'info',
-          'Tu viaje ha iniciado. ¡Buen viaje hacia tu destino!',
-          'Viaje en Curso',
-          undefined,
-          undefined,
-          3000
-        );
+      try {
+        console.log('[GLOBAL_SOCKET] Ride status changed event received:', JSON.stringify(data));
+        if (user?.role !== 'passenger') return;
+        // 'arrived' handled by dedicated ride:driver_arrived handler (screen-level)
+        if (data.status === 'arrived') return;
+        if (data.status === 'in_progress') {
+          playNotificationSound();
+          showStatus(
+            'info',
+            'Tu viaje ha iniciado. ¡Buen viaje hacia tu destino!',
+            'Viaje en Curso',
+            undefined,
+            undefined,
+            3000
+          );
+        }
+      } catch (error) {
+        console.error('[GLOBAL_SOCKET] Error in handleRideStatusChanged:', error);
       }
     },
     [user?.role, playNotificationSound, showStatus]

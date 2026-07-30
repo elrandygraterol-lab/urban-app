@@ -69,19 +69,39 @@ export const useNotifications = () => {
   const { incrementUnreadCount } = useNotificationStore();
   const { showStatus } = useUnifiedNotifications();
 
-  // Check if running in Expo Go (NOT EAS Build — EAS dev builds also report 'expo' but support push)
-  const isExpoGo = Constants.appOwnership === 'expo' && !__DEV__;
+  // True Expo Go: appOwnership === 'expo' AND executionEnvironment === 'storeClient'
+  // EAS dev builds also have appOwnership === 'expo' but executionEnvironment === 'bare'
+  const isExpoGo = Constants.appOwnership === 'expo' && Constants.executionEnvironment === 'storeClient';
 
   useEffect(() => {
-    // Skip push notification setup ONLY in Expo Go (SDK 53+ doesn't support push there)
-    // EAS Build apps (production or development) DO support push notifications
-    if (Constants.appOwnership === 'expo' && !__DEV__) {
+    // Skip push notification setup ONLY in true Expo Go.
+    // EAS Build apps (development, preview, production) always support push.
+    //
+    // Detection strategy:
+    //   - Expo Go sets appOwnership = 'expo' AND executionEnvironment = 'storeClient'
+    //   - EAS dev builds set appOwnership = 'expo' BUT executionEnvironment = 'bare' (or undefined)
+    //   - Production/standalone builds set appOwnership = 'standalone'
+    //
+    // So the only safe Expo Go gate is: appOwnership === 'expo' AND
+    // executionEnvironment === 'storeClient'
+    const isRunningInExpoGo =
+      Constants.appOwnership === 'expo' &&
+      Constants.executionEnvironment === 'storeClient';
+
+    if (isRunningInExpoGo) {
       console.warn(
-        'Push notifications are not supported in Expo Go. Please use a Development Build.'
+        '[NOTIFICATIONS] Push notifications are not supported in Expo Go. Please use EAS Build.'
       );
-      setError('Push notifications require a Development Build');
+      setError('Push notifications require an EAS Build');
       return;
     }
+    
+    console.log('[NOTIFICATIONS] ✅ Valid environment for push notifications', {
+      appOwnership: Constants.appOwnership,
+      executionEnvironment: Constants.executionEnvironment,
+      isDevice: Constants.isDevice,
+      platform: Platform.OS,
+    });
 
     // Register for push notifications
     registerForPushNotificationsAsync()
