@@ -12,34 +12,39 @@ Este documento describe el sistema de diseño completo de UrbanTaxi, incluyendo 
 
 | Color | Código | Uso |
 |-------|--------|-----|
-| **Primary Green** | `#00B300` | Botones primarios, acciones principales, bordes activos |
-| **Secondary Green** | `#32CD32` | Estados hover, elementos secundarios |
-| **Light Green** | `#90EE90` | Fondos, elementos de baja importancia |
+| **Primary Green** | `#2FB908` | Botones primarios, acciones principales, bordes activos |
+| **Light Green** | `#4CCB3A` | Gradientes, elementos secundarios |
+| **Dark Green** | `#269006` | Estados hover, estados activos |
+| **Secondary Green** | `#3DD10A` | Acentos secundarios |
+| **Very Light Green** | `#9EF08A` | Fondos, elementos de baja importancia |
 
 ### Colores de Acento
 
 | Color | Código | Uso |
 |-------|--------|-----|
-| **Orange** | `#FF9500` | Botones de cancelación, advertencias |
-| **Light Orange** | `#E6C896` | Estados hover de cancelación |
+| **Orange** | `#F89C0A` | Botones de cancelación, advertencias |
+| **Light Orange** | `#FBBF24` | Estados hover de cancelación |
+| **Dark Orange** | `#E08809` | Estados hover oscuros de cancelación |
 
 ### Colores Neutros
 
 | Color | Código | Uso |
 |-------|--------|-----|
-| **Dark Gray** | `#505050` | Texto principal, encabezados |
-| **Light Gray** | `#A9A9A9` | Texto secundario, placeholders |
+| **Dark Gray** | `#1f2937` | Texto principal, encabezados |
+| **Medium Gray** | `#6b7280` | Texto secundario |
+| **Light Gray** | `#9ca3af` | Placeholders |
 | **White** | `#FFFFFF` | Fondos, tarjetas |
 | **Black** | `#000000` | Texto de alto contraste |
+| **Background** | `#f9fafb` | Fondo de pantalla |
 
 ### Colores Semánticos
 
 | Color | Código | Uso |
 |-------|--------|-----|
-| **Success** | `#00B300` | Mensajes de éxito |
-| **Warning** | `#FF9500` | Advertencias |
-| **Error** | `#FF3B30` | Errores |
-| **Info** | `#007AFF` | Información |
+| **Success** | `#2FB908` | Mensajes de éxito |
+| **Warning** | `#F89C0A` | Advertencias |
+| **Error** | `#ef4444` | Errores |
+| **Info** | `#3b82f6` | Información |
 
 ---
 
@@ -52,37 +57,37 @@ Este documento describe el sistema de diseño completo de UrbanTaxi, incluyendo 
 fontSize: 32px
 fontWeight: 700
 lineHeight: 40px
-color: #505050
+color: #1f2937
 
 // Encabezado 2 (H2)
 fontSize: 24px
 fontWeight: 600
 lineHeight: 32px
-color: #505050
+color: #1f2937
 
 // Encabezado 3 (H3)
 fontSize: 20px
 fontWeight: 600
 lineHeight: 28px
-color: #505050
+color: #1f2937
 
 // Body (Texto principal)
 fontSize: 16px
 fontWeight: 400
 lineHeight: 24px
-color: #505050
+color: #1f2937
 
 // Body Small
 fontSize: 14px
 fontWeight: 400
 lineHeight: 20px
-color: #505050
+color: #1f2937
 
 // Caption (Texto pequeño)
 fontSize: 12px
 fontWeight: 400
 lineHeight: 16px
-color: #A9A9A9
+color: #9ca3af
 
 // Button
 fontSize: 16px
@@ -93,13 +98,13 @@ lineHeight: 24px
 fontSize: 16px
 fontWeight: 400
 lineHeight: 24px
-color: #505050
+color: #1f2937
 
 // Placeholder
 fontSize: 16px
 fontWeight: 400
 lineHeight: 24px
-color: #A9A9A9
+color: #9ca3af
 ```
 
 ---
@@ -373,7 +378,7 @@ import { Button, Input, Card, Logo } from '@/components/ui';
 import { Theme, Colors, Typography, Spacing, BorderRadius } from '@/constants/theme';
 
 // Usar colores
-const primaryColor = Colors.primary; // #00B300
+const primaryColor = Colors.primary; // #2FB908
 
 // Usar tipografía
 const headingStyle = Typography.h1;

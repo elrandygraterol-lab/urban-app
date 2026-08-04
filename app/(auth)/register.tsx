@@ -483,7 +483,7 @@ export default function RegisterScreen() {
                 <Ionicons
                   name={r === 'passenger' ? 'person-outline' : 'car-outline'}
                   size={18}
-                  color={role === r ? '#059669' : '#94a3b8'}
+                  color={role === r ? '#2FB908' : '#94a3b8'}
                 />
                 <Text style={[styles.roleBtnText, role === r && styles.roleBtnTextActive]}>
                   {r === 'passenger' ? 'Pasajero' : 'Conductor'}
@@ -618,14 +618,14 @@ export default function RegisterScreen() {
                       borderWidth: 2,
                       alignItems: 'center',
                       backgroundColor: vehicleType === v ? '#f0fdf4' : '#fff',
-                      borderColor: vehicleType === v ? '#059669' : '#e5e7eb',
+                      borderColor: vehicleType === v ? '#2FB908' : '#e5e7eb',
                     }}
                   >
                     <Text
                       style={{
                         fontSize: 13,
                         fontWeight: '600',
-                        color: vehicleType === v ? '#059669' : '#6b7280',
+                        color: vehicleType === v ? '#2FB908' : '#6b7280',
                       }}
                     >
                       {v === 'taxi' ? 'Taxi' : 'Moto-Taxi'}
@@ -670,7 +670,7 @@ export default function RegisterScreen() {
                 onPress={() => handlePickDocument(setDriverLicense)}
               >
                 {driverLicense ? (
-                  <Text style={{ color: '#059669', fontWeight: '600' }}>✓ Licencia adjunta</Text>
+                  <Text style={{ color: '#2FB908', fontWeight: '600' }}>✓ Licencia adjunta</Text>
                 ) : (
                   <Text style={{ color: '#9ca3af' }}>Seleccionar archivo</Text>
                 )}
@@ -682,7 +682,7 @@ export default function RegisterScreen() {
                 onPress={() => handlePickDocument(setMedicalCertificate)}
               >
                 {medicalCertificate ? (
-                  <Text style={{ color: '#059669', fontWeight: '600' }}>✓ Certificado adjunto</Text>
+                  <Text style={{ color: '#2FB908', fontWeight: '600' }}>✓ Certificado adjunto</Text>
                 ) : (
                   <Text style={{ color: '#9ca3af' }}>Seleccionar archivo</Text>
                 )}
@@ -970,7 +970,7 @@ const styles = StyleSheet.create({
   formTitleAccent: {
     width: 40,
     height: 4,
-    backgroundColor: '#059669',
+    backgroundColor: '#2FB908',
     borderRadius: 2,
     marginBottom: 16,
   },
@@ -1055,8 +1055,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   termsCheckboxActive: {
-    backgroundColor: '#059669',
-    borderColor: '#059669',
+    backgroundColor: '#2FB908',
+    borderColor: '#2FB908',
   },
   termsLinksRow: {
     flexDirection: 'row',
@@ -1098,7 +1098,7 @@ const styles = StyleSheet.create({
   },
   termsLink: {
     fontSize: 13,
-    color: '#059669',
+    color: '#2FB908',
     fontWeight: '600',
     lineHeight: 20,
   },
@@ -1176,7 +1176,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 11,
     borderRadius: 10,
-    backgroundColor: '#059669',
+    backgroundColor: '#2FB908',
     alignItems: 'center',
   },
   termsAcceptBtnDisabled: {
@@ -1191,12 +1191,12 @@ const styles = StyleSheet.create({
   primaryBtn: {
     marginTop: 20,
     height: 48,
-    backgroundColor: '#059669',
+    backgroundColor: '#2FB908',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
-    shadowColor: '#059669',
+    shadowColor: '#2FB908',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
@@ -1219,7 +1219,7 @@ const styles = StyleSheet.create({
   },
   linkRowAction: {
     fontSize: 14,
-    color: '#059669',
+    color: '#2FB908',
     fontWeight: '700',
   },
   dividerRow: {
@@ -1265,7 +1265,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   roleBtnActive: {
-    borderColor: '#059669',
+    borderColor: '#2FB908',
     backgroundColor: '#ecfdf5',
   },
   roleBtnText: {
@@ -1274,6 +1274,6 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
   },
   roleBtnTextActive: {
-    color: '#059669',
+    color: '#2FB908',
   },
 });

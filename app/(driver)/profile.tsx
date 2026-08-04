@@ -33,6 +33,7 @@ import {
 import { resolveFileUrl } from '@/services/fileUrl';
 import { compressImage } from '@/utils/imageUtils';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
+import { BankPicker } from '@/components/ui/BankPicker';
 
 interface NotificationPreferences {
   rideRequests?: boolean;
@@ -174,9 +175,11 @@ export default function DriverProfileScreen() {
     }
   }, [showToast, setIsAvailable, t]);
 
-  useFocusEffect(useCallback(() => {
-    loadUserData();
-  }, [loadUserData]));
+  useFocusEffect(
+    useCallback(() => {
+      loadUserData();
+    }, [loadUserData])
+  );
 
   useEffect(() => {
     // Usar addConnectionListener en lugar de getSocket() directo
@@ -343,40 +346,44 @@ export default function DriverProfileScreen() {
         return;
       }
 
-      showActionSheet('Foto de perfil', [
-        {
-          label: 'Tomar foto',
-          icon: 'camera',
-          onPress: async () => {
-            const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: ['images'],
-              allowsEditing: true,
-              aspect: [1, 1],
-              quality: 0.8,
-            });
+      showActionSheet(
+        'Foto de perfil',
+        [
+          {
+            label: 'Tomar foto',
+            icon: 'camera',
+            onPress: async () => {
+              const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ['images'],
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+              });
 
-            if (!result.canceled && result.assets[0]) {
-              await uploadPhoto(result.assets[0].uri);
-            }
+              if (!result.canceled && result.assets[0]) {
+                await uploadPhoto(result.assets[0].uri);
+              }
+            },
           },
-        },
-        {
-          label: 'Elegir de galería',
-          icon: 'images',
-          onPress: async () => {
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ['images'],
-              allowsEditing: true,
-              aspect: [1, 1],
-              quality: 0.8,
-            });
+          {
+            label: 'Elegir de galería',
+            icon: 'images',
+            onPress: async () => {
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['images'],
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+              });
 
-            if (!result.canceled && result.assets[0]) {
-              await uploadPhoto(result.assets[0].uri);
-            }
+              if (!result.canceled && result.assets[0]) {
+                await uploadPhoto(result.assets[0].uri);
+              }
+            },
           },
-        },
-      ], 'Elige una opción');
+        ],
+        'Elige una opción'
+      );
     } catch (error) {
       console.error('Error picking profile photo:', error);
       showToast('No se pudo seleccionar la foto', 'error');
@@ -435,21 +442,22 @@ export default function DriverProfileScreen() {
           </TouchableOpacity>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{user?.name || ''}</Text>
-            <Text style={styles.profileRole}>{user?.role === 'driver' ? 'Conductor' : user?.role === 'passenger' ? 'Pasajero' : 'Propietario'}</Text>
+            <Text style={styles.profileRole}>
+              {user?.role === 'driver'
+                ? 'Conductor'
+                : user?.role === 'passenger'
+                  ? 'Pasajero'
+                  : 'Propietario'}
+            </Text>
             {vehicleLabel ? <Text style={styles.profileVehicle}>{vehicleLabel}</Text> : null}
             {user?.rating !== undefined && (
               <View style={styles.profileRating}>
-                <Ionicons name="star" size={14} color="#f59e0b" />
-                <Text style={styles.profileRatingText}>
-                  {Number(user.rating).toFixed(1)}
-                </Text>
+                <Ionicons name="star" size={14} color="#F89C0A" />
+                <Text style={styles.profileRatingText}>{Number(user.rating).toFixed(1)}</Text>
               </View>
             )}
           </View>
-          <TouchableOpacity
-            style={styles.profileEditBtn}
-            onPress={() => setIsEditing(!isEditing)}
-          >
+          <TouchableOpacity style={styles.profileEditBtn} onPress={() => setIsEditing(!isEditing)}>
             <Ionicons
               name={isEditing ? 'close' : 'create-outline'}
               size={20}
@@ -531,12 +539,7 @@ export default function DriverProfileScreen() {
           <View style={styles.settingRow}>
             <View style={styles.settingRowLeft}>
               <View style={styles.settingDot}>
-                <View
-                  style={[
-                    styles.dot,
-                    isSocketConnected ? styles.dotGreen : styles.dotRed,
-                  ]}
-                />
+                <View style={[styles.dot, isSocketConnected ? styles.dotGreen : styles.dotRed]} />
               </View>
               <View>
                 <Text style={styles.settingRowTitle}>
@@ -559,7 +562,9 @@ export default function DriverProfileScreen() {
                 onPress={async () => {
                   if (!isReconnectingSocket) {
                     setIsReconnectingSocket(true);
-                    try { await reconnectSocket(); } catch {}
+                    try {
+                      await reconnectSocket();
+                    } catch {}
                     setIsReconnectingSocket(false);
                   }
                 }}
@@ -630,12 +635,14 @@ export default function DriverProfileScreen() {
                     </View>
                     <Text style={styles.paymentBlockTitle}>Pago Móvil</Text>
                   </View>
-                  {paymentInfo.pagoMovilPhone && paymentInfo.pagoMovilBank && paymentInfo.pagoMovilCedula && (
-                    <View style={styles.configuredBadge}>
-                      <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
-                      <Text style={styles.configuredText}>Listo</Text>
-                    </View>
-                  )}
+                  {paymentInfo.pagoMovilPhone &&
+                    paymentInfo.pagoMovilBank &&
+                    paymentInfo.pagoMovilCedula && (
+                      <View style={styles.configuredBadge}>
+                        <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
+                        <Text style={styles.configuredText}>Listo</Text>
+                      </View>
+                    )}
                 </View>
                 <View style={styles.paymentInputGroup}>
                   <TextInput
@@ -653,12 +660,10 @@ export default function DriverProfileScreen() {
                     placeholderTextColor={Colors.placeholder}
                     keyboardType="phone-pad"
                   />
-                  <TextInput
-                    style={styles.paymentInput}
+                  <BankPicker
                     value={paymentInfo.pagoMovilBank}
-                    onChangeText={text => setPaymentInfo({ ...paymentInfo, pagoMovilBank: text })}
-                    placeholder="Banco — Ej: Venezuela"
-                    placeholderTextColor={Colors.placeholder}
+                    onChange={text => setPaymentInfo({ ...paymentInfo, pagoMovilBank: text })}
+                    placeholder="Seleccionar banco"
                   />
                 </View>
               </View>
@@ -682,17 +687,17 @@ export default function DriverProfileScreen() {
                   )}
                 </View>
                 <View style={styles.paymentInputGroup}>
-                  <TextInput
-                    style={styles.paymentInput}
+                  <BankPicker
                     value={paymentInfo.bankTransferBank}
-                    onChangeText={text => setPaymentInfo({ ...paymentInfo, bankTransferBank: text })}
-                    placeholder="Banco"
-                    placeholderTextColor={Colors.placeholder}
+                    onChange={text => setPaymentInfo({ ...paymentInfo, bankTransferBank: text })}
+                    placeholder="Seleccionar banco"
                   />
                   <TextInput
                     style={styles.paymentInput}
                     value={paymentInfo.bankTransferAccount}
-                    onChangeText={text => setPaymentInfo({ ...paymentInfo, bankTransferAccount: text })}
+                    onChangeText={text =>
+                      setPaymentInfo({ ...paymentInfo, bankTransferAccount: text })
+                    }
                     placeholder="N° de Cuenta — 0102-1234-5678"
                     placeholderTextColor={Colors.placeholder}
                     keyboardType="number-pad"
@@ -701,26 +706,42 @@ export default function DriverProfileScreen() {
                     <TouchableOpacity
                       style={[
                         styles.accountTypeBtn,
-                        paymentInfo.bankTransferAccountType === 'Corriente' && styles.accountTypeBtnActive,
+                        paymentInfo.bankTransferAccountType === 'Corriente' &&
+                          styles.accountTypeBtnActive,
                       ]}
-                      onPress={() => setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Corriente' })}
+                      onPress={() =>
+                        setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Corriente' })
+                      }
                     >
-                      <Text style={[
-                        styles.accountTypeBtnText,
-                        paymentInfo.bankTransferAccountType === 'Corriente' && styles.accountTypeBtnTextActive,
-                      ]}>Corriente</Text>
+                      <Text
+                        style={[
+                          styles.accountTypeBtnText,
+                          paymentInfo.bankTransferAccountType === 'Corriente' &&
+                            styles.accountTypeBtnTextActive,
+                        ]}
+                      >
+                        Corriente
+                      </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[
                         styles.accountTypeBtn,
-                        paymentInfo.bankTransferAccountType === 'Ahorro' && styles.accountTypeBtnActive,
+                        paymentInfo.bankTransferAccountType === 'Ahorro' &&
+                          styles.accountTypeBtnActive,
                       ]}
-                      onPress={() => setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Ahorro' })}
+                      onPress={() =>
+                        setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Ahorro' })
+                      }
                     >
-                      <Text style={[
-                        styles.accountTypeBtnText,
-                        paymentInfo.bankTransferAccountType === 'Ahorro' && styles.accountTypeBtnTextActive,
-                      ]}>Ahorro</Text>
+                      <Text
+                        style={[
+                          styles.accountTypeBtnText,
+                          paymentInfo.bankTransferAccountType === 'Ahorro' &&
+                            styles.accountTypeBtnTextActive,
+                        ]}
+                      >
+                        Ahorro
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1172,7 +1193,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   dotGreen: {
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
   },
   dotRed: {
     backgroundColor: '#ef4444',
@@ -1345,5 +1366,4 @@ const styles = StyleSheet.create({
   },
 
   // ── Misc ─────────────────────────────────────────────────────────────────
-
 });

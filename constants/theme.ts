@@ -7,16 +7,16 @@ import { Platform } from 'react-native';
 
 // UrbanTaxi Brand Colors
 export const Colors = {
-  // Primary Colors (Updated to match admin panel green-400/green-500)
-  primary: '#22c55e', // Main green (green-500) for primary actions
-  primaryLight: '#4ade80', // Light green (green-400) for gradients
-  primaryDark: '#16a34a', // Dark green (green-600) for hover states
-  secondary: '#10b981', // Emerald green for secondary actions
-  light: '#86efac', // Light green (green-300) for backgrounds
+  // Primary Colors (UrbanTaxi brand green #2FB908)
+  primary: '#2FB908', // Main green for primary actions
+  primaryLight: '#4CCB3A', // Light green for gradients
+  primaryDark: '#269006', // Dark green for hover states
+  secondary: '#3DD10A', // Secondary green for accents
+  light: '#9EF08A', // Very light green for backgrounds
 
-  // Accent Colors
-  orange: '#f59e0b', // Amber for cancel/warning actions
-  lightOrange: '#fbbf24', // Light amber for hover cancel states
+  // Accent Colors (UrbanTaxi brand orange #F89C0A)
+  orange: '#F89C0A', // Orange for cancel/warning actions
+  lightOrange: '#FBBF24', // Light amber for hover cancel states
 
   // Neutral Colors
   darkGray: '#1f2937', // Dark gray for headings and primary text
@@ -27,30 +27,30 @@ export const Colors = {
   background: '#f9fafb', // Light background
 
   // Semantic Colors
-  success: '#22c55e',
-  warning: '#f59e0b',
+  success: '#2FB908',
+  warning: '#F89C0A',
   error: '#ef4444',
   info: '#3b82f6',
 
   // UI Element Colors
   border: '#e5e7eb',
   inputBorder: '#d1d5db',
-  inputFocus: '#22c55e',
+  inputFocus: '#2FB908',
   placeholder: '#9ca3af',
   cardBackground: '#FFFFFF',
 
   // Button Colors
-  buttonPrimary: '#22c55e',
-  buttonPrimaryHover: '#16a34a',
-  buttonCancel: '#f59e0b',
-  buttonCancelHover: '#d97706',
+  buttonPrimary: '#2FB908',
+  buttonPrimaryHover: '#269006',
+  buttonCancel: '#F89C0A',
+  buttonCancelHover: '#E08809',
   buttonDisabled: '#d1d5db',
 
   // Text Colors
   textPrimary: '#1f2937',
   textSecondary: '#6b7280',
   textWhite: '#FFFFFF',
-  textLink: '#22c55e',
+  textLink: '#2FB908',
 } as const;
 
 export const Fonts = Platform.select({

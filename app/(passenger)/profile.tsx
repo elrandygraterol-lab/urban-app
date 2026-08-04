@@ -8,7 +8,6 @@ import {
   TextInput,
   Switch,
   ActivityIndicator,
-
   Image,
   Linking,
 } from 'react-native';
@@ -28,6 +27,7 @@ import { useSmartTutorial } from '@/hooks/useSmartTutorial';
 import { setActiveTutorialScreen } from '@/utils/tutorialState';
 import { resolveFileUrl } from '@/services/fileUrl';
 import { compressImage } from '@/utils/imageUtils';
+import { BankPicker } from '@/components/ui/BankPicker';
 
 // const WalkthroughView = walkthroughable(View);
 
@@ -132,9 +132,11 @@ export default function PassengerProfileScreen() {
     }
   }, [showToast, t]);
 
-  useFocusEffect(useCallback(() => {
-    loadUserData();
-  }, [loadUserData]));
+  useFocusEffect(
+    useCallback(() => {
+      loadUserData();
+    }, [loadUserData])
+  );
 
   const handleSaveProfile = async () => {
     try {
@@ -168,10 +170,7 @@ export default function PassengerProfileScreen() {
       const hasBankTransfer = paymentInfo.bankTransferBank && paymentInfo.bankTransferAccount;
 
       if (!hasPagoMovil && !hasBankTransfer) {
-        showToast(
-          'Debes configurar al menos un método de pago completo',
-          'error'
-        );
+        showToast('Debes configurar al menos un método de pago completo', 'error');
         return;
       }
 
@@ -244,40 +243,44 @@ export default function PassengerProfileScreen() {
         return;
       }
 
-      showActionSheet('Foto de perfil', [
-        {
-          label: 'Tomar foto',
-          icon: 'camera',
-          onPress: async () => {
-            const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: ['images'],
-              allowsEditing: true,
-              aspect: [1, 1],
-              quality: 0.8,
-            });
+      showActionSheet(
+        'Foto de perfil',
+        [
+          {
+            label: 'Tomar foto',
+            icon: 'camera',
+            onPress: async () => {
+              const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ['images'],
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+              });
 
-            if (!result.canceled && result.assets[0]) {
-              await uploadPhoto(result.assets[0].uri);
-            }
+              if (!result.canceled && result.assets[0]) {
+                await uploadPhoto(result.assets[0].uri);
+              }
+            },
           },
-        },
-        {
-          label: 'Elegir de galería',
-          icon: 'images',
-          onPress: async () => {
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ['images'],
-              allowsEditing: true,
-              aspect: [1, 1],
-              quality: 0.8,
-            });
+          {
+            label: 'Elegir de galería',
+            icon: 'images',
+            onPress: async () => {
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['images'],
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+              });
 
-            if (!result.canceled && result.assets[0]) {
-              await uploadPhoto(result.assets[0].uri);
-            }
+              if (!result.canceled && result.assets[0]) {
+                await uploadPhoto(result.assets[0].uri);
+              }
+            },
           },
-        },
-      ], 'Elige una opción');
+        ],
+        'Elige una opción'
+      );
     } catch (error) {
       console.error('Error picking profile photo:', error);
       showToast('No se pudo seleccionar la foto', 'error');
@@ -348,7 +351,13 @@ export default function PassengerProfileScreen() {
             </View>
           </TouchableOpacity>
           <Text style={styles.avatarName}>{user?.name || ''}</Text>
-          <Text style={styles.avatarRole}>{user?.role === 'passenger' ? 'Pasajero' : user?.role === 'driver' ? 'Conductor' : 'Propietario'}</Text>
+          <Text style={styles.avatarRole}>
+            {user?.role === 'passenger'
+              ? 'Pasajero'
+              : user?.role === 'driver'
+                ? 'Conductor'
+                : 'Propietario'}
+          </Text>
         </View>
 
         {/* Personal Information */}
@@ -485,39 +494,78 @@ export default function PassengerProfileScreen() {
               <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
                 {/* Pago Móvil */}
                 <View style={{ marginBottom: 16 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: 10,
+                    }}
+                  >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <Ionicons name="phone-portrait-outline" size={18} color={Colors.primary} />
-                      <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937' }}>Pago Móvil</Text>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937' }}>
+                        Pago Móvil
+                      </Text>
                     </View>
-                    {paymentInfo.pagoMovilPhone && paymentInfo.pagoMovilBank && paymentInfo.pagoMovilCedula && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#f0fdf4', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                        <Ionicons name="checkmark-circle" size={12} color={Colors.primary} />
-                        <Text style={{ fontSize: 11, color: Colors.primary, fontWeight: '600' }}>Listo</Text>
-                      </View>
-                    )}
+                    {paymentInfo.pagoMovilPhone &&
+                      paymentInfo.pagoMovilBank &&
+                      paymentInfo.pagoMovilCedula && (
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            backgroundColor: '#f0fdf4',
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                            borderRadius: 6,
+                          }}
+                        >
+                          <Ionicons name="checkmark-circle" size={12} color={Colors.primary} />
+                          <Text style={{ fontSize: 11, color: Colors.primary, fontWeight: '600' }}>
+                            Listo
+                          </Text>
+                        </View>
+                      )}
                   </View>
                   <TextInput
-                    style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, marginBottom: 8, color: '#1f2937' }}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: '#e5e7eb',
+                      borderRadius: 10,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      fontSize: 14,
+                      marginBottom: 8,
+                      color: '#1f2937',
+                    }}
                     value={paymentInfo.pagoMovilCedula}
                     onChangeText={text => setPaymentInfo({ ...paymentInfo, pagoMovilCedula: text })}
                     placeholder="Cédula — V-12345678"
                     placeholderTextColor="#9ca3af"
                   />
                   <TextInput
-                    style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, marginBottom: 8, color: '#1f2937' }}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: '#e5e7eb',
+                      borderRadius: 10,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      fontSize: 14,
+                      marginBottom: 8,
+                      color: '#1f2937',
+                    }}
                     value={paymentInfo.pagoMovilPhone}
                     onChangeText={text => setPaymentInfo({ ...paymentInfo, pagoMovilPhone: text })}
                     placeholder="Teléfono — 0414-1234567"
                     placeholderTextColor="#9ca3af"
                     keyboardType="phone-pad"
                   />
-                  <TextInput
-                    style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#1f2937' }}
+                  <BankPicker
                     value={paymentInfo.pagoMovilBank}
-                    onChangeText={text => setPaymentInfo({ ...paymentInfo, pagoMovilBank: text })}
-                    placeholder="Banco — Ej: Venezuela"
-                    placeholderTextColor="#9ca3af"
+                    onChange={text => setPaymentInfo({ ...paymentInfo, pagoMovilBank: text })}
+                    placeholder="Seleccionar banco"
                   />
                 </View>
 
@@ -525,63 +573,162 @@ export default function PassengerProfileScreen() {
 
                 {/* Transferencia */}
                 <View style={{ marginBottom: 16 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: 10,
+                    }}
+                  >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <Ionicons name="business-outline" size={18} color={Colors.primary} />
-                      <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937' }}>Transferencia</Text>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: '#1f2937' }}>
+                        Transferencia
+                      </Text>
                     </View>
                     {paymentInfo.bankTransferAccount && paymentInfo.bankTransferBank && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#f0fdf4', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                          backgroundColor: '#f0fdf4',
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 6,
+                        }}
+                      >
                         <Ionicons name="checkmark-circle" size={12} color={Colors.primary} />
-                        <Text style={{ fontSize: 11, color: Colors.primary, fontWeight: '600' }}>Listo</Text>
+                        <Text style={{ fontSize: 11, color: Colors.primary, fontWeight: '600' }}>
+                          Listo
+                        </Text>
                       </View>
                     )}
                   </View>
-                  <TextInput
-                    style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, marginBottom: 8, color: '#1f2937' }}
+                  <BankPicker
                     value={paymentInfo.bankTransferBank}
-                    onChangeText={text => setPaymentInfo({ ...paymentInfo, bankTransferBank: text })}
-                    placeholder="Banco"
-                    placeholderTextColor="#9ca3af"
+                    onChange={text => setPaymentInfo({ ...paymentInfo, bankTransferBank: text })}
+                    placeholder="Seleccionar banco"
                   />
                   <TextInput
-                    style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, marginBottom: 8, color: '#1f2937' }}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: '#e5e7eb',
+                      borderRadius: 10,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      fontSize: 14,
+                      marginBottom: 8,
+                      color: '#1f2937',
+                    }}
                     value={paymentInfo.bankTransferAccount}
-                    onChangeText={text => setPaymentInfo({ ...paymentInfo, bankTransferAccount: text })}
+                    onChangeText={text =>
+                      setPaymentInfo({ ...paymentInfo, bankTransferAccount: text })
+                    }
                     placeholder="N° de Cuenta — 0102-1234-5678"
                     placeholderTextColor="#9ca3af"
                     keyboardType="number-pad"
                   />
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     <TouchableOpacity
-                      style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: paymentInfo.bankTransferAccountType === 'Corriente' ? Colors.primary : '#e5e7eb', backgroundColor: paymentInfo.bankTransferAccountType === 'Corriente' ? '#f0fdf4' : '#fff' }}
-                      onPress={() => setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Corriente' })}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 10,
+                        borderRadius: 10,
+                        alignItems: 'center',
+                        borderWidth: 1,
+                        borderColor:
+                          paymentInfo.bankTransferAccountType === 'Corriente'
+                            ? Colors.primary
+                            : '#e5e7eb',
+                        backgroundColor:
+                          paymentInfo.bankTransferAccountType === 'Corriente' ? '#f0fdf4' : '#fff',
+                      }}
+                      onPress={() =>
+                        setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Corriente' })
+                      }
                     >
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: paymentInfo.bankTransferAccountType === 'Corriente' ? Colors.primary : '#6b7280' }}>Corriente</Text>
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: '600',
+                          color:
+                            paymentInfo.bankTransferAccountType === 'Corriente'
+                              ? Colors.primary
+                              : '#6b7280',
+                        }}
+                      >
+                        Corriente
+                      </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: paymentInfo.bankTransferAccountType === 'Ahorro' ? Colors.primary : '#e5e7eb', backgroundColor: paymentInfo.bankTransferAccountType === 'Ahorro' ? '#f0fdf4' : '#fff' }}
-                      onPress={() => setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Ahorro' })}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 10,
+                        borderRadius: 10,
+                        alignItems: 'center',
+                        borderWidth: 1,
+                        borderColor:
+                          paymentInfo.bankTransferAccountType === 'Ahorro'
+                            ? Colors.primary
+                            : '#e5e7eb',
+                        backgroundColor:
+                          paymentInfo.bankTransferAccountType === 'Ahorro' ? '#f0fdf4' : '#fff',
+                      }}
+                      onPress={() =>
+                        setPaymentInfo({ ...paymentInfo, bankTransferAccountType: 'Ahorro' })
+                      }
                     >
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: paymentInfo.bankTransferAccountType === 'Ahorro' ? Colors.primary : '#6b7280' }}>Ahorro</Text>
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: '600',
+                          color:
+                            paymentInfo.bankTransferAccountType === 'Ahorro'
+                              ? Colors.primary
+                              : '#6b7280',
+                        }}
+                      >
+                        Ahorro
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 </View>
 
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, backgroundColor: '#f9fafb', padding: 10, borderRadius: 8 }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginBottom: 12,
+                    backgroundColor: '#f9fafb',
+                    padding: 10,
+                    borderRadius: 8,
+                  }}
+                >
                   <Ionicons name="information-circle-outline" size={14} color="#6b7280" />
-                  <Text style={{ fontSize: 12, color: '#6b7280', flex: 1 }}>Configura al menos un método para recibir reembolsos por cancelaciones.</Text>
+                  <Text style={{ fontSize: 12, color: '#6b7280', flex: 1 }}>
+                    Configura al menos un método para recibir reembolsos por cancelaciones.
+                  </Text>
                 </View>
 
                 <TouchableOpacity
-                  style={{ backgroundColor: Colors.primary, paddingVertical: 13, borderRadius: 12, alignItems: 'center' }}
+                  style={{
+                    backgroundColor: Colors.primary,
+                    paddingVertical: 13,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                  }}
                   onPress={handleSavePaymentInfo}
                   disabled={isSavingPayment}
                 >
                   {isSavingPayment ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>Guardar Métodos de Pago</Text>
+                    <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>
+                      Guardar Métodos de Pago
+                    </Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -598,28 +745,28 @@ export default function PassengerProfileScreen() {
               icon="car-sport-outline"
               label="Llegada del conductor"
               value={notificationPrefs.driverArrival}
-              onToggle={(v) => handleUpdateNotificationPref('driverArrival', v)}
+              onToggle={v => handleUpdateNotificationPref('driverArrival', v)}
             />
             <View style={styles.switchDivider} />
             <SwitchRow
               icon="notifications-outline"
               label="Actualizaciones de viaje"
               value={notificationPrefs.rideUpdates}
-              onToggle={(v) => handleUpdateNotificationPref('rideUpdates', v)}
+              onToggle={v => handleUpdateNotificationPref('rideUpdates', v)}
             />
             <View style={styles.switchDivider} />
             <SwitchRow
               icon="time-outline"
               label="Recordatorios de viaje"
               value={notificationPrefs.tripReminders}
-              onToggle={(v) => handleUpdateNotificationPref('tripReminders', v)}
+              onToggle={v => handleUpdateNotificationPref('tripReminders', v)}
             />
             <View style={styles.switchDivider} />
             <SwitchRow
               icon="megaphone-outline"
               label="Promociones"
               value={notificationPrefs.promotions}
-              onToggle={(v) => handleUpdateNotificationPref('promotions', v)}
+              onToggle={v => handleUpdateNotificationPref('promotions', v)}
             />
           </View>
         </View>

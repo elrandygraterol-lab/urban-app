@@ -1328,7 +1328,7 @@ const styles = StyleSheet.create({
   },
   destAccent: {
     width: 5,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
   },
   destContent: {
     flex: 1,

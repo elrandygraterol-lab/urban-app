@@ -21,20 +21,32 @@ export default function ResetPasswordScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ email?: string }>();
   const { showToast, showStatus, dismissStatus } = useUnifiedNotifications();
+  const [email, setEmail] = useState(params.email?.trim() ?? '');
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  const [emailError, setEmailError] = useState('');
   const [codeError, setCodeError] = useState('');
   const [newPasswordError, setNewPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
   const handleResetPassword = async () => {
-    const email = params.email?.trim();
+    const trimmedEmail = email.trim();
     const trimmedCode = code.trim();
 
     let hasError = false;
+
+    if (!trimmedEmail) {
+      setEmailError('Ingresa tu email');
+      hasError = true;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setEmailError('Ingresa un email válido');
+      hasError = true;
+    } else {
+      setEmailError('');
+    }
 
     if (!trimmedCode || trimmedCode.length !== 6) {
       setCodeError('Ingresa el código de 6 dígitos');
@@ -74,20 +86,21 @@ export default function ResetPasswordScreen() {
 
     if (hasError) return;
 
-    if (!email) {
-      showToast('Email no encontrado. Por favor solicita un nuevo código.', 'error');
-      return;
-    }
-
     setIsLoading(true);
     try {
-      await authAPI.resetPassword(trimmedCode, email, newPassword);
+      await authAPI.resetPassword(trimmedCode, trimmedEmail, newPassword);
       showStatus(
         'success',
         'Tu contraseña ha sido actualizada correctamente.',
         'Contraseña actualizada',
         undefined,
-        { label: 'Ir a Login', onPress: () => { router.replace('/(auth)/login' as any); dismissStatus(); } }
+        {
+          label: 'Ir a Login',
+          onPress: () => {
+            router.replace('/(auth)/login' as any);
+            dismissStatus();
+          },
+        }
       );
     } catch (error: any) {
       const errorMessage =
@@ -146,21 +159,36 @@ export default function ResetPasswordScreen() {
               <View style={styles.formHeader}>
                 <View style={styles.formTitleAccent} />
                 <Text style={styles.formTitle}>Restablecer contraseña</Text>
-                <Text style={styles.formSubtitle}>
-                  Ingresa tu nueva contraseña
-                </Text>
+                <Text style={styles.formSubtitle}>Ingresa tu nueva contraseña</Text>
               </View>
 
-              {/* Email (read-only) */}
-              {params.email ? (
-                <View style={styles.inputWrapper}>
-                  <Text style={styles.inputLabel}>Email</Text>
-                  <View style={[styles.inputBox, styles.inputBoxDisabled]}>
-                    <Ionicons name="mail-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
-                    <Text style={styles.inputDisabledText}>{params.email}</Text>
-                  </View>
+              {/* Email (editable, pre-llenado desde forgot-password) */}
+              <View style={styles.inputWrapper}>
+                <Text style={styles.inputLabel}>Email</Text>
+                <View style={styles.inputBox}>
+                  <Ionicons
+                    name="mail-outline"
+                    size={18}
+                    color="#94a3b8"
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="ejemplo@correo.com"
+                    placeholderTextColor="#cbd5e1"
+                    value={email}
+                    onChangeText={v => {
+                      setEmail(v);
+                      setEmailError('');
+                    }}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!isLoading}
+                  />
                 </View>
-              ) : null}
+                {emailError ? <Text style={styles.fieldError}>{emailError}</Text> : null}
+              </View>
 
               {/* Verification code */}
               <View style={styles.inputWrapper}>
@@ -172,7 +200,10 @@ export default function ResetPasswordScreen() {
                     placeholder="000000"
                     placeholderTextColor="#cbd5e1"
                     value={code}
-                    onChangeText={(v) => { setCode(v); setCodeError(''); }}
+                    onChangeText={v => {
+                      setCode(v);
+                      setCodeError('');
+                    }}
                     keyboardType="number-pad"
                     maxLength={6}
                     autoCapitalize="none"
@@ -187,33 +218,51 @@ export default function ResetPasswordScreen() {
               <View style={styles.inputWrapper}>
                 <Text style={styles.inputLabel}>Nueva contraseña</Text>
                 <View style={styles.inputBox}>
-                  <Ionicons name="lock-closed-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={18}
+                    color="#94a3b8"
+                    style={styles.inputIcon}
+                  />
                   <TextInput
                     style={styles.input}
                     placeholder="Mínimo 8 caracteres"
                     placeholderTextColor="#cbd5e1"
                     value={newPassword}
-                    onChangeText={(v) => { setNewPassword(v); setNewPasswordError(''); }}
+                    onChangeText={v => {
+                      setNewPassword(v);
+                      setNewPasswordError('');
+                    }}
                     secureTextEntry
                     autoCapitalize="none"
                     autoCorrect={false}
                     editable={!isLoading}
                   />
                 </View>
-                {newPasswordError ? <Text style={styles.fieldError}>{newPasswordError}</Text> : null}
+                {newPasswordError ? (
+                  <Text style={styles.fieldError}>{newPasswordError}</Text>
+                ) : null}
               </View>
 
               {/* Confirm password */}
               <View style={styles.inputWrapper}>
                 <Text style={styles.inputLabel}>Confirmar contraseña</Text>
                 <View style={styles.inputBox}>
-                  <Ionicons name="lock-closed-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={18}
+                    color="#94a3b8"
+                    style={styles.inputIcon}
+                  />
                   <TextInput
                     style={styles.input}
                     placeholder="Repite tu contraseña"
                     placeholderTextColor="#cbd5e1"
                     value={confirmPassword}
-                    onChangeText={(v) => { setConfirmPassword(v); setConfirmPasswordError(''); }}
+                    onChangeText={v => {
+                      setConfirmPassword(v);
+                      setConfirmPasswordError('');
+                    }}
                     secureTextEntry
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -242,7 +291,7 @@ export default function ResetPasswordScreen() {
                 onPress={() => router.push('/(auth)/login' as any)}
                 disabled={isLoading}
               >
-                <Ionicons name="arrow-back-outline" size={16} color="#059669" />
+                <Ionicons name="arrow-back-outline" size={16} color="#2FB908" />
                 <Text style={styles.linkBtnText}>Volver al inicio de sesión</Text>
               </TouchableOpacity>
             </View>
@@ -401,7 +450,7 @@ const styles = StyleSheet.create({
   formTitleAccent: {
     width: 40,
     height: 4,
-    backgroundColor: '#059669',
+    backgroundColor: '#2FB908',
     borderRadius: 2,
     marginBottom: 16,
   },
@@ -474,13 +523,13 @@ const styles = StyleSheet.create({
   /* Primary btn */
   primaryBtn: {
     height: 54,
-    backgroundColor: '#059669',
+    backgroundColor: '#2FB908',
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
     marginBottom: 18,
-    shadowColor: '#059669',
+    shadowColor: '#2FB908',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
@@ -505,7 +554,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   linkBtnText: {
-    color: '#059669',
+    color: '#2FB908',
     fontSize: 14,
     fontWeight: '600',
   },

@@ -11,7 +11,7 @@ export default function DriverLayout() {
     <>
       <Tabs
         screenOptions={{
-          tabBarActiveTintColor: '#22c55e',
+          tabBarActiveTintColor: '#2FB908',
           tabBarInactiveTintColor: '#A9A9A9',
           headerShown: false,
           lazy: true,

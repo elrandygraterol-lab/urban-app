@@ -1,22 +1,76 @@
 import { useState, useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { useNotificationStore } from '@/store/notificationStore';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import { rideAPI } from '@/services/api';
+import { setActivePushToken } from '@/services/api/notification';
 
-// Configure how notifications are handled when app is in foreground
+// Ride events that are also delivered over the socket when the app is in the
+// foreground. The socket path already shows the in-app UI (modal/banner), so the
+// system alert is suppressed in that case to avoid duplicates.
+const RIDE_CRITICAL_TYPES = [
+  'ride_request',
+  'ride_request_created',
+  'ride_accepted',
+  'driver_arrived',
+  'ride_started',
+  'ride_completed',
+  'ride_cancelled',
+  'payment_completed',
+  'commission_credited',
+];
+
+// commission_credited has NO socket event — the push listener is its only channel,
+// so it must always surface the in-app banner. The rest are socket-delivered.
+const SOCKET_DELIVERED_TYPES = [
+  'ride_accepted',
+  'driver_arrived',
+  'ride_started',
+  'ride_completed',
+  'ride_cancelled',
+  'payment_completed',
+];
+
+// Lazily-loaded socket connection check. Dynamic import avoids pulling in
+// expo-secure-store/socket.io-client at module load, which would break the
+// jest environment. Metro caches the module after the first load.
+const isSocketConnectedSafe = async (): Promise<boolean> => {
+  try {
+    const { isSocketConnected } = await import('@/services/socket');
+    return isSocketConnected();
+  } catch {
+    return false;
+  }
+};
+
+// Configure how notifications are handled when app is in foreground.
+// Ride-critical events are ALWAYS pushed by the backend (even when the socket
+// is "connected", because a minimized app keeps the socket alive for up to
+// ~85s). When the app is in the foreground AND the socket is live, the event
+// was already delivered in-app — suppress the system alert/sound. In
+// background/killed (or foreground with a dead socket) the system alert shows.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
+  handleNotification: async (notification) => {
+    const data = notification?.request?.content?.data;
+    const type = data?.type;
+    const isRideCritical = typeof type === 'string' && RIDE_CRITICAL_TYPES.includes(type);
+    const isForeground = AppState?.currentState === 'active';
+    let suppress = false;
+    if (isRideCritical && isForeground) {
+      suppress = await isSocketConnectedSafe();
+    }
+    return {
+      shouldShowAlert: !suppress,
+      shouldPlaySound: !suppress,
+      shouldSetBadge: !suppress,
+      shouldShowBanner: !suppress,
+      shouldShowList: !suppress,
+    };
+  },
 });
 
 export interface NotificationData {
@@ -64,6 +118,7 @@ export const useNotifications = () => {
   const [error, setError] = useState<string | null>(null);
   const notificationListener = useRef<Notifications.Subscription | undefined>(undefined);
   const responseListener = useRef<Notifications.Subscription | undefined>(undefined);
+  const pushTokenListener = useRef<Notifications.Subscription | undefined>(undefined);
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
   const { incrementUnreadCount } = useNotificationStore();
@@ -108,6 +163,7 @@ export const useNotifications = () => {
       .then(token => {
         if (token) {
           setExpoPushToken(token);
+          setActivePushToken(token);
           // Only register token with backend if user is authenticated
           if (isAuthenticated) {
             registerDeviceToken(token);
@@ -129,7 +185,7 @@ export const useNotifications = () => {
       });
 
     // Listener for notifications received while app is in foreground
-    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+    notificationListener.current = Notifications.addNotificationReceivedListener(async notification => {
       console.log('[NOTIFICATIONS] 📩 Received in foreground:', notification.request.content.title);
       setNotification(notification);
 
@@ -158,7 +214,17 @@ export const useNotifications = () => {
           'store_approved', 'store_rejected',
         ];
         if (importantTypes.includes(data.type)) {
-          showStatus(mappedType, body, title, data as Record<string, unknown>);
+          // commission_credited has no socket event (push is its only channel),
+          // so always surface it here. The other ride types are ALSO delivered
+          // via socket — when the socket is live the socket handler already
+          // shows the banner, so skip to avoid a duplicate in-app banner.
+          if (
+            data.type === 'commission_credited' ||
+            !SOCKET_DELIVERED_TYPES.includes(data.type) ||
+            !(await isSocketConnectedSafe())
+          ) {
+            showStatus(mappedType, body, title, data as Record<string, unknown>);
+          }
         }
       }
     });
@@ -169,12 +235,49 @@ export const useNotifications = () => {
       handleNotificationResponse(response);
     });
 
+    // Listen for push token refresh. Android/FCM and iOS/APNs rotate tokens
+    // (Play Services update, expiry, restore, reinstall) — without re-registering
+    // the new token, pushes silently stop until the next cold start. Updating
+    // expoPushToken here re-triggers the registration effect below.
+    pushTokenListener.current = Notifications.addPushTokenListener(pushToken => {
+      let newToken: string | null = null;
+      if (typeof pushToken.data === 'string') {
+        newToken = pushToken.data;
+      } else if (pushToken.data && typeof (pushToken.data as any).data === 'string') {
+        newToken = (pushToken.data as any).data;
+      }
+      if (!newToken) return;
+      console.log('[NOTIFICATIONS] 🔄 Push token refreshed:', newToken.substring(0, 30) + '...');
+      setExpoPushToken(newToken);
+      setActivePushToken(newToken);
+    });
+
+    // Handle notification tap when the app was killed (cold start).
+    // The response listener above only fires for background → foreground;
+    // if the process was dead, the tap is delivered via this pending response.
+    Notifications.getLastNotificationResponseAsync()
+      .then(response => {
+        if (response) {
+          console.log(
+            '[NOTIFICATIONS] 📲 Cold-start notification tap:',
+            response.notification.request.content.data
+          );
+          handleNotificationResponse(response);
+        }
+      })
+      .catch(err => {
+        console.warn('[NOTIFICATIONS] ⚠️ Error reading last notification response:', err);
+      });
+
     return () => {
       if (notificationListener.current) {
         notificationListener.current.remove();
       }
       if (responseListener.current) {
         responseListener.current.remove();
+      }
+      if (pushTokenListener.current) {
+        pushTokenListener.current.remove();
       }
     };
   }, []);
@@ -206,7 +309,7 @@ export const useNotifications = () => {
         name: 'UrbanTaxi SJ',
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#22c55e',
+        lightColor: '#2FB908',
       });
       // High-priority channel for ride requests — overrides Do Not Disturb on Android
       await Notifications.setNotificationChannelAsync('ride_requests', {
@@ -214,7 +317,7 @@ export const useNotifications = () => {
         description: 'Notificaciones de nuevas solicitudes de viaje',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250, 0, 250],
-        lightColor: '#22c55e',
+        lightColor: '#2FB908',
         showBadge: true,
         bypassDnd: true,
       });
@@ -224,7 +327,7 @@ export const useNotifications = () => {
         description: 'Actualizaciones del estado de tu viaje',
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250],
-        lightColor: '#22c55e',
+        lightColor: '#2FB908',
         showBadge: true,
       });
       // Channel for payment notifications
@@ -233,7 +336,7 @@ export const useNotifications = () => {
         description: 'Notificaciones de pagos y ganancias',
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250],
-        lightColor: '#f59e0b',
+        lightColor: '#F89C0A',
         showBadge: true,
       });
       console.log('[NOTIFICATIONS] Android notification channels configured (default, ride_requests, ride_status, payments)');
@@ -303,17 +406,27 @@ export const useNotifications = () => {
 
       for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-          token = (
-            await Notifications.getExpoPushTokenAsync({
-              projectId: projectId || undefined,
-            })
-          ).data;
+          const isAndroid = Platform.OS === 'android';
+
+          // Android: use the native FCM device token and deliver directly via
+          // Firebase (firebaseService on the backend). No dependency on Expo's
+          // push relay.
+          // iOS: keep using the Expo push token (APNs via Expo Push Service).
+          const deviceToken = isAndroid
+            ? await Notifications.getDevicePushTokenAsync()
+            : await Notifications.getExpoPushTokenAsync({
+                projectId: projectId || undefined,
+              });
+
+          token = deviceToken.data as string;
 
           console.log(
-            '[NOTIFICATIONS] ✅ Expo Push Token obtained:',
+            '[NOTIFICATIONS] ✅ Push Token obtained:',
             token.substring(0, 30) + '...'
           );
-          console.log('[NOTIFICATIONS] ℹ️ Using Expo Push Service for notifications');
+          console.log(
+            `[NOTIFICATIONS] ℹ️ ${isAndroid ? 'Using direct FCM delivery (firebaseService)' : 'Using Expo Push Service for notifications'}`
+          );
           break; // Success, exit retry loop
         } catch (err: any) {
           lastError = err;

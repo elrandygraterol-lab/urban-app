@@ -17,6 +17,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Colors } from '@/constants/theme';
+import { BANCOS_VENEZUELA } from '@/constants/banks';
 import api from '@/services/api';
 import { getRoute } from '@/services/mapsService';
 import { DriverTaxiIcon, DropoffIcon, PickupIcon } from '@/src/components/map/markers';
@@ -25,36 +26,6 @@ import { formatCurrency, Currency } from '@/utils/currency';
 import CenterLocationButton from '@/components/CenterLocationButton';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
-
-const BANCOS_VENEZUELA = [
-  { code: '0102', name: 'Banco de Venezuela' },
-  { code: '0104', name: 'Banco Venezolano de Crédito' },
-  { code: '0105', name: 'Banco Mercantil' },
-  { code: '0114', name: 'Bancaribe' },
-  { code: '0115', name: 'Banco Exterior' },
-  { code: '0116', name: 'Banco Occidental de Descuento (BOD)' },
-  { code: '0128', name: 'Banco Caroní' },
-  { code: '0134', name: 'Banesco' },
-  { code: '0137', name: 'Banco Sofitasa' },
-  { code: '0138', name: 'Banco Plaza' },
-  { code: '0146', name: 'Banco de la Gente Emprendedora (Bangente)' },
-  { code: '0151', name: 'BFC Banco Fondo Común' },
-  { code: '0156', name: '100% Banco' },
-  { code: '0157', name: 'Banco del Sur' },
-  { code: '0163', name: 'Banco del Tesoro' },
-  { code: '0166', name: 'Banco Agrícola de Venezuela' },
-  { code: '0168', name: 'Bancrecer' },
-  { code: '0169', name: 'Mi Banco' },
-  { code: '0171', name: 'Banco Activo' },
-  { code: '0172', name: 'Bancamiga' },
-  { code: '0173', name: 'Banco Internacional de Desarrollo' },
-  { code: '0174', name: 'Banplus' },
-  { code: '0175', name: 'Banco Bicentenario' },
-  { code: '0176', name: 'Banco de la Fuerza Armada (BANFANB)' },
-  { code: '0177', name: 'Banco de la Mujer' },
-  { code: '0190', name: 'Citibank' },
-  { code: '0191', name: 'Banco Nacional de Crédito (BNC)' },
-];
 
 export default function ManageRideScreen() {
   const router = useRouter();
@@ -435,8 +406,8 @@ export default function ManageRideScreen() {
               )}
               {destination && (
                 <Marker coordinate={destination} title="Destino" anchor={{ x: 0.5, y: 0.5 }}>
-                <DropoffIcon />
-              </Marker>
+                  <DropoffIcon />
+                </Marker>
               )}
               {routeCoordinates.length > 0 && (
                 <Polyline

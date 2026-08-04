@@ -472,7 +472,7 @@ export default function DelegatedRideTrackingScreen() {
   const getStatusInfo = (status: string) => {
     switch (status) {
       case 'pending':
-        return { label: 'Buscando Conductor', color: '#f59e0b', icon: 'search' as const };
+        return { label: 'Buscando Conductor', color: '#F89C0A', icon: 'search' as const };
       case 'accepted':
         return {
           label: 'Conductor Asignado',
@@ -484,7 +484,7 @@ export default function DelegatedRideTrackingScreen() {
       case 'in_progress':
         return { label: 'En Progreso', color: '#3b82f6', icon: 'car' as const };
       case 'completed':
-        return { label: 'Completado', color: '#10b981', icon: 'checkmark-done' as const };
+        return { label: 'Completado', color: '#3DD10A', icon: 'checkmark-done' as const };
       case 'cancelled':
         return { label: 'Cancelado', color: '#ef4444', icon: 'close-circle' as const };
       default:
@@ -569,7 +569,7 @@ export default function DelegatedRideTrackingScreen() {
               driverLocation,
               rideData.status === 'in_progress' ? rideData.destination : rideData.pickup,
             ]}
-            strokeColor={rideData.status === 'in_progress' ? '#22C55E' : '#FF8C00'}
+            strokeColor={rideData.status === 'in_progress' ? '#2FB908' : '#FF8C00'}
             strokeWidth={3}
             lineDashPattern={[10, 5]}
           />
@@ -625,7 +625,7 @@ export default function DelegatedRideTrackingScreen() {
                     {rideData.driver.vehicleInfo?.licensePlate || 'N/A'}
                   </Text>
                   <View style={styles.driverRating}>
-                    <Ionicons name="star" size={14} color="#f59e0b" />
+                    <Ionicons name="star" size={14} color="#F89C0A" />
                     <Text style={styles.driverRatingText}>{rideData.driver.rating.toFixed(1)}</Text>
                   </View>
                 </View>
@@ -793,7 +793,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0fdf4',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#86efac',
+    borderColor: '#9EF08A',
   },
   beneficiaryInfo: {
     flexDirection: 'row',

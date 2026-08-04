@@ -22,7 +22,7 @@ export const StoreCard = React.memo(function StoreCard({
     if (!store.status) return null;
 
     const statusConfig = {
-      activa: { label: 'Activa', color: '#16a34a', bgColor: '#dcfce7' }, // Green
+      activa: { label: 'Activa', color: '#269006', bgColor: '#dcfce7' }, // Green
       'pendiente de aprobación': { label: 'Pendiente', color: '#ca8a04', bgColor: '#fef3c7' }, // Yellow
       rechazada: { label: 'Rechazada', color: '#dc2626', bgColor: '#fee2e2' }, // Red
       inactiva: { label: 'Inactiva', color: '#6b7280', bgColor: '#f3f4f6' }, // Gray

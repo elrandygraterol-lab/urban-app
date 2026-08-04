@@ -14,6 +14,7 @@ import { Colors } from '../../constants/theme';
 import { driverAPI } from '../../services/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
+import { BankPicker } from '@/components/ui/BankPicker';
 
 interface PaymentInfo {
   pagoMovilPhone?: string;
@@ -164,12 +165,10 @@ export default function DriverPaymentMethodsScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Banco</Text>
-            <TextInput
-              style={styles.input}
+            <BankPicker
               value={paymentInfo.pagoMovilBank}
-              onChangeText={t => setPaymentInfo({ ...paymentInfo, pagoMovilBank: t })}
-              placeholder="Ej: Banco de Venezuela"
-              placeholderTextColor="#9ca3af"
+              onChange={t => setPaymentInfo({ ...paymentInfo, pagoMovilBank: t })}
+              placeholder="Seleccionar banco"
             />
           </View>
         </View>
@@ -196,12 +195,10 @@ export default function DriverPaymentMethodsScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Banco</Text>
-            <TextInput
-              style={styles.input}
+            <BankPicker
               value={paymentInfo.bankTransferBank}
-              onChangeText={t => setPaymentInfo({ ...paymentInfo, bankTransferBank: t })}
-              placeholder="Ej: Banco de Venezuela"
-              placeholderTextColor="#9ca3af"
+              onChange={t => setPaymentInfo({ ...paymentInfo, bankTransferBank: t })}
+              placeholder="Seleccionar banco"
             />
           </View>
 

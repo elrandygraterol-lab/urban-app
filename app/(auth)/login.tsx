@@ -154,7 +154,7 @@ export default function LoginScreen() {
         style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}
         edges={['top', 'bottom']}
       >
-        <ActivityIndicator size="large" color="#059669" />
+        <ActivityIndicator size="large" color="#2FB908" />
       </SafeAreaView>
     );
   }
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
   formTitleAccent: {
     width: 40,
     height: 4,
-    backgroundColor: '#059669',
+    backgroundColor: '#2FB908',
     borderRadius: 2,
     marginBottom: 16,
   },
@@ -571,8 +571,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   checkboxChecked: {
-    borderColor: '#059669',
-    backgroundColor: '#059669',
+    borderColor: '#2FB908',
+    backgroundColor: '#2FB908',
   },
   rememberText: {
     fontSize: 14,
@@ -581,18 +581,18 @@ const styles = StyleSheet.create({
   },
   forgotText: {
     fontSize: 14,
-    color: '#059669',
+    color: '#2FB908',
     fontWeight: '600',
   },
   /* Primary Button */
   primaryBtn: {
     height: 48,
-    backgroundColor: '#059669',
+    backgroundColor: '#2FB908',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 14,
-    shadowColor: '#059669',
+    shadowColor: '#2FB908',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
@@ -620,7 +620,7 @@ const styles = StyleSheet.create({
   },
   linkRowAction: {
     fontSize: 14,
-    color: '#059669',
+    color: '#2FB908',
     fontWeight: '700',
   },
 

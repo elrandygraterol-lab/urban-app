@@ -868,6 +868,8 @@ export const onRideCancelled = (
     cancellationFee: number;
     cancelledAt: string;
     timestamp: string;
+    currency?: string;
+    driverCompensation?: number;
   }) => void
 ): (() => void) => {
   if (!socket) {

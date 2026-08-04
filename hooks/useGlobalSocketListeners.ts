@@ -23,7 +23,7 @@ export const useGlobalSocketListeners = ({
   isAuthenticated,
 }: UseGlobalSocketListenersProps) => {
   const { playNotificationSound } = useSound();
-  const { showRideRequest, showStatus, showSuccess, showError, showWarning } = useUnifiedNotifications();
+  const { showRideRequest, dismissRideRequest, activeRideRequest, showStatus, showSuccess, showError, showWarning } = useUnifiedNotifications();
   const { convertToUsd, convertToBs } = useExchangeRate();
   
   // Ref to track if listeners are already registered
@@ -102,6 +102,18 @@ export const useGlobalSocketListeners = ({
     [user?.role, playNotificationSound, showRideRequest]
   );
 
+  // Handler for ride:request_accepted event — another driver accepted the ride,
+  // so dismiss the request card/modal if it matches this ride.
+  const handleRideRequestAccepted = useCallback(
+    (data: { rideId: string }) => {
+      if (activeRideRequest?.id === data.rideId) {
+        console.log('[GLOBAL_SOCKET] Ride request taken by another driver, dismissing:', data.rideId);
+        dismissRideRequest();
+      }
+    },
+    [activeRideRequest?.id, dismissRideRequest]
+  );
+
   // Handler for ride:payment_completed event (BOTH roles - different messages)
   const handlePaymentCompleted = useCallback(
     (data: {
@@ -162,6 +174,7 @@ export const useGlobalSocketListeners = ({
       cancellationFee: number;
       refundAmount?: number;
       currency?: string;
+      driverCompensation?: number;
       hasPaymentMethods?: boolean;
       cancelledAt: string;
       timestamp: string;
@@ -215,8 +228,20 @@ export const useGlobalSocketListeners = ({
         message += `\n\nMotivo: ${data.cancellationReason}`;
       }
 
-      if (data.cancellationFee > 0) {
-        message += `\n\nCompensación: Bs. ${data.cancellationFee.toFixed(2)}`;
+      // Driver: show net compensation received (fee − commission) in dual currency
+      if (user?.role === 'driver' && data.cancelledBy === 'passenger') {
+        const compensation = data.driverCompensation ?? data.cancellationFee ?? 0;
+        if (compensation > 0) {
+          const currency = data.currency || 'VES';
+          const symbol = currency === 'USD' ? '$' : 'Bs.';
+          const dualText = currency === 'USD'
+            ? `${convertToBs(compensation) !== '—' ? ` (≈ Bs. ${convertToBs(compensation)})` : ''}`
+            : `${convertToUsd(compensation) !== '—' ? ` (≈ $ ${convertToUsd(compensation)})` : ''}`;
+          message += `\n\nCompensación recibida: ${symbol} ${compensation.toFixed(2)}${dualText}`;
+        }
+      } else if (user?.role === 'passenger' && data.cancellationFee > 0) {
+        const symbol = data.currency === 'USD' ? '$' : 'Bs.';
+        message += `\n\nTarifa de cancelación: ${symbol} ${data.cancellationFee.toFixed(2)}`;
       }
 
       // Show status notification for both roles
@@ -242,7 +267,7 @@ export const useGlobalSocketListeners = ({
         }
       }
     },
-    [user?.id, user?.role, showStatus, playNotificationSound]
+    [user?.id, user?.role, showStatus, playNotificationSound, convertToUsd, convertToBs]
   );
 
   // HANDLERS FOR PASSENGER
@@ -494,6 +519,7 @@ export const useGlobalSocketListeners = ({
       socket.off('ride:payment_completed', handlePaymentCompleted);
       socket.off('ride:cancelled', handleRideCancelled);
       socket.off('ride:request_created', handleRideRequest);
+      socket.off('ride:request_accepted', handleRideRequestAccepted);
       socket.off('ride:accepted', handleRideAccepted);
       socket.off('ride:status_changed', handleRideStatusChanged);
       socket.off('ride:eta_update', handleEtaUpdate);
@@ -526,6 +552,9 @@ export const useGlobalSocketListeners = ({
       if (user.role === 'driver') {
         socket.on('ride:request_created', handleRideRequest);
         console.log('[GLOBAL_SOCKET]    ride:request_created registered (driver only)');
+
+        socket.on('ride:request_accepted', handleRideRequestAccepted);
+        console.log('[GLOBAL_SOCKET]    ride:request_accepted registered (driver only)');
       }
 
       // PASSENGER-ONLY - driver acceptance, status changes, ETA, driver arrived
@@ -601,6 +630,7 @@ export const useGlobalSocketListeners = ({
       console.log('[GLOBAL_SOCKET]    - ride:completed (shared)');
       if (user.role === 'driver') {
         console.log('[GLOBAL_SOCKET]    - ride:request_created (driver only)');
+        console.log('[GLOBAL_SOCKET]    - ride:request_accepted (driver only)');
       }
       if (user.role === 'passenger') {
         console.log('[GLOBAL_SOCKET]    - ride:accepted (passenger only)');
@@ -774,6 +804,7 @@ export const useGlobalSocketListeners = ({
         currentSocket.off('ride:payment_completed', handlePaymentCompleted);
         currentSocket.off('ride:cancelled', handleRideCancelled);
         currentSocket.off('ride:request_created', handleRideRequest);
+        currentSocket.off('ride:request_accepted', handleRideRequestAccepted);
         currentSocket.off('ride:accepted', handleRideAccepted);
         currentSocket.off('ride:status_changed', handleRideStatusChanged);
         currentSocket.off('ride:eta_update', handleEtaUpdate);
@@ -807,7 +838,7 @@ export const useGlobalSocketListeners = ({
       console.log('[GLOBAL_SOCKET]    listenersRegisteredRef reset to FALSE');
       console.log('[GLOBAL_SOCKET] ========== CLEANUP COMPLETE ==========');
     }
-  }, [isAuthenticated, user?.id, user?.role, handlePaymentCompleted, handleRideCancelled, handleRideRequest, handleRideAccepted, handleRideStatusChanged, handleEtaUpdate, handleDriverArrived, handleRideCompleted, fetchPendingRidesForDriver]);
+  }, [isAuthenticated, user?.id, user?.role, handlePaymentCompleted, handleRideCancelled, handleRideRequest, handleRideRequestAccepted, handleRideAccepted, handleRideStatusChanged, handleEtaUpdate, handleDriverArrived, handleRideCompleted, fetchPendingRidesForDriver]);
 
   // Re-register listeners when socket is fully recreated (e.g., after reconnectSocket destroy+create)
   useEffect(() => {

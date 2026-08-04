@@ -4,3 +4,4 @@ export { Card } from './Card';
 export { Logo } from './Logo';
 export { IconSymbol } from './icon-symbol';
 export { Collapsible } from './collapsible';
+export { BankPicker } from './BankPicker';

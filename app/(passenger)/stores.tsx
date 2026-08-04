@@ -25,7 +25,7 @@ export default function StoresPlaceholderScreen() {
       <View style={styles.content}>
         <View style={styles.iconWrapper}>
           <View style={styles.iconCircle}>
-            <Ionicons name="storefront-outline" size={44} color="#16a34a" />
+            <Ionicons name="storefront-outline" size={44} color="#269006" />
           </View>
           <View style={styles.badgeCircle}>
             <Ionicons name="time-outline" size={22} color="#fff" />
@@ -45,15 +45,15 @@ export default function StoresPlaceholderScreen() {
 
           <View style={styles.featureList}>
             <View style={styles.featureItem}>
-              <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
+              <Ionicons name="checkmark-circle" size={16} color="#269006" />
               <Text style={styles.featureText}>Compra en tiendas cercanas</Text>
             </View>
             <View style={styles.featureItem}>
-              <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
+              <Ionicons name="checkmark-circle" size={16} color="#269006" />
               <Text style={styles.featureText}>Entrega a domicilio</Text>
             </View>
             <View style={styles.featureItem}>
-              <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
+              <Ionicons name="checkmark-circle" size={16} color="#269006" />
               <Text style={styles.featureText}>Pago desde la app</Text>
             </View>
           </View>
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#16a34a',
+    backgroundColor: '#269006',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,

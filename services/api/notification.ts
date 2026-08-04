@@ -1,8 +1,19 @@
 import api from './client';
 
+let activePushToken: string | null = null;
+
+export const setActivePushToken = (token: string | null) => {
+  activePushToken = token;
+};
+
+export const getActivePushToken = () => activePushToken;
+
 export const notificationAPI = {
   registerDevice: (data: { token: string; platform: 'android' | 'ios' | 'web' }) =>
     api.post('/api/notifications/register-device', data),
+
+  unregisterDevice: (token: string) =>
+    api.delete(`/api/notifications/device/${encodeURIComponent(token)}`),
 
   getPreferences: () => api.get('/api/notifications/preferences'),
 

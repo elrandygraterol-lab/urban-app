@@ -470,7 +470,7 @@ export default function DelegatedRideModal({
 
             {/* Important Notice */}
             <View style={styles.noticeCard}>
-              <Ionicons name="alert-circle-outline" size={20} color="#f59e0b" />
+              <Ionicons name="alert-circle-outline" size={20} color="#F89C0A" />
               <Text style={styles.noticeText}>
                 <Text style={styles.noticeTextBold}>Importante:</Text> El beneficiario no recibirá
                 notificaciones automáticas. Asegúrate de informarle sobre el viaje y coordinar la

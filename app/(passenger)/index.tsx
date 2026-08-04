@@ -210,17 +210,26 @@ export default function PassengerHomeScreen() {
   const [activeSuggestionField, setActiveSuggestionField] = useState<'pickup' | 'destination' | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const justSelectedSuggestionRef = useRef(false);
+  const lastPickupSearchRef = useRef('');
+  const lastDestinationSearchRef = useRef('');
 
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
 
+    const val = activeSuggestionField === 'pickup' ? pickupAddress : destinationAddress;
+    const lastRef = activeSuggestionField === 'pickup' ? lastPickupSearchRef : lastDestinationSearchRef;
+
     // Skip search if value was just set by selecting a suggestion
     if (justSelectedSuggestionRef.current) {
       justSelectedSuggestionRef.current = false;
+      lastRef.current = val;
       return;
     }
 
-    const val = activeSuggestionField === 'pickup' ? pickupAddress : destinationAddress;
+    // Avoid redundant search for unchanged value
+    if (val === lastRef.current) return;
+    lastRef.current = val;
+
     if (!val || val.length < 3) {
       setSearchSuggestions([]);
       setShowSearchSuggestions(false);
@@ -626,28 +635,81 @@ export default function PassengerHomeScreen() {
   }, [token]);
 
 
+  /** Full reset of the ride request state so the passenger can start a new
+   *  ride from scratch. Mirrors the "system cancelled" branch of
+   *  handleRideCancelled: clears the map route, pickup/destination, fare and
+   *  search state, then re-centers on the user's current location.
+   */
+  const resetRideRequestState = useCallback(() => {
+    if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
+    setShowCancelModal(false);
+    setActiveRide(null);
+    setDriverLocation(null);
+    setIsSearchingDriver(false);
+    setPaymentCompleted(false);
+    setShowMobilePaymentModal(false);
+    setShowPaymentModal(false);
+    setShowRatingModal(false);
+    setFinalFare(null);
+    setPaymentMethod('cash');
+    setFareCurrency('VES');
+    setShowSecondPickup(false);
+    setSecondPickupLocation(null);
+    setSecondPickupAddress('');
+    setSecondPickupFullAddress('');
+    setSecondPickupLocationSource(null);
+    setShowSecondDestination(false);
+    setSecondDestinationLocation(null);
+    setSecondDestinationAddress('');
+    setSecondDestinationFullAddress('');
+    setSecondDestinationLocationSource(null);
+    setCancelReason('');
+    setRouteCoordinates([]);
+    setNearestRouteIndex(0);
+    setDisplayDistance(null);
+    setDisplayDuration(null);
+    prevDriverLocationRef.current = null;
+    setPickupLocation(null);
+    setPickupAddress('');
+    setPickupFullAddress('');
+    setDestinationLocation(null);
+    setDestinationAddress('');
+    setDestinationFullAddress('');
+    setEstimatedFare(null);
+    setFareBreakdown(null);
+    setIsCalculatingFare(false);
+    setZoneInfo(null);
+    setHasShownNearbyNotification(false);
+    setMapSelectionMode('none');
+    setIsEditingPickup(false);
+    setIsEditingSecondPickup(false);
+    setIsEditingSecondDestination(false);
+    acceptedRideIdRef.current = null;
+
+    // Auto-set pickup to current location so user can start a new request immediately
+    const currentLoc = currentLocationRef.current;
+    if (currentLoc) {
+      setPickupLocation(currentLoc);
+    }
+  }, []);
+
   /** Handle search timeout - auto-cancel after 60 seconds */
   const handleSearchTimeout = useCallback(async () => {
-    if (!activeRide || !activeRide.id) {
-      setIsSearchingDriver(false);
-      setSearchDuration(0);
-      return;
+    if (activeRide?.id) {
+      try {
+        await rideAPI.cancelRide(activeRide.id, { reason: 'search_timeout' });
+      } catch (error) {
+        console.error('[PASSENGER] Auto-cancel failed:', error);
+        // The backend may already have auto-cancelled the ride (system timeout
+        // also fires around 60s), making cancel-with-policy return an error.
+        // The ride is cancelled either way — the full reset below clears the
+        // map/route so the passenger can request a new ride from scratch.
+        showToast('No se pudo cancelar la búsqueda automáticamente.', 'error');
+      }
     }
-    try {
-      await rideAPI.cancelRide(activeRide.id, { reason: 'search_timeout' });
-      setActiveRide(null);
-      setIsSearchingDriver(false);
-      setDriverLocation(null);
-    } catch (error) {
-      console.error('[PASSENGER] Auto-cancel failed:', error);
-      showToast('No se pudo cancelar la búsqueda automáticamente.', 'error');
-      setActiveRide(null);
-      setIsSearchingDriver(false);
-      setDriverLocation(null);
-    } finally {
-      setSearchDuration(0);
-    }
-  }, [activeRide, rideAPI, showToast]);
+    resetRideRequestState();
+    setSearchDuration(0);
+  }, [activeRide, rideAPI, showToast, resetRideRequestState]);
 
 // Start searching animations + timeout when isSearchingDriver changes
   useEffect(() => {
@@ -4034,7 +4096,7 @@ export default function PassengerHomeScreen() {
   if (isLoadingLocation) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#22c55e" />
+        <ActivityIndicator size="large" color="#2FB908" />
         <Text style={styles.loadingText}>Obteniendo ubicación...</Text>
       </View>
     );
@@ -4172,7 +4234,7 @@ export default function PassengerHomeScreen() {
                 strokeColor={
                   !activeRide || activeRide.status === 'pending' || activeRide.status === 'accepted'
                     ? '#FF8C00'
-                    : '#22C55E'
+                    : '#2FB908'
                 }
                 strokeWidth={isApproximateRoute ? 3 : 4}
                 lineCap="round"
@@ -4224,7 +4286,7 @@ export default function PassengerHomeScreen() {
         {activeRide && activeRide.status === 'in_progress' && rideProgress > 0 && (
           <View style={[styles.progressContainer, { top: insets.top + 60 }]}>
             <View style={styles.progressHeader}>
-              <Ionicons name="navigate-circle" size={20} color="#22c55e" />
+              <Ionicons name="navigate-circle" size={20} color="#2FB908" />
               <Text style={styles.progressTitle}>Progreso del viaje</Text>
             </View>
             <View style={styles.progressBarContainer}>
@@ -4326,7 +4388,7 @@ export default function PassengerHomeScreen() {
                       </View>
                       {typeof activeRide.driver.rating === 'number' && activeRide.driver.rating > 0 && (
                         <View style={styles.rideDriverRatingBox}>
-                          <Ionicons name="star" size={12} color="#f59e0b" />
+                          <Ionicons name="star" size={12} color="#F89C0A" />
                           <Text style={styles.rideDriverRating}>{activeRide.driver.rating.toFixed(1)}</Text>
                         </View>
                       )}
@@ -4365,7 +4427,7 @@ export default function PassengerHomeScreen() {
                   {/* ETA strip — usa OSRM (preciso) cuando está disponible, cae a socket ETA */}
                   {activeRide && (activeRide.status === 'accepted' || activeRide.status === 'in_progress') && (
                     <View style={styles.rideEtaStrip}>
-                      <Ionicons name="time-outline" size={14} color="#22c55e" />
+                      <Ionicons name="time-outline" size={14} color="#2FB908" />
                       <Text style={styles.rideEtaText}>
                         {activeRide.status === 'accepted'
                           ? (displayDuration !== null && displayDistance !== null
@@ -4400,7 +4462,7 @@ export default function PassengerHomeScreen() {
                     )}
 
                     {activeRide.status === 'completed' && (
-                      <TouchableOpacity style={[styles.rideBtnCall, { backgroundColor: '#22c55e', flex: 1 }]} onPress={() => handleCloseRatingModal()}>
+                      <TouchableOpacity style={[styles.rideBtnCall, { backgroundColor: '#2FB908', flex: 1 }]} onPress={() => handleCloseRatingModal()}>
                         <Ionicons name="add-circle-outline" size={16} color="#fff" />
                         <Text style={styles.rideBtnCallText}>Solicitar nuevo viaje</Text>
                       </TouchableOpacity>
@@ -4418,7 +4480,7 @@ export default function PassengerHomeScreen() {
                     <Animated.View style={[styles.searchingPulseRing, pulseRingStyle]} />
                     <Animated.View style={[styles.searchingPulseRingInner, pulseRingInnerStyle]} />
                     <View style={styles.searchingIconCircle}>
-                      <Ionicons name="car-outline" size={40} color="#22c55e" />
+                      <Ionicons name="car-outline" size={40} color="#2FB908" />
                     </View>
                   </View>
 
@@ -4448,7 +4510,7 @@ export default function PassengerHomeScreen() {
                   <View style={styles.searchingTripCard}>
                     <View style={styles.searchingTripRow}>
                       <View style={styles.searchingTripIconBg}>
-                        <Ionicons name="location-outline" size={16} color="#22c55e" />
+                        <Ionicons name="location-outline" size={16} color="#2FB908" />
                       </View>
                       <View style={styles.searchingTripContent}>
                         <Text style={styles.searchingTripLabel}>Recogida</Text>
@@ -4610,7 +4672,7 @@ export default function PassengerHomeScreen() {
                         onPress={handleUseCurrentLocation}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       >
-                        <Ionicons name="location" size={20} color="#22c55e" />
+                        <Ionicons name="location" size={20} color="#2FB908" />
                       </TouchableOpacity>
                       <View style={styles.routeRowContent}>
                         {isEditingPickup ? (
@@ -4620,6 +4682,7 @@ export default function PassengerHomeScreen() {
                                 onChangeText={setPickupAddress}
                                 onSelectPlace={place => {
                                   justSelectedSuggestionRef.current = true;
+                                  lastPickupSearchRef.current = place.name;
                                   setPickupLocation({
                                     latitude: place.latitude,
                                     longitude: place.longitude,
@@ -4667,14 +4730,14 @@ export default function PassengerHomeScreen() {
                           <Ionicons
                             name={isEditingPickup ? 'search' : 'pencil'}
                             size={15}
-                            color="#22c55e"
+                            color="#2FB908"
                           />
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.routeActionBtn}
                           onPress={() => handleEnableMapSelection('pickup')}
                         >
-                          <Ionicons name="map-outline" size={15} color="#22c55e" />
+                          <Ionicons name="map-outline" size={15} color="#2FB908" />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -4788,7 +4851,7 @@ export default function PassengerHomeScreen() {
 
                     {/* Destination row */}
                     <View style={styles.routeRow}>
-                      <Ionicons name="location" size={20} color="#22c55e" />
+                      <Ionicons name="location" size={20} color="#2FB908" />
                       <View style={styles.routeRowContent}>
                         <Suspense fallback={<View style={styles.routeAutocomplete} />}>
                           <AddressAutocomplete
@@ -4796,6 +4859,7 @@ export default function PassengerHomeScreen() {
                             onChangeText={setDestinationAddress}
                             onSelectPlace={place => {
                               justSelectedSuggestionRef.current = true;
+                              lastDestinationSearchRef.current = place.name;
                               setDestinationLocation({
                                 latitude: place.latitude,
                                 longitude: place.longitude,
@@ -4825,13 +4889,13 @@ export default function PassengerHomeScreen() {
                           style={styles.routeActionBtn}
                           onPress={handleSearchDestination}
                         >
-                          <Ionicons name="search" size={15} color="#22c55e" />
+                          <Ionicons name="search" size={15} color="#2FB908" />
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.routeActionBtn}
                           onPress={() => handleEnableMapSelection('destination')}
                         >
-                          <Ionicons name="map-outline" size={15} color="#22c55e" />
+                          <Ionicons name="map-outline" size={15} color="#2FB908" />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -4853,6 +4917,7 @@ export default function PassengerHomeScreen() {
                                 onPress={() => {
                                   justSelectedSuggestionRef.current = true;
                                   if (activeSuggestionField === 'pickup') {
+                                    lastPickupSearchRef.current = item.name;
                                     setPickupLocation({
                                       latitude: item.latitude,
                                       longitude: item.longitude,
@@ -4862,6 +4927,7 @@ export default function PassengerHomeScreen() {
                                     setPickupLocationSource(item.source ?? null);
                                     setIsEditingPickup(false);
                                   } else {
+                                    lastDestinationSearchRef.current = item.name;
                                     setDestinationLocation({
                                       latitude: item.latitude,
                                       longitude: item.longitude,
@@ -5020,7 +5086,7 @@ export default function PassengerHomeScreen() {
                         onPress={() => setShowSecondPickup(true)}
                         activeOpacity={0.7}
                       >
-                        <SecondPickupIcon size={26} color="#22c55e" />
+                        <SecondPickupIcon size={26} color="#2FB908" />
                         <Text style={styles.addPointButtonText}>+ Punto de Recogida</Text>
                       </TouchableOpacity>
                     )}
@@ -5031,7 +5097,7 @@ export default function PassengerHomeScreen() {
                         onPress={() => setShowSecondDestination(true)}
                         activeOpacity={0.7}
                       >
-                        <SecondDropoffIcon size={26} color="#22c55e" />
+                        <SecondDropoffIcon size={26} color="#2FB908" />
                         <Text style={styles.addPointButtonText}>+ Punto de Destino</Text>
                       </TouchableOpacity>
                     )}
@@ -5041,7 +5107,7 @@ export default function PassengerHomeScreen() {
                   {/* Fare Estimate */}
                   {isCalculatingFare && (
                     <View style={styles.fareLoadingContainer}>
-                      <ActivityIndicator size="small" color="#22c55e" />
+                      <ActivityIndicator size="small" color="#2FB908" />
                       <Text style={styles.fareLoadingText}>Calculando tarifa...</Text>
                     </View>
                   )}
@@ -5053,7 +5119,7 @@ export default function PassengerHomeScreen() {
                         <Ionicons
                           name={fareBreakdown.usedFallback ? 'pricetag' : 'grid'}
                           size={14}
-                          color="#22c55e"
+                          color="#2FB908"
                         />
                         <Text style={styles.zoneBadgeText}>
                           {fareBreakdown.segmentBreakdown &&
@@ -5077,7 +5143,7 @@ export default function PassengerHomeScreen() {
                         zoneInfo.zoneName !== 'Desconocida' &&
                         fareBreakdown.timeSurcharge?.applied && (
                           <View style={styles.surchargeIndicator}>
-                            <Ionicons name="time" size={12} color="#f59e0b" />
+                            <Ionicons name="time" size={12} color="#F89C0A" />
                             <Text style={styles.surchargeText}>
                               + Recargo de horario (
                               {fareBreakdown.timeSurcharge.type === 'percentage'
@@ -5312,7 +5378,7 @@ export default function PassengerHomeScreen() {
               {/* Policy info */}
               <View style={styles.cancelPolicySection}>
                 <View style={styles.cancelPolicyRow}>
-                  <Ionicons name="checkmark-circle-outline" size={18} color="#22c55e" />
+                  <Ionicons name="checkmark-circle-outline" size={18} color="#2FB908" />
                   <Text style={styles.cancelPolicyRowText}>Gratis durante los primeros 2 minutos</Text>
                 </View>
                 <View style={styles.cancelPolicyRow}>
@@ -5320,7 +5386,7 @@ export default function PassengerHomeScreen() {
                   <Text style={styles.cancelPolicyRowText}>Con tarifa después de 2 minutos</Text>
                 </View>
                 <View style={styles.cancelPolicyRow}>
-                  <Ionicons name="warning-outline" size={18} color="#d97706" />
+                  <Ionicons name="warning-outline" size={18} color="#E08809" />
                   <Text style={styles.cancelPolicyRowText}>50% si el conductor ya llegó al punto</Text>
                 </View>
                 <View style={styles.cancelPolicyRow}>
@@ -5396,7 +5462,7 @@ export default function PassengerHomeScreen() {
                   {/* Payment Header */}
                   <View style={styles.paymentHeader}>
                     <View style={styles.paymentHeaderIcon}>
-                      <Ionicons name="checkmark-circle" size={48} color="#22c55e" />
+                      <Ionicons name="checkmark-circle" size={48} color="#2FB908" />
                     </View>
                     <Text style={styles.paymentTitle}>Viaje Completado</Text>
                     <Text style={styles.paymentSubtitle}>¡Has llegado a tu destino!</Text>
@@ -5458,7 +5524,7 @@ export default function PassengerHomeScreen() {
                         <Ionicons
                           name="cash"
                           size={28}
-                          color={paymentMethod === 'cash' ? '#22c55e' : '#8E8E93'}
+                          color={paymentMethod === 'cash' ? '#2FB908' : '#8E8E93'}
                         />
                       </View>
                       <Text
@@ -5471,7 +5537,7 @@ export default function PassengerHomeScreen() {
                       </Text>
                       {paymentMethod === 'cash' && (
                         <View style={styles.paymentMethodCheckmark}>
-                          <Ionicons name="checkmark-circle" size={24} color="#22c55e" />
+                          <Ionicons name="checkmark-circle" size={24} color="#2FB908" />
                         </View>
                       )}
                     </TouchableOpacity>
@@ -5492,7 +5558,7 @@ export default function PassengerHomeScreen() {
                         <Ionicons
                           name="phone-portrait"
                           size={28}
-                          color={paymentMethod === 'pago_movil' ? '#22c55e' : '#8E8E93'}
+                          color={paymentMethod === 'pago_movil' ? '#2FB908' : '#8E8E93'}
                         />
                       </View>
                       <Text
@@ -5505,7 +5571,7 @@ export default function PassengerHomeScreen() {
                       </Text>
                       {paymentMethod === 'pago_movil' && (
                         <View style={styles.paymentMethodCheckmark}>
-                          <Ionicons name="checkmark-circle" size={24} color="#22c55e" />
+                          <Ionicons name="checkmark-circle" size={24} color="#2FB908" />
                         </View>
                       )}
                     </TouchableOpacity>
@@ -5526,7 +5592,7 @@ export default function PassengerHomeScreen() {
                         <Ionicons
                           name="swap-horizontal"
                           size={28}
-                          color={paymentMethod === 'bank_transfer' ? '#22c55e' : '#8E8E93'}
+                          color={paymentMethod === 'bank_transfer' ? '#2FB908' : '#8E8E93'}
                         />
                       </View>
                       <Text
@@ -5539,7 +5605,7 @@ export default function PassengerHomeScreen() {
                       </Text>
                       {paymentMethod === 'bank_transfer' && (
                         <View style={styles.paymentMethodCheckmark}>
-                          <Ionicons name="checkmark-circle" size={24} color="#22c55e" />
+                          <Ionicons name="checkmark-circle" size={24} color="#2FB908" />
                         </View>
                       )}
                     </TouchableOpacity>
@@ -5569,7 +5635,7 @@ export default function PassengerHomeScreen() {
               ) : (
                 <>
                   <View style={styles.paymentConfirmationContainer}>
-                    <Ionicons name="checkmark-circle" size={80} color="#22c55e" />
+                    <Ionicons name="checkmark-circle" size={80} color="#2FB908" />
                     <Text style={styles.confirmationTitle}>Pago {paymentMethod === 'cash' ? 'Confirmado' : 'Completado'}</Text>
                     <Text style={styles.confirmationMessage}>
                       {paymentMethod === 'cash'
@@ -5612,7 +5678,7 @@ export default function PassengerHomeScreen() {
                     <Ionicons
                       name={star <= driverRating ? 'star' : 'star-outline'}
                       size={36}
-                      color={star <= driverRating ? '#f59e0b' : '#d1d5db'}
+                      color={star <= driverRating ? '#F89C0A' : '#d1d5db'}
                     />
                   </TouchableOpacity>
                 ))}
@@ -5740,7 +5806,7 @@ export default function PassengerHomeScreen() {
                     gap: 12,
                   }}
                 >
-                  <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: '#16a34a', justifyContent: 'center', alignItems: 'center' }}>
+                  <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: '#269006', justifyContent: 'center', alignItems: 'center' }}>
                     <Ionicons name="call" size={20} color="#fff" />
                   </View>
                   <View style={{ flex: 1 }}>
@@ -5923,7 +5989,7 @@ const styles = StyleSheet.create({
     height: 50,
     backgroundColor: '#fff',
     borderWidth: 2,
-    borderColor: '#22c55e',
+    borderColor: '#2FB908',
     borderRadius: 24,
     paddingHorizontal: 20,
     fontSize: 16,
@@ -5931,7 +5997,7 @@ const styles = StyleSheet.create({
   },
   searchButton: {
     marginLeft: 8,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
     borderRadius: 24,
     paddingHorizontal: 20,
     justifyContent: 'center',
@@ -5992,8 +6058,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   vehicleButtonActive: {
-    backgroundColor: '#22c55e',
-    borderColor: '#22c55e',
+    backgroundColor: '#2FB908',
+    borderColor: '#2FB908',
   },
   vehicleButtonText: {
     fontSize: 14,
@@ -6023,8 +6089,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   motoQuantityButtonActive: {
-    backgroundColor: '#22c55e',
-    borderColor: '#22c55e',
+    backgroundColor: '#2FB908',
+    borderColor: '#2FB908',
   },
   motoQuantityIconRow: {
     flexDirection: 'row',
@@ -6218,7 +6284,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#f59e0b',
+    borderColor: '#F89C0A',
     zIndex: 100,
   },
   approximateRouteBannerText: {
@@ -6233,7 +6299,7 @@ const styles = StyleSheet.create({
     top: 60,
     left: 16,
     right: 16,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
     borderRadius: 16,
     padding: 16,
     flexDirection: 'row',
@@ -6287,7 +6353,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fff',
     borderWidth: 2,
-    borderColor: '#22c55e',
+    borderColor: '#2FB908',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 4,
@@ -6346,7 +6412,7 @@ const styles = StyleSheet.create({
   },
   zoneBadgeText: {
     fontSize: 13,
-    color: '#22c55e',
+    color: '#2FB908',
     fontWeight: '600',
   },
   surchargeIndicator: {
@@ -6362,7 +6428,7 @@ const styles = StyleSheet.create({
   },
   surchargeText: {
     fontSize: 12,
-    color: '#f59e0b',
+    color: '#F89C0A',
     fontWeight: '600',
   },
   tripInfoContainer: {
@@ -6398,7 +6464,7 @@ const styles = StyleSheet.create({
   fareAmount: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#22c55e',
+    color: '#2FB908',
   },
   fareBreakdown: {
     borderTopWidth: 1,
@@ -6446,8 +6512,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   requestButtonEnabled: {
-    backgroundColor: '#16a34a',
-    shadowColor: '#16a34a',
+    backgroundColor: '#269006',
+    shadowColor: '#269006',
     shadowOpacity: 0.3,
   },
   requestButtonDisabled: {
@@ -6480,7 +6546,7 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     borderWidth: 2,
-    borderColor: '#22c55e',
+    borderColor: '#2FB908',
   },
   searchingPulseRingInner: {
     position: 'absolute',
@@ -6488,7 +6554,7 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 50,
     borderWidth: 1.5,
-    borderColor: '#4ade80',
+    borderColor: '#4CCB3A',
   },
   searchingIconCircle: {
     width: 72,
@@ -6497,7 +6563,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FDF4',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#22c55e',
+    shadowColor: '#2FB908',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
@@ -6515,7 +6581,7 @@ const styles = StyleSheet.create({
   },
   searchingLoadingFill: {
     height: '100%',
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
     borderRadius: 1.5,
   },
   searchingTitle: {
@@ -6637,7 +6703,7 @@ const styles = StyleSheet.create({
   driverMarker: {
     width: 44,
     height: 44,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
@@ -6732,7 +6798,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
   },
   rideDriverRow: {
     flexDirection: 'row',
@@ -6787,10 +6853,10 @@ const styles = StyleSheet.create({
   rideStatusAccepted: { backgroundColor: '#dbeafe' },
   rideStatusArrived: { backgroundColor: '#fed7aa' },
   rideStatusInProgress: { backgroundColor: '#d1fae5' },
-  rideStatusText: { fontSize: 11, fontWeight: '600', color: '#16a34a' },
+  rideStatusText: { fontSize: 11, fontWeight: '600', color: '#269006' },
   rideStatusTextAccepted: { color: '#2563eb' },
   rideStatusTextArrived: { color: '#ea580c' },
-  rideStatusTextInProgress: { color: '#059669' },
+  rideStatusTextInProgress: { color: '#2FB908' },
   rideEtaStrip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -6820,7 +6886,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
     paddingVertical: 10,
     borderRadius: 8,
     gap: 6,
@@ -6888,12 +6954,12 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 32,
     overflow: 'hidden',
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
   },
   driverAvatarPlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -6940,7 +7006,7 @@ const styles = StyleSheet.create({
   statusBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#16a34a',
+    color: '#269006',
   },
   statusBadgeTextAccepted: {
     color: '#2563eb',
@@ -7032,7 +7098,7 @@ const styles = StyleSheet.create({
   etaValueText: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#16a34a',
+    color: '#269006',
   },
   actionButtonsSection: {
     flexDirection: 'row',
@@ -7043,7 +7109,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
     paddingVertical: 14,
     paddingHorizontal: 12,
     gap: 8,
@@ -7360,7 +7426,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
     borderWidth: 2,
-    borderColor: '#22c55e',
+    borderColor: '#2FB908',
   },
   finalFareLabel: {
     fontSize: 16,
@@ -7370,7 +7436,7 @@ const styles = StyleSheet.create({
   finalFareAmount: {
     fontSize: 36,
     fontWeight: 'bold',
-    color: '#22c55e',
+    color: '#2FB908',
   },
   paymentBreakdown: {
     backgroundColor: '#F5F5F5',
@@ -7415,7 +7481,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fff',
     borderWidth: 2,
-    borderColor: '#22c55e',
+    borderColor: '#2FB908',
     borderRadius: 12,
     padding: 16,
   },
@@ -7451,8 +7517,8 @@ const styles = StyleSheet.create({
   },
   paymentMethodOptionSelected: {
     backgroundColor: '#F0FFF4',
-    borderColor: '#22c55e',
-    shadowColor: '#22c55e',
+    borderColor: '#2FB908',
+    shadowColor: '#2FB908',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -7470,7 +7536,7 @@ const styles = StyleSheet.create({
     borderColor: '#E0E0E0',
   },
   paymentMethodIconCircleSelected: {
-    borderColor: '#22c55e',
+    borderColor: '#2FB908',
     backgroundColor: '#F0FFF4',
   },
   paymentMethodOptionText: {
@@ -7488,7 +7554,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   paymentMethodOptionTextSelected: {
-    color: '#22c55e',
+    color: '#2FB908',
     fontWeight: '700',
   },
   paymentMethodCheckmark: {
@@ -7513,7 +7579,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
    processPaymentButton: {
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
     borderRadius: 16,
     paddingVertical: 16,
     flexDirection: 'row',
@@ -7521,7 +7587,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
     marginBottom: 8,
-    shadowColor: '#22c55e',
+    shadowColor: '#2FB908',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -7549,7 +7615,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
     borderWidth: 3,
-    borderColor: '#22c55e',
+    borderColor: '#2FB908',
   },
   successIcon: {
     fontSize: 48,
@@ -7557,7 +7623,7 @@ const styles = StyleSheet.create({
   confirmationTitle: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#22c55e',
+    color: '#2FB908',
     marginBottom: 12,
   },
   confirmationMessage: {
@@ -7583,7 +7649,7 @@ const styles = StyleSheet.create({
   confirmationFareAmount: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#22c55e',
+    color: '#2FB908',
   },
   confirmationFareDual: {
     fontSize: 14,
@@ -7599,13 +7665,13 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   continueButton: {
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
     borderRadius: 24,
     paddingVertical: 16,
     paddingHorizontal: 48,
     alignItems: 'center',
     width: '100%',
-    shadowColor: '#22c55e',
+    shadowColor: '#2FB908',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -7648,7 +7714,7 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#f59e0b',
+    color: '#F89C0A',
     textAlign: 'center',
     marginBottom: 16,
   },
@@ -7683,7 +7749,7 @@ const styles = StyleSheet.create({
   },
   ratingBtnSubmit: {
     flex: 2,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
     borderRadius: 10,
     paddingVertical: 11,
     alignItems: 'center',
@@ -7722,13 +7788,13 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: '#22c55e',
+    borderColor: '#2FB908',
   },
   ratingDriverAvatar: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -7783,7 +7849,7 @@ const styles = StyleSheet.create({
   commentInput: {
     backgroundColor: '#fff',
     borderWidth: 2,
-    borderColor: '#22c55e',
+    borderColor: '#2FB908',
     borderRadius: 12,
     padding: 12,
     fontSize: 16,
@@ -7814,11 +7880,11 @@ const styles = StyleSheet.create({
   },
   submitRatingButton: {
     flex: 2,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
     borderRadius: 24,
     paddingVertical: 14,
     alignItems: 'center',
-    shadowColor: '#22c55e',
+    shadowColor: '#2FB908',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -7931,7 +7997,7 @@ const styles = StyleSheet.create({
     right: 16,
     width: 34,
     height: 34,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
     borderRadius: 17,
     justifyContent: 'center',
     alignItems: 'center',
@@ -7957,7 +8023,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f0fdf4', // green-50
     borderWidth: 1.5,
-    borderColor: '#22c55e', // green-500 — matches system theme
+    borderColor: '#2FB908', // green-500 — matches system theme
     borderRadius: 16,
     paddingVertical: 6,
     paddingHorizontal: 10,
@@ -7967,7 +8033,7 @@ const styles = StyleSheet.create({
   addPointButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#16a34a', // green-600 — matches system theme
+    color: '#269006', // green-600 — matches system theme
   },
   secondPickupIconContainer: {
     width: 36,
@@ -8017,7 +8083,7 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2FB908',
     borderRadius: 4,
   },
   progressText: {

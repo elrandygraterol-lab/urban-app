@@ -47,7 +47,16 @@ export default function ForgotPasswordScreen() {
         'Se ha enviado un código de verificación a tu email. Por favor revisa tu bandeja de entrada.',
         'Éxito',
         undefined,
-        { label: 'OK', onPress: () => { router.replace({ pathname: '/(auth)/reset-password' as any, params: { email: email.trim() } }); dismissStatus(); } }
+        {
+          label: 'OK',
+          onPress: () => {
+            router.replace({
+              pathname: '/(auth)/reset-password' as any,
+              params: { email: email.trim() },
+            });
+            dismissStatus();
+          },
+        }
       );
     } catch (error: any) {
       const errorMessage =
@@ -106,12 +115,19 @@ export default function ForgotPasswordScreen() {
               <View style={styles.formHeader}>
                 <View style={styles.formTitleAccent} />
                 <Text style={styles.formTitle}>Recuperar contraseña</Text>
-                <Text style={styles.formSubtitle}>Ingresa tu email y te enviaremos un enlace</Text>
+                <Text style={styles.formSubtitle}>
+                  Ingresa tu email y te enviaremos un código de verificación
+                </Text>
               </View>
               <View style={styles.inputWrapper}>
                 <Text style={styles.inputLabel}>Email</Text>
                 <View style={styles.inputBox}>
-                  <Ionicons name="mail-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
+                  <Ionicons
+                    name="mail-outline"
+                    size={18}
+                    color="#94a3b8"
+                    style={styles.inputIcon}
+                  />
                   <TextInput
                     style={styles.input}
                     placeholder="ejemplo@correo.com"
@@ -134,7 +150,7 @@ export default function ForgotPasswordScreen() {
                 {isLoading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.primaryBtnText}>Enviar enlace</Text>
+                  <Text style={styles.primaryBtnText}>Enviar código</Text>
                 )}
               </TouchableOpacity>
 
@@ -143,7 +159,7 @@ export default function ForgotPasswordScreen() {
                 onPress={() => router.push('/(auth)/reset-password' as any)}
                 disabled={isLoading}
               >
-                <Ionicons name="key-outline" size={16} color="#059669" />
+                <Ionicons name="key-outline" size={16} color="#2FB908" />
                 <Text style={styles.linkBtnText}>Ya tengo un código de recuperación</Text>
               </TouchableOpacity>
 
@@ -152,7 +168,7 @@ export default function ForgotPasswordScreen() {
                 onPress={() => router.push('/(auth)/login' as any)}
                 disabled={isLoading}
               >
-                <Ionicons name="arrow-back-outline" size={16} color="#059669" />
+                <Ionicons name="arrow-back-outline" size={16} color="#2FB908" />
                 <Text style={styles.linkBtnText}>Volver al inicio de sesión</Text>
               </TouchableOpacity>
             </View>
@@ -311,7 +327,7 @@ const styles = StyleSheet.create({
   formTitleAccent: {
     width: 40,
     height: 4,
-    backgroundColor: '#059669',
+    backgroundColor: '#2FB908',
     borderRadius: 2,
     marginBottom: 16,
   },
@@ -370,12 +386,12 @@ const styles = StyleSheet.create({
   /* Primary btn */
   primaryBtn: {
     height: 54,
-    backgroundColor: '#059669',
+    backgroundColor: '#2FB908',
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 18,
-    shadowColor: '#059669',
+    shadowColor: '#2FB908',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
@@ -400,7 +416,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   linkBtnText: {
-    color: '#059669',
+    color: '#2FB908',
     fontSize: 14,
     fontWeight: '600',
   },

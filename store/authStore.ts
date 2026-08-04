@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
+import { getActivePushToken, setActivePushToken } from '@/services/api/notification';
 
 export type UserRole = 'passenger' | 'driver' | 'owner' | null;
 
@@ -262,6 +263,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    const pushToken = getActivePushToken();
+    setActivePushToken(null);
+
+    if (pushToken) {
+      try {
+        const authToken = await SecureStore.getItemAsync(TOKEN_KEY);
+        if (authToken) {
+          const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+          await axios.delete(`${apiUrl}/api/notifications/device/${encodeURIComponent(pushToken)}`, {
+            headers: { Authorization: `Bearer ${authToken}` },
+            timeout: 5000,
+          });
+        }
+      } catch {
+        // Best-effort: no bloquear el logout si el unregister falla
+      }
+    }
+
     await SecureStore.deleteItemAsync(TOKEN_KEY);
     await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
     await SecureStore.deleteItemAsync(USER_KEY);

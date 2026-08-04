@@ -212,7 +212,7 @@ export default function PassengerHistoryScreen() {
             key={star}
             name={star <= rating ? 'star' : 'star-outline'}
             size={11}
-            color={star <= rating ? '#f59e0b' : '#d1d5db'}
+            color={star <= rating ? '#F89C0A' : '#d1d5db'}
           />
         ))}
       </View>
@@ -281,7 +281,7 @@ export default function PassengerHistoryScreen() {
         <View style={styles.cardFooterRight}>
           {ride.driver && (
             <View style={styles.driverRating}>
-              <Ionicons name="star" size={11} color="#f59e0b" />
+              <Ionicons name="star" size={11} color="#F89C0A" />
               <Text style={styles.driverRatingText}>{(ride.driver.averageRating ?? 0).toFixed(1)}</Text>
             </View>
           )}
@@ -415,7 +415,7 @@ export default function PassengerHistoryScreen() {
                     <Text style={styles.detailDriverDetail}>{selectedRide.driver.licensePlate}</Text>
                   </View>
                   <View style={styles.detailDriverRating}>
-                    <Ionicons name="star" size={14} color="#f59e0b" />
+                    <Ionicons name="star" size={14} color="#F89C0A" />
                     <Text style={styles.detailDriverRatingText}>
                       {(selectedRide.driver.averageRating ?? 0).toFixed(1)} promedio
                     </Text>
@@ -426,7 +426,7 @@ export default function PassengerHistoryScreen() {
               {selectedRide.rating && (
                 <View style={styles.detailCard}>
                   <View style={styles.detailRow}>
-                    <Ionicons name="star" size={15} color="#f59e0b" />
+                    <Ionicons name="star" size={15} color="#F89C0A" />
                     <Text style={styles.detailRowLabel}>Tu Calificación</Text>
                   </View>
                   <View style={styles.detailMyRating}>
@@ -435,7 +435,7 @@ export default function PassengerHistoryScreen() {
                         key={star}
                         name={star <= selectedRide.rating!.rating ? 'star' : 'star-outline'}
                         size={22}
-                        color={star <= selectedRide.rating!.rating ? '#f59e0b' : '#d1d5db'}
+                        color={star <= selectedRide.rating!.rating ? '#F89C0A' : '#d1d5db'}
                       />
                     ))}
                   </View>
@@ -457,7 +457,7 @@ export default function PassengerHistoryScreen() {
                         key={star}
                         name={star <= selectedRide.conductorRating!.rating ? 'star' : 'star-outline'}
                         size={22}
-                        color={star <= selectedRide.conductorRating!.rating ? '#f59e0b' : '#d1d5db'}
+                        color={star <= selectedRide.conductorRating!.rating ? '#F89C0A' : '#d1d5db'}
                       />
                     ))}
                   </View>
@@ -742,7 +742,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0fdf4',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#86efac',
+    borderColor: '#9EF08A',
   },
   activeFiltersText: {
     fontSize: 12,

@@ -62,10 +62,7 @@ export const rideAPI = {
     }
   },
 
-  cancelRide: async (
-    rideId: string,
-    data?: CancelRideRequest
-  ): Promise<CancelRideResponse> => {
+  cancelRide: async (rideId: string, data?: CancelRideRequest): Promise<CancelRideResponse> => {
     try {
       const response = await api.post<CancelRideResponse>(
         `/api/rides/${rideId}/cancel-with-policy`,
@@ -89,7 +86,14 @@ export const rideAPI = {
         if (error.response?.status === 404) {
           throw new Error('Ride not found');
         }
-        throw new Error(error.response?.data?.error?.message || 'Failed to cancel ride');
+        const serverMessage = error.response?.data?.error?.message || '';
+        // Defensive: if the ride was already cancelled (e.g. by the system
+        // auto-cancel timeout), treat the request as a successful no-op
+        // instead of surfacing an error.
+        if (serverMessage.includes('estado: cancelled')) {
+          return { success: true, alreadyCancelled: true } as unknown as CancelRideResponse;
+        }
+        throw new Error(serverMessage || 'Failed to cancel ride');
       }
       throw error;
     }
@@ -99,17 +103,24 @@ export const rideAPI = {
 
   getActiveRides: () => api.get('/api/rides/active'),
 
-  getRideHistory: (params?: { startDate?: string; endDate?: string; page?: string; limit?: string }) =>
-    api.get('/api/rides/history', { params }),
+  getRideHistory: (params?: {
+    startDate?: string;
+    endDate?: string;
+    page?: string;
+    limit?: string;
+  }) => api.get('/api/rides/history', { params }),
 
   updateLocation: (rideId: string, latitude: number, longitude: number, accuracy?: number) =>
     api.post(`/api/rides/${rideId}/location`, { latitude, longitude, accuracy }),
 
-  changePaymentMethod: (rideId: string, data: {
-    mode: 'pago_movil';
-    pagoMovilReference: string;
-    pagoMovilAmount: number;
-  }) => api.patch(`/api/rides/${rideId}/payment-method`, data),
+  changePaymentMethod: (
+    rideId: string,
+    data: {
+      mode: 'pago_movil';
+      pagoMovilReference: string;
+      pagoMovilAmount: number;
+    }
+  ) => api.patch(`/api/rides/${rideId}/payment-method`, data),
 
   trackDelegatedRide: (rideId: string) => api.get(`/api/rides/delegate/${rideId}/track`),
 

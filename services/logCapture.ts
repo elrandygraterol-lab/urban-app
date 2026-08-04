@@ -104,8 +104,19 @@ function formatArg(arg: unknown): string {
   }
 }
 
+// Messages known to be harmless but noisy (e.g. react-navigation warnings during
+// initial redirect) — filtered out so they don't pollute the buffer or the backend.
+const IGNORED_LOG_PATTERNS = [
+  /Can't perform a React state update on a component that hasn't mounted yet/,
+];
+
+function isIgnorableLog(message: string): boolean {
+  return IGNORED_LOG_PATTERNS.some(pattern => pattern.test(message));
+}
+
 function addLogEntry(level: LogLevel, args: unknown[]): void {
   const message = args.map(formatArg).join(' ');
+  if (isIgnorableLog(message)) return;
   const source = detectSource(message);
   const now = new Date();
   const entry: LogEntry = {

@@ -100,7 +100,7 @@ export function useRideTracking(rideId: string | null, rideStatus: string) {
           foregroundService: {
             notificationTitle: 'UrbanTaxi SJ',
             notificationBody: 'Compartiendo tu ubicación con el pasajero',
-            notificationColor: '#22c55e',
+            notificationColor: '#2FB908',
           },
         } as any,
         (location) => {

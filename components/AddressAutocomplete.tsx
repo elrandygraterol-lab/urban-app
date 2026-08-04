@@ -79,6 +79,7 @@ export default function AddressAutocomplete({
     // Skip search if value was just set by selection (avoid flicker)
     if (justSelectedRef.current) {
       justSelectedRef.current = false;
+      lastSearchValue.current = value;
       return;
     }
 

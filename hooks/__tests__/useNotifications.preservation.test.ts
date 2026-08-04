@@ -355,7 +355,7 @@ describe('Preservation Property Tests: Existing Notification Functionality', () 
           name: 'default',
           importance: 5, // AndroidImportance.MAX
           vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#22c55e',
+          lightColor: '#2FB908',
         });
 
         // PRESERVATION: Channel configuration should match current settings
@@ -365,7 +365,7 @@ describe('Preservation Property Tests: Existing Notification Functionality', () 
             name: 'default',
             importance: 5,
             vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#22c55e',
+            lightColor: '#2FB908',
           })
         );
       }),

@@ -292,7 +292,7 @@ function DriverEarningsScreenContent() {
 
           {/* Balance Card — Credit Card Style */}
           <LinearGradient
-            colors={['#10b981', '#059669', '#047857']}
+            colors={['#3DD10A', '#2FB908', '#269006']}
             style={styles.balanceCard}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -686,7 +686,7 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 18,
     minHeight: 200,
-    shadowColor: '#059669',
+    shadowColor: '#2FB908',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 16,

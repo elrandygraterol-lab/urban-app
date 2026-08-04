@@ -60,7 +60,7 @@ export const PickupIcon: React.FC<{ size?: number }> = ({ size = 36 }) => (
 );
 
 export const DropoffIcon: React.FC<{ size?: number }> = ({ size = 36 }) => (
-  <CircleMarker size={size} color="#22c55e">
+  <CircleMarker size={size} color="#2FB908">
     <Ionicons name="location" size={size * 0.5} color="#FFFFFF" />
   </CircleMarker>
 );
@@ -76,7 +76,7 @@ export const SecondPickupIcon: React.FC<{ size?: number; color?: string }> = ({
 
 export const SecondDropoffIcon: React.FC<{ size?: number; color?: string }> = ({
   size = 32,
-  color = '#22c55e',
+  color = '#2FB908',
 }) => (
   <CircleMarker size={size} color={color}>
     <Ionicons name="flag" size={size * 0.5} color="#FFFFFF" />

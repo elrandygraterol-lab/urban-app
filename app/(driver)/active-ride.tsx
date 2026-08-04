@@ -17,8 +17,7 @@ import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useDriverStore } from '@/store/driverStore';
 import Constants from 'expo-constants';
-import api, { getAdaptiveTimeout } from '@/services/api';
-import { rideAPI } from '@/services/api';
+import api, { getAdaptiveTimeout, rideAPI } from '@/services/api';
 import { getRoute } from '@/services/mapsService';
 import { getSocket, onPaymentConfirmed } from '@/services/socket';
 import { useSound } from '@/hooks/useSound';
@@ -145,7 +144,7 @@ export default function ActiveRideScreen() {
   const rideRef = useRef<Ride | null>(null); // Always-current ride for GPS callback
   const locationRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const prevDriverPosRef = useRef<{ latitude: number; longitude: number } | null>(null);
-  const [driverHeading, setDriverHeading] = useState<number>(0);
+  const driverHeadingRef = useRef<number>(0);
   const locationBufferRef = useRef<Array<{ latitude: number; longitude: number; heading: number | null }>>([]);
   const completionSoundPlayedRef = useRef(false);
   const driverInitiatedCancelRef = useRef(false);
@@ -387,6 +386,7 @@ export default function ActiveRideScreen() {
   // State to track if user has manually interacted with map
   const [userInteractedWithMap, setUserInteractedWithMap] = useState(false);
   const initialMapSetupRef = useRef(true);
+  const prevRideStatusRef = useRef<string | undefined>(undefined);
 
   // GPS tracking: smoothly follow driver on map during navigation
   // Only follows when the user has NOT manually interacted with the map.
@@ -406,6 +406,27 @@ export default function ActiveRideScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location?.latitude, location?.longitude, userInteractedWithMap]);
+
+  // Auto-center + point like the passenger ONLY when destination navigation starts.
+  // Without this, transitioning to `in_progress` doesn't recenter the camera if the
+  // user had interacted with the map (the follow effect above isn't keyed on ride.status).
+  useEffect(() => {
+    const prev = prevRideStatusRef.current;
+    prevRideStatusRef.current = ride?.status;
+
+    if ((!prev || prev !== 'in_progress') && ride?.status === 'in_progress') {
+      if (location && mapRef.current) {
+        setUserInteractedWithMap(false);
+        programmaticMoveCountRef.current += 1;
+        animateNavigationCamera(mapRef, location, routeBearing || heading || 0, {
+          duration: 500,
+          zoom: 17,
+          pitch: 50,
+        });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ride?.status, location?.latitude, location?.longitude]);
 
   useEffect(() => {
     if (!location || routeCoordinates.length < 2) {
@@ -605,7 +626,7 @@ export default function ActiveRideScreen() {
             const prev = prevDriverPosRef.current;
             if (prev.latitude !== newCoords.latitude || prev.longitude !== newCoords.longitude) {
               const brng = computeBearing(prev, newCoords);
-              setDriverHeading(brng);
+              driverHeadingRef.current = brng;
             }
           }
           prevDriverPosRef.current = newCoords;
@@ -958,6 +979,8 @@ export default function ActiveRideScreen() {
       cancellationFee: number;
       cancelledAt: string;
       timestamp: string;
+      currency?: string;
+      driverCompensation?: number;
     }) => {
       console.log('[ACTIVE_RIDE] ========================================');
       console.log('[ACTIVE_RIDE] 🚫 RIDE CANCELLED EVENT RECEIVED');
@@ -998,9 +1021,17 @@ export default function ActiveRideScreen() {
         message += `\n\nMotivo: ${data.cancellationReason}`;
       }
 
-      // Add compensation information if applicable
-      if (data.cancellationFee > 0) {
-        message += `\n\nCompensación recibida: Bs. ${data.cancellationFee.toFixed(2)}`;
+      // Add compensation info if the passenger cancelled (driver keeps net amount)
+      if (data.cancelledBy === 'passenger') {
+        const compensation = data.driverCompensation ?? data.cancellationFee ?? 0;
+        if (compensation > 0) {
+          const currency = data.currency || 'VES';
+          const symbol = currency === 'USD' ? '$' : 'Bs.';
+          const dualText = currency === 'USD'
+            ? `${convertToBs(compensation) !== '—' ? ` (≈ Bs. ${convertToBs(compensation)})` : ''}`
+            : `${convertToUsd(compensation) !== '—' ? ` (≈ $ ${convertToUsd(compensation)})` : ''}`;
+          message += `\n\nCompensación recibida: ${symbol} ${compensation.toFixed(2)}${dualText}`;
+        }
       }
 
       // Restore driver availability
@@ -1245,15 +1276,6 @@ export default function ActiveRideScreen() {
       }
     }).catch(() => {});
   });
-
-  const confirmCashAndStartRide = async () => {
-    if (!rideRef.current) return;
-    if (isUpdatingStatus) return;
-    setIsUpdatingStatus(true);
-    setIsPaymentConfirmed(true);
-    console.log('[ACTIVE_RIDE] Cash confirmed by driver, starting ride');
-    await updateRideStatus('in_progress');
-  };
 
   const updateRideStatus = async (newStatus: string) => {
     if (isUpdatingStatus) return;
@@ -1797,7 +1819,7 @@ export default function ActiveRideScreen() {
               strokeColor={
                 isNavigatingToPickup
                   ? '#FF8C00' // Orange for going to pickup
-                  : '#22c55e' // Green for going to destination
+                  : '#2FB908' // Green for going to destination
               }
               strokeWidth={isApproximateRoute ? 3 : 5}
               lineCap="round"
@@ -1865,7 +1887,7 @@ export default function ActiveRideScreen() {
               width: 8,
               height: 8,
               borderRadius: 4,
-              backgroundColor: '#22c55e',
+              backgroundColor: '#2FB908',
               marginRight: 5,
             }}
           />
@@ -1990,7 +2012,7 @@ export default function ActiveRideScreen() {
             backgroundColor:
               ride.status === 'accepted' || (ride.status === 'arrived' && !isPaymentConfirmed)
                 ? '#FF8C00' // Orange for going to pickup
-                : '#22c55e', // Green for going to destination
+                : '#2FB908', // Green for going to destination
             paddingHorizontal: 16,
             paddingVertical: 10,
             borderRadius: 25,
@@ -2088,7 +2110,7 @@ export default function ActiveRideScreen() {
                   backgroundColor:
                     ride.status === 'accepted' || (ride.status === 'arrived' && !isPaymentConfirmed)
                       ? '#FF8C00'
-                      : '#22c55e',
+                      : '#2FB908',
                   width: 48,
                   height: 48,
                   borderRadius: 24,
@@ -2205,7 +2227,7 @@ export default function ActiveRideScreen() {
                     </Text>
                     {ride.passengerRating != null && (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 }}>
-                        <Ionicons name="star" size={12} color="#f59e0b" />
+                        <Ionicons name="star" size={12} color="#F89C0A" />
                         <Text style={{ fontSize: 12, color: '#6b7280', fontWeight: '500' }}>
                           {ride.passengerRating.toFixed(1)}
                         </Text>
@@ -2232,7 +2254,7 @@ export default function ActiveRideScreen() {
                   activeOpacity={0.8}
                   style={{
                     flex: 1,
-                    backgroundColor: ride.isDelegated || ride.status === 'in_progress' ? '#e5e7eb' : '#16a34a',
+                    backgroundColor: ride.isDelegated || ride.status === 'in_progress' ? '#e5e7eb' : '#269006',
                     paddingVertical: 10,
                     borderRadius: 10,
                     flexDirection: 'row',
@@ -2364,7 +2386,7 @@ export default function ActiveRideScreen() {
                       alignItems: 'center',
                     }}
                   >
-                    <Ionicons name="flag" size={18} color="#22c55e" />
+                    <Ionicons name="flag" size={18} color="#2FB908" />
                   </View>
                   <Text
                     style={{
@@ -2414,7 +2436,7 @@ export default function ActiveRideScreen() {
                   >
                     {formatCurrency(ride.estimatedFare, ride.currency || 'VES')}
                   </Text>
-                  <Text style={{ fontSize: 13, color: '#16a34a', fontWeight: '600' }}>
+                  <Text style={{ fontSize: 13, color: '#269006', fontWeight: '600' }}>
                     {ride.currency === 'USD'
                       ? `Bs. ${convertToBs(ride.estimatedFare)}`
                       : `$ ${convertToUsd(ride.estimatedFare)}`}
@@ -2450,14 +2472,14 @@ export default function ActiveRideScreen() {
                   size={16}
                   color={passengerPaymentMode === 'pago_movil' ? '#3b82f6'
                     : passengerPaymentMode === 'cash' ? colors.mediumGray
-                    : '#d97706'}
+                    : '#E08809'}
                 />
                 <Text
                   style={{
                     fontSize: 13,
                     color: passengerPaymentMode === 'pago_movil' ? '#3b82f6'
                       : passengerPaymentMode === 'cash' ? colors.mediumGray
-                      : '#d97706',
+                      : '#E08809',
                     fontWeight: '500',
                   }}
                 >
@@ -2528,16 +2550,16 @@ export default function ActiveRideScreen() {
                         {passengerPaymentMode === 'pago_movil'
                           ? 'El pasajero debe confirmar el pago móvil antes de iniciar el viaje'
                           : passengerPaymentMode === 'cash'
-                          ? 'Confirma que recibiste el efectivo del pasajero para iniciar el viaje'
+                          ? 'El pasajero debe confirmar el pago en efectivo en su app para iniciar el viaje'
                           : 'El pasajero aún no ha seleccionado el método de pago'}
                       </Text>
                     </View>
                   </View>
                 ) : (
                   <View style={{ backgroundColor: '#f0fdf4', padding: 14, borderRadius: 12, marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <Ionicons name="checkmark-circle" size={20} color="#16a34a" />
+                    <Ionicons name="checkmark-circle" size={20} color="#269006" />
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#16a34a', marginBottom: 2 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#269006', marginBottom: 2 }}>
                         Pago confirmado
                       </Text>
                       <Text style={{ fontSize: 12, color: '#4b5563' }}>
@@ -2550,22 +2572,15 @@ export default function ActiveRideScreen() {
                 {/* Buttons row */}
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TouchableOpacity
-                    onPress={() => {
-                      // For cash: auto-confirm payment, then start ride
-                      if (passengerPaymentMode === 'cash' && !isPaymentConfirmed) {
-                        confirmCashAndStartRide();
-                      } else {
-                        updateRideStatus('in_progress');
-                      }
-                    }}
-                    disabled={passengerPaymentMode !== 'cash' && (!isPaymentConfirmed || isUpdatingStatus)}
+                    onPress={() => updateRideStatus('in_progress')}
+                    disabled={!isPaymentConfirmed || isUpdatingStatus}
                     style={{
                       flex: 2,
-                      backgroundColor: passengerPaymentMode === 'cash' || isPaymentConfirmed ? colors.primary : '#D1D5DB',
+                      backgroundColor: isPaymentConfirmed ? colors.primary : '#D1D5DB',
                       paddingVertical: 12,
                       borderRadius: 10,
                       alignItems: 'center',
-                      opacity: passengerPaymentMode === 'cash' || isPaymentConfirmed ? 1 : 0.6,
+                      opacity: isPaymentConfirmed ? 1 : 0.6,
                       flexDirection: 'row',
                       justifyContent: 'center',
                       gap: 6,
@@ -2575,12 +2590,12 @@ export default function ActiveRideScreen() {
                       <ActivityIndicator size="small" color="#fff" />
                     ) : (
                       <Ionicons
-                        name={passengerPaymentMode === 'cash' || isPaymentConfirmed ? 'play-circle' : 'time-outline'}
+                        name={isPaymentConfirmed ? 'play-circle' : 'time-outline'}
                         size={18} color="#fff"
                       />
                     )}
                     <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>
-                      {isUpdatingStatus ? 'Iniciando...' : passengerPaymentMode === 'cash' || isPaymentConfirmed ? 'Iniciar' : 'Esperando Pago'}
+                      {isUpdatingStatus ? 'Iniciando...' : isPaymentConfirmed ? 'Iniciar' : 'Esperando Pago'}
                     </Text>
                   </TouchableOpacity>
 
@@ -2889,13 +2904,13 @@ export default function ActiveRideScreen() {
                   <Ionicons
                     name={star <= passengerRating ? 'star' : 'star-outline'}
                     size={36}
-                    color={star <= passengerRating ? '#f59e0b' : '#d1d5db'}
+                    color={star <= passengerRating ? '#F89C0A' : '#d1d5db'}
                   />
                 </TouchableOpacity>
               ))}
             </View>
             {passengerRating > 0 && (
-              <Text style={{ fontSize: 13, fontWeight: '600', color: '#f59e0b', textAlign: 'center', marginBottom: 16 }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#F89C0A', textAlign: 'center', marginBottom: 16 }}>
                 {passengerRating === 1 && 'Muy malo'}
                 {passengerRating === 2 && 'Malo'}
                 {passengerRating === 3 && 'Regular'}
@@ -2925,7 +2940,7 @@ export default function ActiveRideScreen() {
                 <Text style={{ color: '#6b7280', fontSize: 14, fontWeight: '600' }}>Omitir</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={{ flex: 2, backgroundColor: '#22c55e', borderRadius: 10, paddingVertical: 11, alignItems: 'center', opacity: passengerRating === 0 || isSubmittingRating ? 0.5 : 1 }}
+                style={{ flex: 2, backgroundColor: '#2FB908', borderRadius: 10, paddingVertical: 11, alignItems: 'center', opacity: passengerRating === 0 || isSubmittingRating ? 0.5 : 1 }}
                 onPress={handleSubmitRating}
                 disabled={passengerRating === 0 || isSubmittingRating}
               >
@@ -2972,7 +2987,7 @@ export default function ActiveRideScreen() {
                 gap: 12,
               }}
             >
-              <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: '#16a34a', justifyContent: 'center', alignItems: 'center' }}>
+              <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: '#269006', justifyContent: 'center', alignItems: 'center' }}>
                 <Ionicons name="call" size={20} color="#fff" />
               </View>
               <View style={{ flex: 1 }}>
@@ -3028,7 +3043,7 @@ export default function ActiveRideScreen() {
         <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
           <View style={{ backgroundColor: '#fff', borderRadius: 20, padding: 24, width: '100%', maxWidth: 340, alignItems: 'center' }}>
             <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#f0fdf4', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
-              <Ionicons name="location-outline" size={28} color="#22c55e" />
+              <Ionicons name="location-outline" size={28} color="#2FB908" />
             </View>
 
             <Text style={{ fontSize: 19, fontWeight: '700', color: '#1f2937', textAlign: 'center', marginBottom: 12 }}>
@@ -3043,13 +3058,13 @@ export default function ActiveRideScreen() {
 
             <View style={{ width: '100%', marginBottom: 16 }}>
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
-                <Ionicons name="checkmark-circle" size={18} color="#22c55e" style={{ marginRight: 8, marginTop: 2 }} />
+                <Ionicons name="checkmark-circle" size={18} color="#2FB908" style={{ marginRight: 8, marginTop: 2 }} />
                 <Text style={{ fontSize: 14, color: '#374151', flex: 1 }}>
                   Compartir tu posición en tiempo real con el pasajero durante el viaje
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                <Ionicons name="checkmark-circle" size={18} color="#22c55e" style={{ marginRight: 8, marginTop: 2 }} />
+                <Ionicons name="checkmark-circle" size={18} color="#2FB908" style={{ marginRight: 8, marginTop: 2 }} />
                 <Text style={{ fontSize: 14, color: '#374151', flex: 1 }}>
                   Garantizar un servicio seguro y preciso
                 </Text>
@@ -3072,7 +3087,7 @@ export default function ActiveRideScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={confirmBackgroundDisclosure}
-                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center', backgroundColor: '#22c55e' }}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center', backgroundColor: '#2FB908' }}
               >
                 <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>Aceptar</Text>
               </TouchableOpacity>

@@ -53,17 +53,17 @@ interface NotificationConfig {
 const NOTIFICATION_CONFIG: Record<NotificationType, NotificationConfig> = {
   ride_request: {
     icon: 'car-sport',
-    iconColor: '#22c55e',
+    iconColor: '#2FB908',
     bgColor: '#f0fdf4',
     borderColor: '#bbf7d0',
-    accentColor: '#16a34a',
+    accentColor: '#269006',
   },
   ride_accepted: {
     icon: 'car-sport',
-    iconColor: '#22c55e',
+    iconColor: '#2FB908',
     bgColor: '#f0fdf4',
     borderColor: '#bbf7d0',
-    accentColor: '#16a34a',
+    accentColor: '#269006',
   },
   ride_cancelled: {
     icon: 'close-circle',
@@ -81,24 +81,24 @@ const NOTIFICATION_CONFIG: Record<NotificationType, NotificationConfig> = {
   },
   ride_completed: {
     icon: 'flag',
-    iconColor: '#22c55e',
+    iconColor: '#2FB908',
     bgColor: '#f0fdf4',
     borderColor: '#bbf7d0',
-    accentColor: '#16a34a',
+    accentColor: '#269006',
   },
   driver_arrived: {
     icon: 'location',
-    iconColor: '#f59e0b',
+    iconColor: '#F89C0A',
     bgColor: '#fffbeb',
     borderColor: '#fde68a',
-    accentColor: '#d97706',
+    accentColor: '#E08809',
   },
   payment_completed: {
     icon: 'cash',
-    iconColor: '#22c55e',
+    iconColor: '#2FB908',
     bgColor: '#f0fdf4',
     borderColor: '#bbf7d0',
-    accentColor: '#16a34a',
+    accentColor: '#269006',
   },
   payment_failed: {
     icon: 'card',
@@ -116,10 +116,10 @@ const NOTIFICATION_CONFIG: Record<NotificationType, NotificationConfig> = {
   },
   store_approved: {
     icon: 'storefront',
-    iconColor: '#22c55e',
+    iconColor: '#2FB908',
     bgColor: '#f0fdf4',
     borderColor: '#bbf7d0',
-    accentColor: '#16a34a',
+    accentColor: '#269006',
   },
   store_rejected: {
     icon: 'storefront',
@@ -130,10 +130,10 @@ const NOTIFICATION_CONFIG: Record<NotificationType, NotificationConfig> = {
   },
   new_review: {
     icon: 'star',
-    iconColor: '#f59e0b',
+    iconColor: '#F89C0A',
     bgColor: '#fffbeb',
     borderColor: '#fde68a',
-    accentColor: '#d97706',
+    accentColor: '#E08809',
   },
   review_reply: {
     icon: 'chatbubble',
@@ -144,17 +144,17 @@ const NOTIFICATION_CONFIG: Record<NotificationType, NotificationConfig> = {
   },
   success: {
     icon: 'checkmark-circle',
-    iconColor: '#22c55e',
+    iconColor: '#2FB908',
     bgColor: '#f0fdf4',
     borderColor: '#bbf7d0',
-    accentColor: '#16a34a',
+    accentColor: '#269006',
   },
   warning: {
     icon: 'warning',
-    iconColor: '#f59e0b',
+    iconColor: '#F89C0A',
     bgColor: '#fffbeb',
     borderColor: '#fde68a',
-    accentColor: '#d97706',
+    accentColor: '#E08809',
   },
   error: {
     icon: 'alert-circle',
@@ -183,7 +183,7 @@ function renderStars(rating: number | undefined | null) {
           key={star}
           name={star <= r ? 'star' : 'star-outline'}
           size={13}
-          color={star <= r ? '#f59e0b' : '#d1d5db'}
+          color={star <= r ? '#F89C0A' : '#d1d5db'}
         />
       ))}
     </View>
@@ -247,7 +247,7 @@ const RideRequestCard: React.FC<{
   });
 
   const urgencyColor =
-    secondsRemaining <= 5 ? '#ef4444' : secondsRemaining <= 15 ? '#f59e0b' : Colors.primary;
+    secondsRemaining <= 5 ? '#ef4444' : secondsRemaining <= 15 ? '#F89C0A' : Colors.primary;
 
   return (
     <Animated.View
@@ -256,7 +256,7 @@ const RideRequestCard: React.FC<{
       {/* Header with timer */}
       <View style={styles.rideCardHeader}>
         <View style={styles.rideIconCircle}>
-          <Ionicons name="car-sport" size={22} color="#16a34a" />
+          <Ionicons name="car-sport" size={22} color="#269006" />
         </View>
         <View style={styles.rideCardHeaderText}>
           <Text style={styles.rideCardTitle}>Nueva Solicitud</Text>
@@ -521,8 +521,8 @@ const ToastNotificationItem: React.FC<{
   const opacity = useRef(new Animated.Value(0)).current;
 
   const typeConfig = {
-    success: { icon: 'checkmark-circle' as const, bg: '#16a34a', border: '#15803d' },
-    warning: { icon: 'warning' as const, bg: '#d97706', border: '#b45309' },
+    success: { icon: 'checkmark-circle' as const, bg: '#269006', border: '#15803d' },
+    warning: { icon: 'warning' as const, bg: '#E08809', border: '#b45309' },
     error: { icon: 'alert-circle' as const, bg: '#dc2626', border: '#b91c1c' },
     info: { icon: 'information-circle' as const, bg: '#2563eb', border: '#1d4ed8' },
   };
@@ -1042,7 +1042,7 @@ const styles = StyleSheet.create({
   },
   starsText: {
     fontSize: 15,
-    color: '#F59E0B',
+    color: '#F89C0A',
     letterSpacing: 1,
   },
   ratingRow: {
@@ -1217,11 +1217,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#16a34a',
+    backgroundColor: '#269006',
     paddingVertical: 10,
     borderRadius: 10,
     gap: 5,
-    shadowColor: '#16a34a',
+    shadowColor: '#269006',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,

@@ -169,13 +169,13 @@ export default function DriverRideHistoryScreen() {
   const getStatusConfig = (status: string) => {
     switch (status) {
       case 'completed':
-        return { label: 'Completado', color: '#16a34a', bg: '#f0fdf4' };
+        return { label: 'Completado', color: '#269006', bg: '#f0fdf4' };
       case 'cancelled':
         return { label: 'Cancelado', color: '#dc2626', bg: '#fef2f2' };
       case 'in_progress':
         return { label: 'En progreso', color: '#2563eb', bg: '#eff6ff' };
       case 'accepted':
-        return { label: 'Aceptado', color: '#d97706', bg: '#fffbeb' };
+        return { label: 'Aceptado', color: '#E08809', bg: '#fffbeb' };
       case 'arrived':
         return { label: 'Llegó', color: '#7c3aed', bg: '#f5f3ff' };
       default:

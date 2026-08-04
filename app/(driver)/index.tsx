@@ -714,7 +714,7 @@ export default function DriverHomeScreen() {
         activeOpacity={0.7}
       >
         {isUpdatingAvailability ? (
-          <ActivityIndicator size="small" color={isAvailable ? '#10B981' : '#F59E0B'} />
+          <ActivityIndicator size="small" color={isAvailable ? '#3DD10A' : '#F89C0A'} />
         ) : (
           <>
             <View
@@ -877,10 +877,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.error,
   },
   dotAvailable: {
-    backgroundColor: '#10B981', // Green for available
+    backgroundColor: '#3DD10A', // Green for available
   },
   dotUnavailable: {
-    backgroundColor: '#F59E0B', // Amber for unavailable
+    backgroundColor: '#F89C0A', // Amber for unavailable
   },
   statusText: {
     fontSize: 12,
@@ -905,11 +905,11 @@ const styles = StyleSheet.create({
   },
   available: {
     borderWidth: 1,
-    borderColor: '#10B981',
+    borderColor: '#3DD10A',
   },
   unavailable: {
     borderWidth: 1,
-    borderColor: '#F59E0B',
+    borderColor: '#F89C0A',
   },
   modalOverlay: {
     flex: 1,
