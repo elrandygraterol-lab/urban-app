@@ -154,7 +154,10 @@ console.warn = function (...args: unknown[]) {
 };
 
 console.error = function (...args: unknown[]) {
-  originalConsole.error(...args);
+  const message = args.map(formatArg).join(' ');
+  if (!isIgnorableLog(message)) {
+    originalConsole.error(...args);
+  }
   addLogEntry('error', args);
 };
 

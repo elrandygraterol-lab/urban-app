@@ -173,12 +173,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Create FormData for file uploads
       const formData = new FormData();
 
-      // Add basic fields
+      // Add basic fields (role is determined by endpoint, not sent in body)
       formData.append('email', data.email);
       formData.append('password', data.password);
       formData.append('name', data.name);
       formData.append('phone', data.phone);
-      formData.append('role', data.role);
 
       // Add profile photo if provided (optional for all roles)
       if (data.profilePhoto) {
@@ -216,22 +215,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
       }
 
-      // Use XMLHttpRequest for reliable multipart upload (fetch has issues with FormData in RN)
-      const result = await new Promise<{ status: number; data: any }>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', url);
-        xhr.timeout = 30000;
-        xhr.onload = () => {
-          try {
-            resolve({ status: xhr.status, data: JSON.parse(xhr.responseText) });
-          } catch {
-            reject(new Error('Invalid response'));
-          }
-        };
-        xhr.onerror = () => reject(new Error('Network request failed'));
-        xhr.ontimeout = () => reject(new Error('Request timeout'));
-        xhr.send(formData);
-      });
+      // Use fetch for multipart upload (XMLHttpRequest doesn't properly serialize
+      // FormData with file objects in React Native, causing "Network request failed")
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+      const result = {
+        status: response.status,
+        data: await response.json(),
+      };
 
       console.log('[REGISTER] Response status:', result.status);
 

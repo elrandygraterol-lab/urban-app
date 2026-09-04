@@ -760,10 +760,19 @@ export const useGlobalSocketListeners = ({
             console.log('[GLOBAL_SOCKET]    Calling connectSocket() (auto-reconnect)...');
             connectSocket()
               .then(connectedSocket => {
-                console.log('[GLOBAL_SOCKET] Auto-reconnect successful!');
-                console.log('[GLOBAL_SOCKET]    New Socket ID:', connectedSocket.id);
-                registerListeners(connectedSocket);
-                setupDisconnectHandler(connectedSocket);
+                if (connectedSocket?.connected) {
+                  console.log('[GLOBAL_SOCKET] Auto-reconnect successful!');
+                  console.log('[GLOBAL_SOCKET]    New Socket ID:', connectedSocket.id);
+                  registerListeners(connectedSocket);
+                  setupDisconnectHandler(connectedSocket);
+                } else {
+                  console.log('[GLOBAL_SOCKET] Socket created, waiting for connection...');
+                  // Listeners will be registered on 'connect' event
+                  connectedSocket?.once('connect', () => {
+                    registerListeners(connectedSocket);
+                    setupDisconnectHandler(connectedSocket);
+                  });
+                }
               })
               .catch(error => {
                 console.error('[GLOBAL_SOCKET] Auto-reconnect failed:', error.message);
