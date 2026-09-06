@@ -372,20 +372,6 @@ export const useNotifications = () => {
         }
       }
 
-      // Register RIDE_REQUEST notification category with interactive actions
-      await Notifications.setNotificationCategoryAsync('RIDE_REQUEST', [
-        {
-          identifier: 'ACCEPT_RIDE',
-          buttonTitle: 'Aceptar',
-          options: { opensAppToForeground: true },
-        },
-        {
-          identifier: 'REJECT_RIDE',
-          buttonTitle: 'Rechazar',
-          options: { opensAppToForeground: false, isDestructive: true },
-        },
-      ]);
-
       // Get the Expo push token with retry logic
       const projectId = Constants.expoConfig?.extra?.eas?.projectId;
 
@@ -408,15 +394,24 @@ export const useNotifications = () => {
         try {
           const isAndroid = Platform.OS === 'android';
 
-          // Android: use the native FCM device token and deliver directly via
-          // Firebase (firebaseService on the backend). No dependency on Expo's
-          // push relay.
-          // iOS: keep using the Expo push token (APNs via Expo Push Service).
-          const deviceToken = isAndroid
-            ? await Notifications.getDevicePushTokenAsync()
-            : await Notifications.getExpoPushTokenAsync({
+          // Dev builds: use Expo Push Token for ALL platforms.
+          // Direct FCM on Android requires the app's SHA-1 to be registered
+          // in Firebase Console, which is tedious for debug keystores.
+          // Expo Push Service works immediately without any Firebase setup.
+          //
+          // Production builds: Android uses direct FCM (firebaseService),
+          // iOS uses Expo Push Service (APNs).
+          const useExpoToken = __DEV__;
+
+          const deviceToken = useExpoToken
+            ? await Notifications.getExpoPushTokenAsync({
                 projectId: projectId || undefined,
-              });
+              })
+            : isAndroid
+              ? await Notifications.getDevicePushTokenAsync()
+              : await Notifications.getExpoPushTokenAsync({
+                  projectId: projectId || undefined,
+                });
 
           token = deviceToken.data as string;
 
@@ -425,7 +420,7 @@ export const useNotifications = () => {
             token.substring(0, 30) + '...'
           );
           console.log(
-            `[NOTIFICATIONS] ℹ️ ${isAndroid ? 'Using direct FCM delivery (firebaseService)' : 'Using Expo Push Service for notifications'}`
+            `[NOTIFICATIONS] ℹ️ ${useExpoToken ? 'Using Expo Push Service (dev build)' : isAndroid ? 'Using direct FCM delivery (firebaseService)' : 'Using Expo Push Service (iOS)'}`
           );
           break; // Success, exit retry loop
         } catch (err: any) {
@@ -439,7 +434,11 @@ export const useNotifications = () => {
             err.message?.includes('ECONNREFUSED') ||
             err.message?.includes('ETIMEDOUT');
 
-          // FCM SERVICE_NOT_AVAILABLE = emulator sin Google Play Services, no reintentar
+          // FCM failures that should not be retried.
+          // These cover distinct root causes; on a physical device the exact
+          // message matters because the generic warning below is intentionally
+          // broad (legacy behaviour). The inline classification is the source
+          // of truth for deciding between "retry" and "give up".
           const isFcmPermanent =
             err.message?.includes('SERVICE_NOT_AVAILABLE') ||
             err.message?.includes('java.io.IOException') ||
@@ -447,8 +446,30 @@ export const useNotifications = () => {
             err.message?.includes('FirebaseApp is not initialized');
 
           if (isFcmPermanent) {
+            // Distinguish likely root causes so a physical device failure is
+            // easier to debug in production logs. The exact message comes from
+            // the underlying Firebase/Play Services SDK, not from this app.
+            const realErrorCode =
+              err.message?.includes('SERVICE_NOT_AVAILABLE')
+                ? 'FCM_ServiceNotAvailable'
+                : err.message?.includes('FirebaseApp is not initialized')
+                  ? 'FirebaseAppNotInitialized'
+                  : err.message?.includes('java.io.IOException')
+                    ? 'FcmIoException'
+                    : err.message?.includes('ExecutionException')
+                      ? 'FirebaseExecutionException'
+                      : 'FcmUnknownPermanentFailure';
+
             console.warn(
-              '[NOTIFICATIONS] ⚠️ FCM no disponible (emulador sin Google Play Services o dispositivo incompatible). Las notificaciones push no estarán disponibles.'
+              '[NOTIFICATIONS] ⚠️ FCM no disponible (emulador sin Google Play Services o dispositivo incompatible). Las notificaciones push no estarán disponibles.',
+              {
+                realErrorCode,
+                errName: err?.name ?? null,
+                errMessage: err?.message ?? null,
+                platform: Platform.OS,
+                isDevice: Constants.isDevice,
+                appOwnership: Constants.appOwnership,
+              }
             );
             return null; // Salir sin lanzar error
           }
@@ -472,6 +493,26 @@ export const useNotifications = () => {
           }
         }
       }
+
+      // Set notification category AFTER token fetch — fire-and-forget.
+      // This call hangs on some Android devices (never resolves), so we
+      // intentionally do NOT await it. The category is non-critical for
+      // receiving push notifications; it only adds interactive action buttons.
+      Notifications.setNotificationCategoryAsync('RIDE_REQUEST', [
+        {
+          identifier: 'ACCEPT_RIDE',
+          buttonTitle: 'Aceptar',
+          options: { opensAppToForeground: true },
+        },
+        {
+          identifier: 'REJECT_RIDE',
+          buttonTitle: 'Rechazar',
+          options: { opensAppToForeground: false, isDestructive: true },
+        },
+      ])
+        .then(() => console.log('[NOTIFICATIONS] ✅ Notification category set'))
+        .catch((err) => console.warn('[NOTIFICATIONS] ⚠️ Failed to set notification category (non-critical):', err?.message));
+
     } else {
       console.warn('[NOTIFICATIONS] ⚠️ Must use physical device for Push Notifications');
       console.warn('[NOTIFICATIONS] Current environment:', {

@@ -17,7 +17,7 @@ module.exports = ({ config }) => {
     : './google-services-dev.json';
   const iosGoogleServices = profile === 'production' ? './GoogleService-Info.plist'
     : profile === 'preview' ? './GoogleService-Info-preview.plist'
-    : undefined;
+    : './GoogleService-Info.plist'; // dev builds: use production plist as fallback
 
   return {
     ...config,
@@ -141,7 +141,7 @@ module.exports = ({ config }) => {
     extra: {
       router: {},
       eas: {
-      projectId:'2f0a1436-e1de-4a63-bf42-78a033c62cb9',
+        "projectId": "358c0fe7-fd50-41a0-befd-86213bed1fbf"
       },
       // Store Management System Configuration
       storeImageMaxSizeMB: 5,
