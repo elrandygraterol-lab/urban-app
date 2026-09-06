@@ -1,0 +1,76 @@
+{
+  "project_info": {
+    "project_number": "466121819334",
+    "project_id": "urban-notification-7e090",
+    "storage_bucket": "urban-notification-7e090.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:466121819334:android:e79ecf7d46be84231883c7",
+        "android_client_info": {
+          "package_name": "com.urbantaxi.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCXRj8ciPctTOCLr_jLkyTPmsKg3FrbQtY"
+        },
+        {
+          "current_key": "AIzaSyAwibX-3gOGfKnKj_6470A0YvVZC--yp4E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:466121819334:android:ad165a9a06f32f7f1883c7",
+        "android_client_info": {
+          "package_name": "com.urbantaxi.app.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCXRj8ciPctTOCLr_jLkyTPmsKg3FrbQtY"
+        },
+        {
+          "current_key": "AIzaSyAwibX-3gOGfKnKj_6470A0YvVZC--yp4E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:466121819334:android:53a7098522bbe3561883c7",
+        "android_client_info": {
+          "package_name": "com.urbantaxi.app.preview"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCXRj8ciPctTOCLr_jLkyTPmsKg3FrbQtY"
+        },
+        {
+          "current_key": "AIzaSyAwibX-3gOGfKnKj_6470A0YvVZC--yp4E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

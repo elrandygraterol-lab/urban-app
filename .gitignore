@@ -44,8 +44,8 @@ app-example
 /ios
 /android
 
-# Firebase configuration files (contain sensitive data)
-google-services.json
-google-services-*.json
+# Firebase iOS configuration files
 GoogleService-Info.plist
 GoogleService-Info-*.plist
+# Firebase service account used by backend FCM delivery (Firebase Admin SDK; should not be committed)
+backend-urban-taxis/config/firebase-service-account.json
