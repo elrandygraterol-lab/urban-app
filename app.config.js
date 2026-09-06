@@ -7,11 +7,6 @@ module.exports = ({ config }) => {
     : profile === 'preview' ? '.preview'
     : '.dev';
   const packageName = `com.urbantaxi.app${suffix}`;
-  // Firebase is required in all EAS builds (production, preview, development) so that
-  // expo-notifications can obtain an FCM token, which is needed for Expo Push Service.
-  // Without the @react-native-firebase/app plugin the native FCM registration fails
-  // and getExpoPushTokenAsync() throws SERVICE_NOT_AVAILABLE on Android.
-  const isFirebaseEnabled = profile === 'production' || profile === 'preview' || profile === 'development' || !profile;
   const androidGoogleServices = profile === 'production' ? './google-services.json'
     : profile === 'preview' ? './google-services-preview.json'
     : './google-services-dev.json';
@@ -120,7 +115,6 @@ module.exports = ({ config }) => {
           androidCollapsedTitle: appName,
         },
       ],
-      ...(isFirebaseEnabled ? ['@react-native-firebase/app'] : []),
       'expo-audio',
       './plugins/withRemoveRecordAudioPermission',
       './plugins/withEdgeToEdge',

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
 import { AppState, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
@@ -154,7 +155,7 @@ export const useNotifications = () => {
     console.log('[NOTIFICATIONS] ✅ Valid environment for push notifications', {
       appOwnership: Constants.appOwnership,
       executionEnvironment: Constants.executionEnvironment,
-      isDevice: Constants.isDevice,
+      isDevice: Device.isDevice,
       platform: Platform.OS,
     });
 
@@ -293,7 +294,7 @@ export const useNotifications = () => {
     let token: string | null = null;
 
     // Check if running on a physical device (not simulator/emulator)
-    const isDevice = Constants.isDevice;
+    const isDevice = Device.isDevice;
     const isDevBuild = Constants.appOwnership === 'expo' || __DEV__;
 
     console.log('[NOTIFICATIONS] Device check:', {
@@ -386,9 +387,12 @@ export const useNotifications = () => {
       // We still use Expo Push Notifications service exclusively for sending notifications.
       // See PUSH_NOTIFICATIONS_TROUBLESHOOTING.md for details.
 
-      // Retry logic for Expo API server errors (503, 429, etc.)
-      let retries = 3;
+      // Retry logic for Expo API server errors (503, 429, etc.).
+      // FIS_AUTH_ERROR (Xiaomi/MIUI) is also retried with up to 5 attempts
+      // because Google Play Services often needs time to initialize.
+      let retries = 5;
       let lastError: Error | null = null;
+      let lastWasFisAuth = false;
 
       for (let attempt = 1; attempt <= retries; attempt++) {
         try {
@@ -434,15 +438,18 @@ export const useNotifications = () => {
             err.message?.includes('ECONNREFUSED') ||
             err.message?.includes('ETIMEDOUT');
 
-          // FCM failures that should not be retried.
-          // These cover distinct root causes; on a physical device the exact
-          // message matters because the generic warning below is intentionally
-          // broad (legacy behaviour). The inline classification is the source
-          // of truth for deciding between "retry" and "give up".
+          // FIS_AUTH_ERROR is common on Xiaomi/MIUI devices where Google Play
+          // Services is battery-optimized. It's transient — retrying with longer
+          // delays usually succeeds after GPS initializes.
+          const isFisAuthError =
+            err.message?.includes('FIS_AUTH_ERROR') ||
+            err.message?.includes('FirebaseInstallationService');
+
+          // FCM failures that should not be retried (true permanent errors).
           const isFcmPermanent =
             err.message?.includes('SERVICE_NOT_AVAILABLE') ||
-            err.message?.includes('java.io.IOException') ||
-            err.message?.includes('ExecutionException') ||
+            (err.message?.includes('java.io.IOException') && !isFisAuthError) ||
+            (err.message?.includes('ExecutionException') && !isFisAuthError) ||
             err.message?.includes('FirebaseApp is not initialized');
 
           if (isFcmPermanent) {
@@ -467,14 +474,32 @@ export const useNotifications = () => {
                 errName: err?.name ?? null,
                 errMessage: err?.message ?? null,
                 platform: Platform.OS,
-                isDevice: Constants.isDevice,
+                isDevice: Device.isDevice,
                 appOwnership: Constants.appOwnership,
               }
             );
             return null; // Salir sin lanzar error
           }
 
-          if (isTransient && attempt < retries) {
+          if (isFisAuthError) {
+            // FIS_AUTH_ERROR on Xiaomi/MIUI: Google Play Services needs time
+            // to initialize. Retry with increasing delays: 3s, 5s, 8s, 12s
+            lastWasFisAuth = true;
+            if (attempt < retries) {
+              const waitTime = attempt === 1 ? 3000 : attempt === 2 ? 5000 : attempt === 3 ? 8000 : 12000;
+              console.warn(
+                `[NOTIFICATIONS] ⚠️ FIS_AUTH_ERROR - Google Play Services initializing (attempt ${attempt}/${retries}). Retrying in ${waitTime / 1000}s...`
+              );
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+            } else {
+              console.warn(
+                '[NOTIFICATIONS] ⚠️ FIS_AUTH_ERROR persists after',
+                retries,
+                'attempts. Google Play Services may need manual activation on this device.'
+              );
+              return null;
+            }
+          } else if (isTransient && attempt < retries) {
             const waitTime = attempt * 2000; // 2s, 4s, 6s
             console.warn(
               `[NOTIFICATIONS] ⚠️ Expo API temporarily unavailable (attempt ${attempt}/${retries}). Retrying in ${waitTime / 1000}s...`
