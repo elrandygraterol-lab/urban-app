@@ -9,7 +9,7 @@
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleDebug",
-        "credentialsSource": "local"
+        "credentialsSource": "remote"
       },
       "ios": {
         "simulator": false,
@@ -29,7 +29,7 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk",
-        "credentialsSource": "local"
+        "credentialsSource": "remote"
       },
       "ios": {
         "simulator": false
@@ -43,7 +43,7 @@
     "production": {
       "android": {
         "buildType": "app-bundle",
-        "credentialsSource": "local"
+        "credentialsSource": "remote"
       },
       "ios": {
         "buildConfiguration": "Release"
