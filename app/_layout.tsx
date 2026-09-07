@@ -55,7 +55,7 @@ function AppContent() {
   const [disclosureAccepted, setDisclosureAccepted] = useState(false);
 
   // Initialize notifications
-  const { expoPushToken, error: notificationError } = useNotifications();
+  const { expoPushToken, error: notificationError, processPendingColdStart } = useNotifications();
 
   // Initialize global socket listeners for payment and cancellation events
   // Only mounted after authentication — evita importar socket.io en login
@@ -202,6 +202,15 @@ function AppContent() {
 
     return () => handle.cancel();
   }, [isNavigationReady, isAuthenticated, user?.id, user?.role]);
+
+  // Process pending cold-start notification tap after auth + navigation are ready.
+  // The notification tap was stored in useNotifications() during cold start;
+  // now that the user is authenticated and the Stack is mounted, navigate.
+  useEffect(() => {
+    if (isNavigationReady && isAuthenticated && disclosureAccepted) {
+      processPendingColdStart();
+    }
+  }, [isNavigationReady, isAuthenticated, disclosureAccepted]);
 
   return (
     <>

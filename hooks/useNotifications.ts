@@ -64,6 +64,15 @@ Notifications.setNotificationHandler({
     if (isRideCritical && isForeground) {
       suppress = await isSocketConnectedSafe();
     }
+    console.log('[NOTIFICATIONS] 🔔 handleNotification:', {
+      type,
+      isRideCritical,
+      isForeground,
+      suppress,
+      title: notification?.request?.content?.title,
+      body: notification?.request?.content?.body,
+      dataKeys: data ? Object.keys(data) : [],
+    });
     return {
       shouldShowAlert: !suppress,
       shouldPlaySound: !suppress,
@@ -120,6 +129,8 @@ export const useNotifications = () => {
   const notificationListener = useRef<Notifications.Subscription | undefined>(undefined);
   const responseListener = useRef<Notifications.Subscription | undefined>(undefined);
   const pushTokenListener = useRef<Notifications.Subscription | undefined>(undefined);
+  // Store cold-start notification response until auth+navigation are ready
+  const pendingColdStartRef = useRef<Notifications.NotificationResponse | null>(null);
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
   const { incrementUnreadCount } = useNotificationStore();
@@ -188,6 +199,12 @@ export const useNotifications = () => {
     // Listener for notifications received while app is in foreground
     notificationListener.current = Notifications.addNotificationReceivedListener(async notification => {
       console.log('[NOTIFICATIONS] 📩 Received in foreground:', notification.request.content.title);
+      console.log('[NOTIFICATIONS] 📩 Full notification content:', JSON.stringify({
+        title: notification.request.content.title,
+        body: notification.request.content.body,
+        data: notification.request.content.data,
+        sound: notification.request.content.sound,
+      }, null, 2));
       setNotification(notification);
 
       const data = notification.request.content.data as NotificationData;
@@ -210,6 +227,7 @@ export const useNotifications = () => {
         const mappedType = data.type as Parameters<typeof showStatus>[0];
         // Only show status banner for important events (not for every push)
         const importantTypes = [
+          'ride_request', 'ride_request_created',
           'ride_accepted', 'driver_arrived', 'ride_started', 'ride_completed',
           'ride_cancelled', 'payment_completed', 'commission_credited',
           'store_approved', 'store_rejected',
@@ -256,14 +274,15 @@ export const useNotifications = () => {
     // Handle notification tap when the app was killed (cold start).
     // The response listener above only fires for background → foreground;
     // if the process was dead, the tap is delivered via this pending response.
+    // We store it in a ref and let _layout.tsx process it after auth is ready.
     Notifications.getLastNotificationResponseAsync()
       .then(response => {
         if (response) {
           console.log(
-            '[NOTIFICATIONS] 📲 Cold-start notification tap:',
+            '[NOTIFICATIONS] 📲 Cold-start notification tap (stored for later):',
             response.notification.request.content.data
           );
-          handleNotificationResponse(response);
+          pendingColdStartRef.current = response;
         }
       })
       .catch(err => {
@@ -601,50 +620,70 @@ export const useNotifications = () => {
     // Navigate to appropriate screen based on notification type
     if (data.type) {
       switch (data.type) {
-        // ── STORE NOTIFICATIONS ──────────────────────────────────────────
-        case 'store_approved':
-        case 'store_rejected':
-        case 'new_review':
-        case 'review_reply':
-          router.push('/(passenger)/index' as any);
-          break;
-
-        // ── DRIVER NOTIFICATIONS ─────────────────────────────────────────
+        // ── DRIVER: RIDE REQUEST ────────────────────────────────────────
         case 'ride_request':
         case 'ride_request_created':
         case 'new_ride_request':
-          // Navigate to driver home where ride request card shows
+          console.log('[NOTIFICATIONS] → Navigating to driver home (ride request)');
           router.push('/(driver)/index' as any);
           break;
 
+        // ── DRIVER: RIDE TAKEN BY ANOTHER DRIVER ────────────────────────
+        case 'ride_taken':
+          console.log('[NOTIFICATIONS] → Navigating to driver home (ride taken by another)');
+          router.push('/(driver)/index' as any);
+          break;
+
+        // ── RIDE CANCELLED (both roles) ─────────────────────────────────
         case 'ride_cancelled':
-          // Navigate to driver home (ride was cancelled, show updated state)
-          if (data.rideId) {
-            router.push('/(driver)/index' as any);
+          {
+            const { user: cancelUser } = useAuthStore.getState();
+            const cancelRole = cancelUser?.role;
+            console.log('[NOTIFICATIONS] → ride_cancelled for role:', cancelRole);
+            if (cancelRole === 'driver') {
+              router.push('/(driver)/index' as any);
+            } else {
+              router.push('/(passenger)/index' as any);
+            }
           }
           break;
 
+        // ── DRIVER: PAYMENTS ────────────────────────────────────────────
         case 'payment_completed':
-          // Navigate to driver earnings
+          console.log('[NOTIFICATIONS] → Navigating to driver earnings');
           router.push('/(driver)/earnings' as any);
           break;
 
         case 'commission_credited':
-          // Navigate to driver wallet
+          console.log('[NOTIFICATIONS] → Navigating to driver wallet');
           router.push('/(driver)/wallet' as any);
           break;
 
+        case 'payment_processed':
+          {
+            const { user: payUser } = useAuthStore.getState();
+            const payRole = payUser?.role;
+            console.log('[NOTIFICATIONS] → payment_processed for role:', payRole);
+            if (payRole === 'driver') {
+              router.push('/(driver)/earnings' as any);
+            } else {
+              router.push('/(passenger)/index' as any);
+            }
+          }
+          break;
+
+        // ── DRIVER: VERIFICATION ────────────────────────────────────────
         case 'driver_verified':
         case 'driver_rejected':
         case 'verification_status':
-          // Navigate to driver verification status
+          console.log('[NOTIFICATIONS] → Navigating to driver verification status');
           router.push('/(driver)/verification-status' as any);
           break;
 
-        // ── PASSENGER NOTIFICATIONS ──────────────────────────────────────
+        // ── PASSENGER: RIDE LIFECYCLE ───────────────────────────────────
         case 'ride_accepted':
-          // Navigate to passenger home where ride tracking starts
           if (data.rideId) {
+            console.log('[NOTIFICATIONS] → Navigating to passenger tracking (ride accepted)');
             router.push({
               pathname: '/(passenger)/index' as any,
               params: { activeRideId: data.rideId },
@@ -653,8 +692,8 @@ export const useNotifications = () => {
           break;
 
         case 'driver_arrived':
-          // Navigate to passenger active ride tracking
           if (data.rideId) {
+            console.log('[NOTIFICATIONS] → Navigating to passenger tracking (driver arrived)');
             router.push({
               pathname: '/(passenger)/index' as any,
               params: { activeRideId: data.rideId },
@@ -663,8 +702,8 @@ export const useNotifications = () => {
           break;
 
         case 'ride_started':
-          // Navigate to passenger active ride tracking
           if (data.rideId) {
+            console.log('[NOTIFICATIONS] → Navigating to passenger tracking (ride started)');
             router.push({
               pathname: '/(passenger)/index' as any,
               params: { activeRideId: data.rideId },
@@ -673,41 +712,51 @@ export const useNotifications = () => {
           break;
 
         case 'ride_completed':
-          // Navigate to passenger ride history or receipt
-          if (data.rideId) {
-            router.push(`/(passenger)/history` as any);
-          }
-          break;
-
-        case 'payment_processed':
-          // Navigate based on role
-          if (data.driverEarnings) {
-            router.push('/(driver)/earnings' as any);
-          } else if (data.rideId) {
-            router.push(`/(passenger)/history` as any);
-          }
+          console.log('[NOTIFICATIONS] → Navigating to passenger history (ride completed)');
+          router.push('/(passenger)/index' as any);
           break;
 
         // ── SHARED RIDE ──────────────────────────────────────────────────
         case 'shared_ride_invitation':
+          console.log('[NOTIFICATIONS] → Navigating to passenger index (shared ride)');
+          router.push('/(passenger)/index' as any);
+          break;
+
+        // ── STORE NOTIFICATIONS ──────────────────────────────────────────
+        case 'store_approved':
+        case 'store_rejected':
+        case 'new_review':
+        case 'review_reply':
+          console.log('[NOTIFICATIONS] → Navigating to passenger index (store notification)');
           router.push('/(passenger)/index' as any);
           break;
 
         // ── PROMOTIONS ───────────────────────────────────────────────────
         case 'promotions':
         case 'promotions_notification':
-          // Navigate to passenger home
-          router.push('/(passenger)/index' as any);
+          {
+            const { user: promoUser } = useAuthStore.getState();
+            const promoRole = promoUser?.role;
+            console.log('[NOTIFICATIONS] → promotions for role:', promoRole);
+            if (promoRole === 'driver') {
+              router.push('/(driver)/index' as any);
+            } else {
+              router.push('/(passenger)/index' as any);
+            }
+          }
           break;
 
+        // ── UNKNOWN TYPE: fallback by role ───────────────────────────────
         default:
-          console.log('[NOTIFICATIONS] Unknown notification type, navigating home:', data.type);
-          // Default: navigate to appropriate home based on role
-          const { user } = useAuthStore.getState();
-          if (user?.role === 'driver') {
-            router.push('/(driver)/index' as any);
-          } else {
-            router.push('/(passenger)/index' as any);
+          {
+            const { user: defUser } = useAuthStore.getState();
+            const defRole = defUser?.role;
+            console.log('[NOTIFICATIONS] → Unknown type, fallback for role:', defRole, 'type:', data.type);
+            if (defRole === 'driver') {
+              router.push('/(driver)/index' as any);
+            } else {
+              router.push('/(passenger)/index' as any);
+            }
           }
       }
     }
@@ -737,6 +786,16 @@ export const useNotifications = () => {
     await Notifications.setBadgeCountAsync(count);
   };
 
+  // Process pending cold-start notification (call after auth + navigation ready)
+  const processPendingColdStart = (): void => {
+    const response = pendingColdStartRef.current;
+    if (response) {
+      console.log('[NOTIFICATIONS] 📲 Processing pending cold-start notification tap');
+      pendingColdStartRef.current = null;
+      handleNotificationResponse(response);
+    }
+  };
+
   return {
     expoPushToken,
     notification,
@@ -745,5 +804,6 @@ export const useNotifications = () => {
     clearNotifications,
     getBadgeCount,
     setBadgeCount,
+    processPendingColdStart,
   };
 };
