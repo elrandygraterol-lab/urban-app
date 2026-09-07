@@ -398,24 +398,18 @@ export const useNotifications = () => {
         try {
           const isAndroid = Platform.OS === 'android';
 
-          // Dev builds: use Expo Push Token for ALL platforms.
-          // Direct FCM on Android requires the app's SHA-1 to be registered
-          // in Firebase Console, which is tedious for debug keystores.
-          // Expo Push Service works immediately without any Firebase setup.
+          // Android: ALWAYS use direct FCM token (getDevicePushTokenAsync).
+          // This bypasses Expo's Firebase Installation Service (FIS) layer
+          // which causes FIS_AUTH_ERROR on Xiaomi/MIUI devices even when
+          // google-services.json and SHA-1 are correctly configured.
+          // The backend routes FCM tokens to firebaseService (FCM v1) automatically.
           //
-          // Production builds: Android uses direct FCM (firebaseService),
-          // iOS uses Expo Push Service (APNs).
-          const useExpoToken = __DEV__;
-
-          const deviceToken = useExpoToken
-            ? await Notifications.getExpoPushTokenAsync({
+          // iOS: Use Expo Push Token (APNs via Expo Push Service).
+          const deviceToken = isAndroid
+            ? await Notifications.getDevicePushTokenAsync()
+            : await Notifications.getExpoPushTokenAsync({
                 projectId: projectId || undefined,
-              })
-            : isAndroid
-              ? await Notifications.getDevicePushTokenAsync()
-              : await Notifications.getExpoPushTokenAsync({
-                  projectId: projectId || undefined,
-                });
+              });
 
           token = deviceToken.data as string;
 
@@ -424,7 +418,7 @@ export const useNotifications = () => {
             token.substring(0, 30) + '...'
           );
           console.log(
-            `[NOTIFICATIONS] ℹ️ ${useExpoToken ? 'Using Expo Push Service (dev build)' : isAndroid ? 'Using direct FCM delivery (firebaseService)' : 'Using Expo Push Service (iOS)'}`
+            `[NOTIFICATIONS] ℹ️ ${isAndroid ? 'Using direct FCM delivery (firebaseService)' : 'Using Expo Push Service (iOS)'}`
           );
           break; // Success, exit retry loop
         } catch (err: any) {
