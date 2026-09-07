@@ -118,6 +118,7 @@ module.exports = ({ config }) => {
       'expo-audio',
       './plugins/withRemoveRecordAudioPermission',
       './plugins/withEdgeToEdge',
+      '@react-native-firebase/app',
     ],
     experiments: {
       typedRoutes: true,
