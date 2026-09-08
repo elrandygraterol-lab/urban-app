@@ -104,6 +104,13 @@ export default function LoginScreen() {
       await login(email.trim(), password);
     } catch (error: any) {
       const rawMessage: string = error?.response?.data?.error?.message || error?.message || '';
+      const errorCode: string = error?.response?.data?.error?.code || '';
+
+      // Email not verified — redirect to verify-email screen
+      if (errorCode === 'EMAIL_NOT_VERIFIED' || rawMessage.toLowerCase().includes('verificar tu email')) {
+        router.push({ pathname: '/(auth)/verify-email', params: { email: email.trim() } } as any);
+        return;
+      }
 
       // Driver pending admin approval — show friendly message, no technical details
       const isPendingApproval =

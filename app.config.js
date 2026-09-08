@@ -110,8 +110,7 @@ module.exports = ({ config }) => {
       [
         'expo-notifications',
         {
-          icon: './assets/images/notification-icon.png',
-          color: '#2FB908',
+          color: '#ffffff',
           androidCollapsedTitle: appName,
         },
       ],

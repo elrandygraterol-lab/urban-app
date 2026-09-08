@@ -95,6 +95,7 @@ export default function DelegatedRideTrackingScreen() {
   const [rideData, setRideData] = useState<DelegatedRideData | null>(null);
   const [driverLocation, setDriverLocation] = useState<LocationCoords | null>(null);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
+  const prevDriverLocationRef = useRef<LocationCoords | null>(null);
 
   // Load ride data
   const loadRideData = useCallback(async () => {
@@ -295,17 +296,24 @@ export default function DelegatedRideTrackingScreen() {
       }
     };
 
-    // Listen for driver location updates
+    // Listen for driver location updates — skip micro-movements <15m to prevent flicker
+    const MIN_DRIVER_MOVE_METERS = 15;
     const handleDriverLocationUpdate = (data: any) => {
-      logInfo('DelegatedRideTracking', 'Driver location update', {
-        lat: data.latitude,
-        lng: data.longitude,
-      });
-
-      setDriverLocation({
+      const newLoc = {
         latitude: data.latitude,
         longitude: data.longitude,
-      });
+      };
+
+      const prev = prevDriverLocationRef.current;
+      if (prev) {
+        const dLat = newLoc.latitude - prev.latitude;
+        const dLng = (newLoc.longitude - prev.longitude) * Math.cos(newLoc.latitude * Math.PI / 180);
+        const distMeters = Math.sqrt(dLat * dLat + dLng * dLng) * 111320;
+        if (distMeters < MIN_DRIVER_MOVE_METERS) return;
+      }
+
+      prevDriverLocationRef.current = newLoc;
+      setDriverLocation(newLoc);
     };
 
     // Listen for ETA updates

@@ -176,7 +176,7 @@ export default function DriverHomeScreen() {
   const startLocationUpdates = useCallback(async () => {
     const Loc = await getLocation();
     const subscription = await Loc.watchPositionAsync(
-      { accuracy: Loc.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
+      { accuracy: Loc.Accuracy.High, timeInterval: 10000, distanceInterval: 25 },
       async newLocation => {
         const newCoords = {
           latitude: newLocation.coords.latitude,

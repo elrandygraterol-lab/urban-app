@@ -329,7 +329,6 @@ export const useNotifications = () => {
         name: 'UrbanTaxi SJ',
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#2FB908',
       });
       // High-priority channel for ride requests — overrides Do Not Disturb on Android
       await Notifications.setNotificationChannelAsync('ride_requests', {
@@ -337,7 +336,6 @@ export const useNotifications = () => {
         description: 'Notificaciones de nuevas solicitudes de viaje',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250, 0, 250],
-        lightColor: '#2FB908',
         showBadge: true,
         bypassDnd: true,
       });
@@ -347,7 +345,6 @@ export const useNotifications = () => {
         description: 'Actualizaciones del estado de tu viaje',
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250],
-        lightColor: '#2FB908',
         showBadge: true,
       });
       // Channel for payment notifications
@@ -356,7 +353,6 @@ export const useNotifications = () => {
         description: 'Notificaciones de pagos y ganancias',
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250],
-        lightColor: '#F89C0A',
         showBadge: true,
       });
       console.log('[NOTIFICATIONS] Android notification channels configured (default, ride_requests, ride_status, payments)');

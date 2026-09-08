@@ -1402,14 +1402,21 @@ export default function PassengerHomeScreen() {
       }));
     };
 
-    // Listen for driver location updates
+    // Listen for driver location updates — skip micro-movements <15m to prevent flicker
+    const MIN_DRIVER_MOVE_METERS = 15;
     const handleDriverLocationUpdate = (data: any) => {
-      console.log('📍 Driver location update:', data);
-
       const newDriverLocation = {
         latitude: data.latitude,
         longitude: data.longitude,
       };
+
+      const prev = prevDriverLocationRef.current;
+      if (prev) {
+        const dLat = newDriverLocation.latitude - prev.latitude;
+        const dLng = (newDriverLocation.longitude - prev.longitude) * Math.cos(newDriverLocation.latitude * Math.PI / 180);
+        const distMeters = Math.sqrt(dLat * dLat + dLng * dLng) * 111320;
+        if (distMeters < MIN_DRIVER_MOVE_METERS) return;
+      }
 
       setDriverLocation(newDriverLocation);
 
@@ -2107,8 +2114,8 @@ export default function PassengerHomeScreen() {
         locationSubscription = await Loc.watchPositionAsync(
           {
             accuracy: Loc.Accuracy.BestForNavigation,
-            timeInterval: 2000,
-            distanceInterval: 3,
+            timeInterval: 5000,
+            distanceInterval: 10,
           },
           location => {
             const { latitude, longitude } = location.coords;
@@ -2160,8 +2167,8 @@ export default function PassengerHomeScreen() {
         locationSubscription = await Loc.watchPositionAsync(
           {
             accuracy: Loc.Accuracy.BestForNavigation,
-            timeInterval: 2000,
-            distanceInterval: 1,
+            timeInterval: 5000,
+            distanceInterval: 10,
           },
           location => {
             const { latitude, longitude } = location.coords;

@@ -605,8 +605,8 @@ export default function ActiveRideScreen() {
       const subscription = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.BestForNavigation,
-          timeInterval: 2000,
-          distanceInterval: 3,
+          timeInterval: 5000,
+          distanceInterval: 10,
           pausesUpdatesAutomatically: false,
           activityType: Location.ActivityType.AutomotiveNavigation,
         } as any,

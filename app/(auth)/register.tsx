@@ -376,17 +376,39 @@ export default function RegisterScreen() {
         }),
       });
 
-      showStatus(
-        'success',
-        'Tu cuenta ha sido creada correctamente. Serás redirigido al inicio de sesión.',
-        'Registro exitoso',
-        undefined,
-        undefined,
-        3000
-      );
-      setTimeout(() => {
-        router.replace('/(auth)/login' as any);
-      }, 3000);
+      // Para pasajeros y propietarios, navegar a verificación de email
+      if (role === 'passenger' || role === 'owner') {
+        showStatus(
+          'success',
+          'Tu cuenta ha sido creada. Te hemos enviado un código de verificación a tu email.',
+          'Registro exitoso',
+          undefined,
+          {
+            label: 'Verificar email',
+            onPress: () => {
+              router.replace({
+                pathname: '/(auth)/verify-email' as any,
+                params: { email: email.trim() },
+              });
+              dismissStatus();
+            },
+          },
+          10000
+        );
+      } else {
+        // Para conductores, redirigir al login (el admin los verifica)
+        showStatus(
+          'success',
+          'Tu cuenta ha sido creada correctamente. Un administrador la revisará pronto.',
+          'Registro exitoso',
+          undefined,
+          undefined,
+          3000
+        );
+        setTimeout(() => {
+          router.replace('/(auth)/login' as any);
+        }, 3000);
+      }
     } catch (error: any) {
       console.error('[REGISTER_SCREEN] Registration error:', error);
       const msg = error?.response?.data?.error?.message || error?.message || '';
