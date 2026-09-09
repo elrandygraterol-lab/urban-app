@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Image,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -18,6 +19,7 @@ import { Colors as COLORS } from '@/constants/theme';
 import { compressImage } from '@/utils/imageUtils';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import { uploadDriverDocumentFile, getStorageProvider } from '@/services/fileUploader';
+import { ActionSheet } from '@/components/ActionSheet';
 
 type DocumentType =
   | 'drivers_license'
@@ -79,6 +81,11 @@ export default function DocumentsUploadScreen() {
   const { showToast } = useUnifiedNotifications();
   const [documents, setDocuments] = useState<DocumentUpload[]>(REQUIRED_DOCUMENTS);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [actionSheet, setActionSheet] = useState<{
+    visible: boolean;
+    index: number;
+    acceptsFiles: boolean;
+  }>({ visible: false, index: -1, acceptsFiles: false });
 
   if (!user?.id) {
     return (
@@ -88,104 +95,90 @@ export default function DocumentsUploadScreen() {
     );
   }
 
-  const pickDocument = async (index: number) => {
+  const pickDocument = (index: number) => {
     const doc = documents[index];
     const acceptsFiles = DOCUMENT_TYPES_ACCEPTING_FILES.includes(doc.type);
 
+    setActionSheet({
+      visible: true,
+      index,
+      acceptsFiles,
+    });
+  };
+
+  const handleActionSheetPress = async (optionIndex: number) => {
+    const { index, acceptsFiles } = actionSheet;
+    if (index === -1) return;
+
+    setActionSheet({ ...actionSheet, visible: false });
+
+    const doc = documents[index];
+
     if (acceptsFiles) {
-      // Show options: Image or Document
-      const options = [
-        {
-          text: 'Tomar foto',
-          onPress: async () => {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== 'granted') {
-              showToast('Necesitamos permiso para acceder a la cámara', 'error');
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: 'images',
-              allowsEditing: true,
-              aspect: [4, 3],
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets?.[0]) {
-              const newDocuments = [...documents];
-              newDocuments[index].uri = result.assets[0].uri;
-              newDocuments[index].fileName = 'photo.jpg';
-              newDocuments[index].mimeType = 'image/jpeg';
-              setDocuments(newDocuments);
-            }
-          },
-        },
-        {
-          text: 'Elegir imagen',
-          onPress: async () => {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-              showToast('Necesitamos permiso para acceder a tus archivos', 'error');
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: 'images',
-              allowsEditing: true,
-              aspect: [4, 3],
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets?.[0]) {
-              const newDocuments = [...documents];
-              newDocuments[index].uri = result.assets[0].uri;
-              newDocuments[index].fileName = 'photo.jpg';
-              newDocuments[index].mimeType = 'image/jpeg';
-              setDocuments(newDocuments);
-            }
-          },
-        },
-        {
-          text: 'Seleccionar archivo (PDF, Word)',
-          onPress: async () => {
-            try {
-              const result = await DocumentPicker.getDocumentAsync({
-                type: [
-                  'application/pdf',
-                  'application/msword',
-                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                ],
-                copyToCacheDirectory: true,
-              });
+      if (optionIndex === 0) {
+        // Tomar foto
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          showToast('Necesitamos permiso para acceder a la cámara', 'error');
+          return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: 'images',
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
+        if (!result.canceled && result.assets?.[0]) {
+          const newDocuments = [...documents];
+          newDocuments[index].uri = result.assets[0].uri;
+          newDocuments[index].fileName = 'photo.jpg';
+          newDocuments[index].mimeType = 'image/jpeg';
+          setDocuments(newDocuments);
+        }
+      } else if (optionIndex === 1) {
+        // Elegir imagen
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          showToast('Necesitamos permiso para acceder a tus archivos', 'error');
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: 'images',
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
+        if (!result.canceled && result.assets?.[0]) {
+          const newDocuments = [...documents];
+          newDocuments[index].uri = result.assets[0].uri;
+          newDocuments[index].fileName = 'photo.jpg';
+          newDocuments[index].mimeType = 'image/jpeg';
+          setDocuments(newDocuments);
+        }
+      } else if (optionIndex === 2) {
+        // Seleccionar archivo (PDF, Word)
+        try {
+          const result = await DocumentPicker.getDocumentAsync({
+            type: [
+              'application/pdf',
+              'application/msword',
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ],
+            copyToCacheDirectory: true,
+          });
 
-              if (!result.canceled && result.assets?.[0]) {
-                const asset = result.assets[0];
-                const newDocuments = [...documents];
-                newDocuments[index].uri = asset.uri;
-                newDocuments[index].fileName = asset.name;
-                newDocuments[index].mimeType = asset.mimeType || 'application/pdf';
-                setDocuments(newDocuments);
-              }
-            } catch (error) {
-              console.error('Error picking document:', error);
-              showToast('Error al seleccionar el archivo', 'error');
-            }
-          },
-        },
-        { text: 'Cancelar', style: 'cancel' as const },
-      ];
-
-      // Show action sheet
-      const { ActionSheetIOS, Platform } = require('react-native');
-      if (Platform.OS === 'ios') {
-        ActionSheetIOS.showActionSheetWithOptions(
-          { options: options.map(o => o.text), cancelButtonIndex: options.length - 1 },
-          (buttonIndex: number) => {
-            if (buttonIndex !== options.length - 1 && options[buttonIndex]?.onPress) {
-              options[buttonIndex].onPress();
-            }
+          if (!result.canceled && result.assets?.[0]) {
+            const asset = result.assets[0];
+            const newDocuments = [...documents];
+            newDocuments[index].uri = asset.uri;
+            newDocuments[index].fileName = asset.name;
+            newDocuments[index].mimeType = asset.mimeType || 'application/pdf';
+            setDocuments(newDocuments);
           }
-        );
-      } else {
-        // For Android, use the first option (camera) as default
-        // In a real app, you'd use a custom modal
-        if (options[0]?.onPress) options[0].onPress();
+        } catch (error) {
+          console.error('Error picking document:', error);
+          showToast('Error al seleccionar el archivo', 'error');
+        }
       }
     } else {
       // Vehicle photos: only images
@@ -209,9 +202,28 @@ export default function DocumentsUploadScreen() {
           setDocuments(newDocuments);
         }
       } catch {
-        showToast('No se pudo seleccionar la imagen', 'error');
+        showToast('Error al seleccionar la imagen', 'error');
       }
     }
+  };
+
+  const renderActionSheet = () => {
+    if (!actionSheet.visible) return null;
+
+    const { acceptsFiles } = actionSheet;
+    const options = acceptsFiles
+      ? [
+          { text: 'Tomar foto', onPress: () => handleActionSheetPress(0) },
+          { text: 'Elegir imagen', onPress: () => handleActionSheetPress(1) },
+          { text: 'Seleccionar archivo (PDF, Word)', onPress: () => handleActionSheetPress(2) },
+          { text: 'Cancelar', onPress: () => setActionSheet({ ...actionSheet, visible: false }), style: 'cancel' as const },
+        ]
+      : [
+          { text: 'Elegir imagen', onPress: () => handleActionSheetPress(0) },
+          { text: 'Cancelar', onPress: () => setActionSheet({ ...actionSheet, visible: false }), style: 'cancel' as const },
+        ];
+
+    return <ActionSheet visible={actionSheet.visible} options={options} onClose={() => setActionSheet({ ...actionSheet, visible: false })} title="Seleccionar origen" />;
   };
 
   const uploadDocument = async (index: number) => {
@@ -377,6 +389,7 @@ export default function DocumentsUploadScreen() {
           )}
         </TouchableOpacity>
       </View>
+      {renderActionSheet()}
     </ScrollView>
   );
 }

@@ -10,7 +10,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
 let cachedStorageProvider: string | null = null;
 let cacheExpiry = 0;
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 60 * 1000; // 1 minute (shorter TTL for faster config propagation)
 
 /**
  * Get the storage provider from the backend
@@ -148,64 +148,6 @@ export async function uploadDriverDocumentFile(
     url: data.data?.url || data.url,
     provider: 'local',
   };
-}
-
-/**
- * Upload multiple files for driver registration
- * Returns URLs to send in the registration request
- */
-export async function uploadRegistrationFiles(files: {
-  profilePhoto?: { uri: string };
-  driverLicense?: { uri: string };
-  medicalCertificate?: { uri: string };
-}, driverId: string): Promise<{
-  profilePhotoUrl?: string;
-  driverLicenseUrl?: string;
-  medicalCertificateUrl?: string;
-}> {
-  const provider = await getStorageProvider();
-
-  if (provider === 'local') {
-    // Local mode: files will be sent as multipart with registration
-    return {};
-  }
-
-  // Cloudinary mode: upload each file and return URLs
-  const results: {
-    profilePhotoUrl?: string;
-    driverLicenseUrl?: string;
-    medicalCertificateUrl?: string;
-  } = {};
-
-  const uploadPromises: Promise<void>[] = [];
-
-  if (files.profilePhoto) {
-    uploadPromises.push(
-      uploadProfilePhoto(files.profilePhoto.uri, driverId || 'temp').then(result => {
-        results.profilePhotoUrl = result.url;
-      })
-    );
-  }
-
-  if (files.driverLicense) {
-    uploadPromises.push(
-      uploadDriverDocumentFile(files.driverLicense.uri, driverId || 'temp', 'drivers_license').then(result => {
-        results.driverLicenseUrl = result.url;
-      })
-    );
-  }
-
-  if (files.medicalCertificate) {
-    uploadPromises.push(
-      uploadDriverDocumentFile(files.medicalCertificate.uri, driverId || 'temp', 'medical_certificate').then(result => {
-        results.medicalCertificateUrl = result.url;
-      })
-    );
-  }
-
-  await Promise.all(uploadPromises);
-
-  return results;
 }
 
 /**

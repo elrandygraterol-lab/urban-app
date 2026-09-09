@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, ScrollView, Text, TouchableOpacity, Image, ActivityIndicator, Platform, ActionSheetIOS } from 'react-native';
+import { View, ScrollView, Text, TouchableOpacity, Image, ActivityIndicator, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { Colors as colors } from '@/constants/theme';
 import { compressImage } from '@/utils/imageUtils';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 import { uploadDriverDocumentFile, getStorageProvider } from '@/services/fileUploader';
+import { ActionSheet } from '@/components/ActionSheet';
 
 interface Document {
   id: string;
@@ -27,6 +28,11 @@ export default function DocumentsScreen() {
   const [reVerificationStatus, setReVerificationStatus] = useState<
     'pending' | 'approved' | 'rejected' | null
   >(null);
+  const [actionSheet, setActionSheet] = useState<{
+    visible: boolean;
+    documentType: string;
+    acceptsFiles: boolean;
+  }>({ visible: false, documentType: '', acceptsFiles: false });
 
   const fetchDocuments = useCallback(async () => {
     try {
@@ -51,86 +57,74 @@ export default function DocumentsScreen() {
   // Document types that accept PDFs and Word docs
   const FILE_ACCEPTING_TYPES = ['drivers_license', 'vehicle_registration', 'insurance'];
 
-  const pickDocument = async (documentType: string) => {
+  const pickDocument = (documentType: string) => {
     const acceptsFiles = FILE_ACCEPTING_TYPES.includes(documentType);
 
+    setActionSheet({
+      visible: true,
+      documentType,
+      acceptsFiles,
+    });
+  };
+
+  const handleActionSheetPress = async (optionIndex: number) => {
+    const { documentType, acceptsFiles } = actionSheet;
+    if (!documentType) return;
+
+    setActionSheet({ ...actionSheet, visible: false });
+
     if (acceptsFiles) {
-      // Show options for images and documents
-      const options = [
-        {
-          text: 'Tomar foto',
-          onPress: async () => {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== 'granted') {
-              showToast('Necesitamos permiso para acceder a la cámara', 'error');
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: 'images',
-              allowsEditing: true,
-              aspect: [4, 3],
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets?.[0]) {
-              uploadDocument(result.assets[0].uri, documentType, true);
-            }
-          },
-        },
-        {
-          text: 'Elegir imagen',
-          onPress: async () => {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-              showToast('Necesitamos permiso para acceder a tus archivos', 'error');
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: 'images',
-              allowsEditing: true,
-              aspect: [4, 3],
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets?.[0]) {
-              uploadDocument(result.assets[0].uri, documentType, true);
-            }
-          },
-        },
-        {
-          text: 'Seleccionar archivo (PDF, Word)',
-          onPress: async () => {
-            try {
-              const result = await DocumentPicker.getDocumentAsync({
-                type: [
-                  'application/pdf',
-                  'application/msword',
-                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                ],
-                copyToCacheDirectory: true,
-              });
+      if (optionIndex === 0) {
+        // Tomar foto
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          showToast('Necesitamos permiso para acceder a la cámara', 'error');
+          return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: 'images',
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
+        if (!result.canceled && result.assets?.[0]) {
+          uploadDocument(result.assets[0].uri, documentType, true);
+        }
+      } else if (optionIndex === 1) {
+        // Elegir imagen
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          showToast('Necesitamos permiso para acceder a tus archivos', 'error');
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: 'images',
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
+        if (!result.canceled && result.assets?.[0]) {
+          uploadDocument(result.assets[0].uri, documentType, true);
+        }
+      } else if (optionIndex === 2) {
+        // Seleccionar archivo (PDF, Word)
+        try {
+          const result = await DocumentPicker.getDocumentAsync({
+            type: [
+              'application/pdf',
+              'application/msword',
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ],
+            copyToCacheDirectory: true,
+          });
 
-              if (!result.canceled && result.assets?.[0]) {
-                uploadDocument(result.assets[0].uri, documentType, false);
-              }
-            } catch (error) {
-              console.error('Error picking document:', error);
-              showToast('Error al seleccionar el archivo', 'error');
-            }
-          },
-        },
-        { text: 'Cancelar', style: 'cancel' as const },
-      ];
-
-      if (Platform.OS === 'ios') {
-        ActionSheetIOS.showActionSheetWithOptions(
-          { options: options.map(o => o.text), cancelButtonIndex: options.length - 1 },
-          (buttonIndex: number) => {
-            if (buttonIndex !== options.length - 1 && options[buttonIndex]?.onPress) {
-              options[buttonIndex].onPress();
-            }
+          if (!result.canceled && result.assets?.[0]) {
+            uploadDocument(result.assets[0].uri, documentType, false);
           }
-        );
-      } else {
-        if (options[0]?.onPress) options[0].onPress();
+        } catch (error) {
+          console.error('Error picking document:', error);
+          showToast('Error al seleccionar el archivo', 'error');
+        }
       }
     } else {
       // Vehicle photos: only images
@@ -146,9 +140,28 @@ export default function DocumentsScreen() {
           uploadDocument(result.assets[0].uri, documentType, true);
         }
       } catch {
-        showToast('Failed to pick image', 'error');
+        showToast('Error al seleccionar la imagen', 'error');
       }
     }
+  };
+
+  const renderActionSheet = () => {
+    if (!actionSheet.visible) return null;
+
+    const { acceptsFiles } = actionSheet;
+    const options = acceptsFiles
+      ? [
+          { text: 'Tomar foto', onPress: () => handleActionSheetPress(0) },
+          { text: 'Elegir imagen', onPress: () => handleActionSheetPress(1) },
+          { text: 'Seleccionar archivo (PDF, Word)', onPress: () => handleActionSheetPress(2) },
+          { text: 'Cancelar', onPress: () => setActionSheet({ ...actionSheet, visible: false }), style: 'cancel' as const },
+        ]
+      : [
+          { text: 'Elegir imagen', onPress: () => handleActionSheetPress(0) },
+          { text: 'Cancelar', onPress: () => setActionSheet({ ...actionSheet, visible: false }), style: 'cancel' as const },
+        ];
+
+    return <ActionSheet visible={actionSheet.visible} options={options} onClose={() => setActionSheet({ ...actionSheet, visible: false })} title="Seleccionar origen" />;
   };
 
   const uploadDocument = async (uri: string, documentType: string, isImage: boolean = true) => {
@@ -333,6 +346,7 @@ export default function DocumentsScreen() {
           </TouchableOpacity>
         ))}
       </View>
+      {renderActionSheet()}
     </ScrollView>
   );
 }
