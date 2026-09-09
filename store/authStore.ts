@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
 import { getActivePushToken, setActivePushToken } from '@/services/api/notification';
+import { uploadProfileImage, uploadDocument } from '@/services/cloudinaryUpload';
+import { getStorageProvider } from '@/services/fileUploader';
 
 export type UserRole = 'passenger' | 'driver' | 'owner' | null;
 
@@ -165,96 +167,235 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         endpoint = '/api/auth/register/owner';
       }
 
-      const url = `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}${endpoint}`;
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const url = `${apiUrl}${endpoint}`;
       console.log('[REGISTER] Starting registration...');
       console.log('[REGISTER] URL:', url);
       console.log('[REGISTER] Data:', { ...data, password: '[HIDDEN]' });
 
-      // Create FormData for file uploads
-      const formData = new FormData();
+      // Check storage provider
+      const storageProvider = await getStorageProvider();
+      console.log('[REGISTER] Storage provider:', storageProvider);
 
-      // Add basic fields (role is determined by endpoint, not sent in body)
-      formData.append('email', data.email);
-      formData.append('password', data.password);
-      formData.append('name', data.name);
-      formData.append('phone', data.phone);
+      if (storageProvider === 'cloudinary') {
+        // CLOUDINARY MODE: Upload files to Cloudinary first, then send URLs
+        const formData = new FormData();
+        formData.append('email', data.email);
+        formData.append('password', data.password);
+        formData.append('name', data.name);
+        formData.append('phone', data.phone);
 
-      // Add profile photo if provided (optional for all roles)
-      if (data.profilePhoto) {
-        const photoFile = {
-          uri: data.profilePhoto.uri,
-          name: data.profilePhoto.name,
-          type: data.profilePhoto.type,
-        } as any;
-        formData.append('profilePhoto', photoFile);
-      }
-
-      // Add driver-specific fields
-      if (data.role === 'driver') {
-        if (data.vehicleType) formData.append('vehicleType', data.vehicleType);
-        if (data.licensePlate) formData.append('licensePlate', data.licensePlate);
-        if (data.vehicleModel) formData.append('vehicleModel', data.vehicleModel);
-
-        // Add driver documents
-        if (data.driverLicense) {
-          const licenseFile = {
-            uri: data.driverLicense.uri,
-            name: data.driverLicense.name,
-            type: data.driverLicense.type,
-          } as any;
-          formData.append('driverLicense', licenseFile);
-        }
-
-        if (data.medicalCertificate) {
-          const medicalFile = {
-            uri: data.medicalCertificate.uri,
-            name: data.medicalCertificate.name,
-            type: data.medicalCertificate.type,
-          } as any;
-          formData.append('medicalCertificate', medicalFile);
-        }
-      }
-
-      // Use fetch for multipart upload (XMLHttpRequest doesn't properly serialize
-      // FormData with file objects in React Native, causing "Network request failed")
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
-      let response: Response;
-      try {
-        response = await fetch(url, {
-          method: 'POST',
-          body: formData,
-          signal: controller.signal,
-        });
-      } finally {
-        clearTimeout(timeoutId);
-      }
-      const result = {
-        status: response.status,
-        data: await response.json(),
-      };
-
-      console.log('[REGISTER] Response status:', result.status);
-
-      if (result.status < 200 || result.status >= 300) {
-        const errorData = result.data;
-        console.error('[REGISTER] Error response:', errorData);
-        let errorMessage = 'Registration failed';
-        if (errorData?.error) {
-          errorMessage = errorData.error.message || errorMessage;
-          if (errorData.error.details && Array.isArray(errorData.error.details)) {
-            const validationErrors = errorData.error.details
-              .map((d: any) => `• ${d.field || d.path?.[0] || 'Campo'}: ${d.message || 'inválido'}`)
-              .join('\n');
-            if (validationErrors) errorMessage = `Errores de validación:\n\n${validationErrors}`;
+        // Upload profile photo to Cloudinary
+        if (data.profilePhoto) {
+          try {
+            const tempId = `temp_${Date.now()}`;
+            const result = await uploadProfileImage(data.profilePhoto.uri, tempId);
+            formData.append('profilePhotoUrl', result.secure_url);
+            console.log('[REGISTER] Profile photo uploaded to Cloudinary:', result.secure_url);
+          } catch (error) {
+            console.error('[REGISTER] Failed to upload profile photo to Cloudinary:', error);
           }
-        } else if (errorData?.message) {
-          errorMessage = errorData.message;
         }
-        throw new Error(errorMessage);
-      }
 
-      console.log('[REGISTER] Success! Complete! User should now login.');
+        // Add driver-specific fields
+        if (data.role === 'driver') {
+          if (data.vehicleType) formData.append('vehicleType', data.vehicleType);
+          if (data.licensePlate) formData.append('licensePlate', data.licensePlate);
+          if (data.vehicleModel) formData.append('vehicleModel', data.vehicleModel);
+
+          // Upload driver license to Cloudinary
+          if (data.driverLicense) {
+            try {
+              const tempId = `temp_${Date.now()}`;
+              const result = await uploadDocument(data.driverLicense.uri, tempId, 'drivers_license');
+              formData.append('driverLicenseUrl', result.secure_url);
+              console.log('[REGISTER] Driver license uploaded to Cloudinary:', result.secure_url);
+            } catch (error) {
+              console.error('[REGISTER] Failed to upload driver license to Cloudinary:', error);
+            }
+          }
+
+          // Upload medical certificate to Cloudinary
+          if (data.medicalCertificate) {
+            try {
+              const tempId = `temp_${Date.now()}`;
+              const result = await uploadDocument(data.medicalCertificate.uri, tempId, 'medical_certificate');
+              formData.append('medicalCertificateUrl', result.secure_url);
+              console.log('[REGISTER] Medical certificate uploaded to Cloudinary:', result.secure_url);
+            } catch (error) {
+              console.error('[REGISTER] Failed to upload medical certificate to Cloudinary:', error);
+            }
+          }
+        }
+
+        // Send registration request with URLs
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        let response: Response;
+        try {
+          response = await fetch(url, {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+        const result = {
+          status: response.status,
+          data: await response.json(),
+        };
+
+        console.log('[REGISTER] Response status:', result.status);
+
+        if (result.status < 200 || result.status >= 300) {
+          const errorData = result.data;
+          console.error('[REGISTER] Error response:', errorData);
+          let errorMessage = 'Registration failed';
+          if (errorData?.error) {
+            errorMessage = errorData.error.message || errorMessage;
+            if (errorData.error.details && Array.isArray(errorData.error.details)) {
+              const validationErrors = errorData.error.details
+                .map((d: any) => `• ${d.field || d.path?.[0] || 'Campo'}: ${d.message || 'inválido'}`)
+                .join('\n');
+              if (validationErrors) errorMessage = `Errores de validación:\n\n${validationErrors}`;
+            }
+          } else if (errorData?.message) {
+            errorMessage = errorData.message;
+          }
+          throw new Error(errorMessage);
+        }
+
+        const dataResponse = result.data;
+        console.log('[REGISTER] Success! Response:', JSON.stringify(dataResponse));
+
+        // Check if email verification is required
+        if (dataResponse.data?.requiresEmailVerification) {
+          console.log('[REGISTER] Email verification required');
+          // Don't set as authenticated - user needs to verify email first
+          set({ isLoading: false });
+          return;
+        }
+
+        // Extract tokens and user data
+        const tokens = dataResponse.data?.tokens || dataResponse.tokens;
+        const user = dataResponse.data?.user || dataResponse.user;
+        const accessToken = tokens?.accessToken || dataResponse.token;
+
+        if (accessToken && user) {
+          await SecureStore.setItemAsync('auth_token', accessToken);
+          if (tokens?.refreshToken) {
+            await SecureStore.setItemAsync('refresh_token', tokens.refreshToken);
+          }
+          await SecureStore.setItemAsync('user_data', JSON.stringify(user));
+          set({ user, token: accessToken, isAuthenticated: true });
+        }
+
+      } else {
+        // LOCAL MODE: Send files directly to backend (current behavior)
+        const formData = new FormData();
+        formData.append('email', data.email);
+        formData.append('password', data.password);
+        formData.append('name', data.name);
+        formData.append('phone', data.phone);
+
+        // Add profile photo if provided
+        if (data.profilePhoto) {
+          const photoFile = {
+            uri: data.profilePhoto.uri,
+            name: data.profilePhoto.name,
+            type: data.profilePhoto.type,
+          } as any;
+          formData.append('profilePhoto', photoFile);
+        }
+
+        // Add driver-specific fields
+        if (data.role === 'driver') {
+          if (data.vehicleType) formData.append('vehicleType', data.vehicleType);
+          if (data.licensePlate) formData.append('licensePlate', data.licensePlate);
+          if (data.vehicleModel) formData.append('vehicleModel', data.vehicleModel);
+
+          if (data.driverLicense) {
+            const licenseFile = {
+              uri: data.driverLicense.uri,
+              name: data.driverLicense.name,
+              type: data.driverLicense.type,
+            } as any;
+            formData.append('driverLicense', licenseFile);
+          }
+
+          if (data.medicalCertificate) {
+            const medicalFile = {
+              uri: data.medicalCertificate.uri,
+              name: data.medicalCertificate.name,
+              type: data.medicalCertificate.type,
+            } as any;
+            formData.append('medicalCertificate', medicalFile);
+          }
+        }
+
+        // Use fetch for multipart upload
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        let response: Response;
+        try {
+          response = await fetch(url, {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+        const result = {
+          status: response.status,
+          data: await response.json(),
+        };
+
+        console.log('[REGISTER] Response status:', result.status);
+
+        if (result.status < 200 || result.status >= 300) {
+          const errorData = result.data;
+          console.error('[REGISTER] Error response:', errorData);
+          let errorMessage = 'Registration failed';
+          if (errorData?.error) {
+            errorMessage = errorData.error.message || errorMessage;
+            if (errorData.error.details && Array.isArray(errorData.error.details)) {
+              const validationErrors = errorData.error.details
+                .map((d: any) => `• ${d.field || d.path?.[0] || 'Campo'}: ${d.message || 'inválido'}`)
+                .join('\n');
+              if (validationErrors) errorMessage = `Errores de validación:\n\n${validationErrors}`;
+            }
+          } else if (errorData?.message) {
+            errorMessage = errorData.message;
+          }
+          throw new Error(errorMessage);
+        }
+
+        const dataResponse = result.data;
+        console.log('[REGISTER] Success! Response:', JSON.stringify(dataResponse));
+
+        // Check if email verification is required
+        if (dataResponse.data?.requiresEmailVerification) {
+          console.log('[REGISTER] Email verification required');
+          set({ isLoading: false });
+          return;
+        }
+
+        // Extract tokens and user data
+        const tokens = dataResponse.data?.tokens || dataResponse.tokens;
+        const user = dataResponse.data?.user || dataResponse.user;
+        const accessToken = tokens?.accessToken || dataResponse.token;
+
+        if (accessToken && user) {
+          await SecureStore.setItemAsync('auth_token', accessToken);
+          if (tokens?.refreshToken) {
+            await SecureStore.setItemAsync('refresh_token', tokens.refreshToken);
+          }
+          await SecureStore.setItemAsync('user_data', JSON.stringify(user));
+          set({ user, token: accessToken, isAuthenticated: true });
+        }
+      }
     } catch (error) {
       console.error('[REGISTER] Error:', error);
       throw error;

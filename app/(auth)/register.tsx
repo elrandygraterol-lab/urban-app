@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/authStore';
 import { PRIVACY_TEXT, TERMS_TEXT } from '@/constants/legalText';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
@@ -228,18 +229,18 @@ export default function RegisterScreen() {
     ], 'Elige una opción');
   };
 
-  // Document picker
+  // Document picker - supports images, PDFs, and Word documents
   const handlePickDocument = async (setter: (file: DocumentFile) => void) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      showToast('Necesitamos permiso para acceder a tus archivos', 'error');
-      return;
-    }
     showActionSheet('Seleccionar documento', [
       {
         label: 'Tomar foto',
         icon: 'camera',
         onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') {
+            showToast('Necesitamos permiso para acceder a la cámara', 'error');
+            return;
+          }
           const result = await ImagePicker.launchCameraAsync({
             mediaTypes: ['images'],
             allowsEditing: true,
@@ -258,9 +259,14 @@ export default function RegisterScreen() {
         },
       },
       {
-        label: 'Elegir de galería',
+        label: 'Elegir imagen de galería',
         icon: 'images',
         onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') {
+            showToast('Necesitamos permiso para acceder a tus archivos', 'error');
+            return;
+          }
           const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
             allowsEditing: true,
@@ -275,6 +281,35 @@ export default function RegisterScreen() {
               type: 'image/jpeg',
               size: asset.fileSize || 0,
             });
+          }
+        },
+      },
+      {
+        label: 'Seleccionar archivo (PDF, Word)',
+        icon: 'document',
+        onPress: async () => {
+          try {
+            const result = await DocumentPicker.getDocumentAsync({
+              type: [
+                'application/pdf',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              ],
+              copyToCacheDirectory: true,
+            });
+
+            if (!result.canceled && result.assets?.[0]) {
+              const asset = result.assets[0];
+              setter({
+                uri: asset.uri,
+                name: asset.name,
+                type: asset.mimeType || 'application/pdf',
+                size: asset.size || 0,
+              });
+            }
+          } catch (error) {
+            console.error('Error picking document:', error);
+            showToast('Error al seleccionar el archivo', 'error');
           }
         },
       },
@@ -692,9 +727,18 @@ export default function RegisterScreen() {
                 onPress={() => handlePickDocument(setDriverLicense)}
               >
                 {driverLicense ? (
-                  <Text style={{ color: '#2FB908', fontWeight: '600' }}>✓ Licencia adjunta</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons
+                      name={driverLicense.type?.includes('pdf') ? 'document-text' : 'image'}
+                      size={18}
+                      color="#2FB908"
+                    />
+                    <Text style={{ color: '#2FB908', fontWeight: '600', marginLeft: 6 }}>
+                      {driverLicense.name || 'Licencia adjunta'}
+                    </Text>
+                  </View>
                 ) : (
-                  <Text style={{ color: '#9ca3af' }}>Seleccionar archivo</Text>
+                  <Text style={{ color: '#9ca3af' }}>Seleccionar archivo (imagen, PDF, Word)</Text>
                 )}
               </TouchableOpacity>
 
@@ -704,9 +748,18 @@ export default function RegisterScreen() {
                 onPress={() => handlePickDocument(setMedicalCertificate)}
               >
                 {medicalCertificate ? (
-                  <Text style={{ color: '#2FB908', fontWeight: '600' }}>✓ Certificado adjunto</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons
+                      name={medicalCertificate.type?.includes('pdf') ? 'document-text' : 'image'}
+                      size={18}
+                      color="#2FB908"
+                    />
+                    <Text style={{ color: '#2FB908', fontWeight: '600', marginLeft: 6 }}>
+                      {medicalCertificate.name || 'Certificado adjunto'}
+                    </Text>
+                  </View>
                 ) : (
-                  <Text style={{ color: '#9ca3af' }}>Seleccionar archivo</Text>
+                  <Text style={{ color: '#9ca3af' }}>Seleccionar archivo (imagen, PDF, Word)</Text>
                 )}
               </TouchableOpacity>
             </>

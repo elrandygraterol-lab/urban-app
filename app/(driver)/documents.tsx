@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, ScrollView, Text, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { View, ScrollView, Text, TouchableOpacity, Image, ActivityIndicator, Platform, ActionSheetIOS } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/authStore';
 import api from '@/services/api';
 import { Colors as colors } from '@/constants/theme';
-import { uploadDocumentToCloudinary } from '@/services/cloudinary';
 import { compressImage } from '@/utils/imageUtils';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
+import { uploadDriverDocumentFile, getStorageProvider } from '@/services/fileUploader';
 
 interface Document {
   id: string;
@@ -29,7 +31,7 @@ export default function DocumentsScreen() {
   const fetchDocuments = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/api/users/drivers/${user?.id}/documents`);
+      const response = await api.get(`/api/drivers/${user?.id}/documents`);
       setDocuments(response.data);
 
       // Check re-verification status
@@ -46,47 +48,135 @@ export default function DocumentsScreen() {
     fetchDocuments();
   }, [fetchDocuments]);
 
-  const pickImage = async (documentType: string) => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
+  // Document types that accept PDFs and Word docs
+  const FILE_ACCEPTING_TYPES = ['drivers_license', 'vehicle_registration', 'insurance'];
 
-      if (!result.canceled) {
-        uploadDocument(result.assets[0].uri, documentType);
+  const pickDocument = async (documentType: string) => {
+    const acceptsFiles = FILE_ACCEPTING_TYPES.includes(documentType);
+
+    if (acceptsFiles) {
+      // Show options for images and documents
+      const options = [
+        {
+          text: 'Tomar foto',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              showToast('Necesitamos permiso para acceder a la cámara', 'error');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: 'images',
+              allowsEditing: true,
+              aspect: [4, 3],
+              quality: 0.8,
+            });
+            if (!result.canceled && result.assets?.[0]) {
+              uploadDocument(result.assets[0].uri, documentType, true);
+            }
+          },
+        },
+        {
+          text: 'Elegir imagen',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              showToast('Necesitamos permiso para acceder a tus archivos', 'error');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: 'images',
+              allowsEditing: true,
+              aspect: [4, 3],
+              quality: 0.8,
+            });
+            if (!result.canceled && result.assets?.[0]) {
+              uploadDocument(result.assets[0].uri, documentType, true);
+            }
+          },
+        },
+        {
+          text: 'Seleccionar archivo (PDF, Word)',
+          onPress: async () => {
+            try {
+              const result = await DocumentPicker.getDocumentAsync({
+                type: [
+                  'application/pdf',
+                  'application/msword',
+                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                ],
+                copyToCacheDirectory: true,
+              });
+
+              if (!result.canceled && result.assets?.[0]) {
+                uploadDocument(result.assets[0].uri, documentType, false);
+              }
+            } catch (error) {
+              console.error('Error picking document:', error);
+              showToast('Error al seleccionar el archivo', 'error');
+            }
+          },
+        },
+        { text: 'Cancelar', style: 'cancel' as const },
+      ];
+
+      if (Platform.OS === 'ios') {
+        ActionSheetIOS.showActionSheetWithOptions(
+          { options: options.map(o => o.text), cancelButtonIndex: options.length - 1 },
+          (buttonIndex: number) => {
+            if (buttonIndex !== options.length - 1 && options[buttonIndex]?.onPress) {
+              options[buttonIndex].onPress();
+            }
+          }
+        );
+      } else {
+        if (options[0]?.onPress) options[0].onPress();
       }
-    } catch {
-      showToast('Failed to pick image', 'error');
+    } else {
+      // Vehicle photos: only images
+      try {
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: 'images',
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
+
+        if (!result.canceled) {
+          uploadDocument(result.assets[0].uri, documentType, true);
+        }
+      } catch {
+        showToast('Failed to pick image', 'error');
+      }
     }
   };
 
-  const uploadDocument = async (uri: string, documentType: string) => {
+  const uploadDocument = async (uri: string, documentType: string, isImage: boolean = true) => {
     try {
       setUploading(true);
 
-      const compressedUri = await compressImage(uri, { type: 'photo' });
+      // Compress only if it's an image
+      let uploadUri = uri;
+      if (isImage) {
+        uploadUri = await compressImage(uri, { type: 'photo' });
+      }
 
-      // Upload to Cloudinary
-      const cloudinaryResponse = await uploadDocumentToCloudinary(
-        compressedUri,
-        documentType,
-        user?.id || ''
-      );
+      // Upload using fileUploader (handles Cloudinary or Local based on admin config)
+      const uploadResult = await uploadDriverDocumentFile(uploadUri, user?.id || '', documentType);
 
-      // Send to backend with Cloudinary URL
+      // Send to backend with the URL (Cloudinary URL or local path)
       const formData = new FormData();
       formData.append('documentType', documentType);
-      formData.append('documentUrl', cloudinaryResponse.secure_url);
-      formData.append('cloudinaryPublicId', cloudinaryResponse.public_id);
+      formData.append('documentUrl', uploadResult.url);
+      if (uploadResult.publicId) {
+        formData.append('cloudinaryPublicId', uploadResult.publicId);
+      }
 
-      await api.post(`/api/users/drivers/${user?.id}/documents`, formData, {
+      await api.post(`/api/drivers/${user?.id}/documents`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      showToast('Documento subido correctamente a Cloudinary', 'success');
+      showToast('Documento subido correctamente', 'success');
       setReVerificationStatus('pending');
       fetchDocuments();
     } catch (error) {
@@ -226,7 +316,7 @@ export default function DocumentsScreen() {
         {documentTypes.map(docType => (
           <TouchableOpacity
             key={docType.id}
-            onPress={() => pickImage(docType.id)}
+            onPress={() => pickDocument(docType.id)}
             disabled={uploading}
             style={{
               padding: 12,

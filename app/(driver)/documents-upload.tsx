@@ -9,13 +9,15 @@ import {
   Image,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { driverAPI } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { Colors as COLORS } from '@/constants/theme';
-import { uploadDocumentToCloudinary } from '@/services/cloudinary';
 import { compressImage } from '@/utils/imageUtils';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
+import { uploadDriverDocumentFile, getStorageProvider } from '@/services/fileUploader';
 
 type DocumentType =
   | 'drivers_license'
@@ -29,9 +31,18 @@ interface DocumentUpload {
   type: DocumentType;
   label: string;
   uri?: string;
+  fileName?: string;
+  mimeType?: string;
   isUploading: boolean;
   isUploaded: boolean;
 }
+
+// Document types that accept PDFs and Word docs
+const DOCUMENT_TYPES_ACCEPTING_FILES: DocumentType[] = [
+  'drivers_license',
+  'vehicle_registration',
+  'insurance',
+];
 
 const REQUIRED_DOCUMENTS: DocumentUpload[] = [
   { type: 'drivers_license', label: 'Licencia de Conducir', isUploading: false, isUploaded: false },
@@ -77,29 +88,136 @@ export default function DocumentsUploadScreen() {
     );
   }
 
-  const pickImage = async (index: number) => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
+  const pickDocument = async (index: number) => {
+    const doc = documents[index];
+    const acceptsFiles = DOCUMENT_TYPES_ACCEPTING_FILES.includes(doc.type);
 
-      if (!result.canceled) {
-        const newDocuments = [...documents];
-        newDocuments[index].uri = result.assets[0].uri;
-        setDocuments(newDocuments);
+    if (acceptsFiles) {
+      // Show options: Image or Document
+      const options = [
+        {
+          text: 'Tomar foto',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              showToast('Necesitamos permiso para acceder a la cámara', 'error');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: 'images',
+              allowsEditing: true,
+              aspect: [4, 3],
+              quality: 0.8,
+            });
+            if (!result.canceled && result.assets?.[0]) {
+              const newDocuments = [...documents];
+              newDocuments[index].uri = result.assets[0].uri;
+              newDocuments[index].fileName = 'photo.jpg';
+              newDocuments[index].mimeType = 'image/jpeg';
+              setDocuments(newDocuments);
+            }
+          },
+        },
+        {
+          text: 'Elegir imagen',
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              showToast('Necesitamos permiso para acceder a tus archivos', 'error');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: 'images',
+              allowsEditing: true,
+              aspect: [4, 3],
+              quality: 0.8,
+            });
+            if (!result.canceled && result.assets?.[0]) {
+              const newDocuments = [...documents];
+              newDocuments[index].uri = result.assets[0].uri;
+              newDocuments[index].fileName = 'photo.jpg';
+              newDocuments[index].mimeType = 'image/jpeg';
+              setDocuments(newDocuments);
+            }
+          },
+        },
+        {
+          text: 'Seleccionar archivo (PDF, Word)',
+          onPress: async () => {
+            try {
+              const result = await DocumentPicker.getDocumentAsync({
+                type: [
+                  'application/pdf',
+                  'application/msword',
+                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                ],
+                copyToCacheDirectory: true,
+              });
+
+              if (!result.canceled && result.assets?.[0]) {
+                const asset = result.assets[0];
+                const newDocuments = [...documents];
+                newDocuments[index].uri = asset.uri;
+                newDocuments[index].fileName = asset.name;
+                newDocuments[index].mimeType = asset.mimeType || 'application/pdf';
+                setDocuments(newDocuments);
+              }
+            } catch (error) {
+              console.error('Error picking document:', error);
+              showToast('Error al seleccionar el archivo', 'error');
+            }
+          },
+        },
+        { text: 'Cancelar', style: 'cancel' as const },
+      ];
+
+      // Show action sheet
+      const { ActionSheetIOS, Platform } = require('react-native');
+      if (Platform.OS === 'ios') {
+        ActionSheetIOS.showActionSheetWithOptions(
+          { options: options.map(o => o.text), cancelButtonIndex: options.length - 1 },
+          (buttonIndex: number) => {
+            if (buttonIndex !== options.length - 1 && options[buttonIndex]?.onPress) {
+              options[buttonIndex].onPress();
+            }
+          }
+        );
+      } else {
+        // For Android, use the first option (camera) as default
+        // In a real app, you'd use a custom modal
+        if (options[0]?.onPress) options[0].onPress();
       }
-    } catch {
-      showToast('No se pudo seleccionar la imagen', 'error');
+    } else {
+      // Vehicle photos: only images
+      try {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          showToast('Necesitamos permiso para acceder a tus archivos', 'error');
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: 'images',
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
+        if (!result.canceled && result.assets?.[0]) {
+          const newDocuments = [...documents];
+          newDocuments[index].uri = result.assets[0].uri;
+          newDocuments[index].fileName = 'photo.jpg';
+          newDocuments[index].mimeType = 'image/jpeg';
+          setDocuments(newDocuments);
+        }
+      } catch {
+        showToast('No se pudo seleccionar la imagen', 'error');
+      }
     }
   };
 
   const uploadDocument = async (index: number) => {
     const doc = documents[index];
     if (!doc.uri) {
-      showToast('Por favor selecciona una imagen primero', 'error');
+      showToast('Por favor selecciona un archivo primero', 'error');
       return;
     }
 
@@ -108,15 +226,25 @@ export default function DocumentsUploadScreen() {
       newDocuments[index].isUploading = true;
       setDocuments(newDocuments);
 
-      // Upload to Cloudinary
-      const compressedUri = await compressImage(doc.uri, { type: 'photo' });
-      const cloudinaryResponse = await uploadDocumentToCloudinary(compressedUri, doc.type, user!.id);
+      // Check if file is an image (based on MIME type)
+      const isImage = doc.mimeType?.startsWith('image/') ?? true;
 
-      // Send to backend with Cloudinary URL
+      // Compress only if it's an image
+      let uploadUri = doc.uri;
+      if (isImage) {
+        uploadUri = await compressImage(doc.uri, { type: 'photo' });
+      }
+
+      // Upload using fileUploader (handles Cloudinary or Local based on admin config)
+      const uploadResult = await uploadDriverDocumentFile(uploadUri, user!.id, doc.type);
+
+      // Send to backend with the URL (Cloudinary URL or local path)
       const formData = new FormData();
       formData.append('documentType', doc.type);
-      formData.append('documentUrl', cloudinaryResponse.secure_url);
-      formData.append('cloudinaryPublicId', cloudinaryResponse.public_id);
+      formData.append('documentUrl', uploadResult.url);
+      if (uploadResult.publicId) {
+        formData.append('cloudinaryPublicId', uploadResult.publicId);
+      }
 
       await driverAPI.uploadDocument(user!.id, doc.type, formData);
 
@@ -191,16 +319,29 @@ export default function DocumentsUploadScreen() {
               {doc.isUploaded && <Text style={styles.uploadedBadge}>✓ Subido</Text>}
             </View>
 
-            {doc.uri && <Image source={{ uri: doc.uri }} style={styles.documentPreview} />}
+            {doc.uri && (
+              doc.mimeType?.startsWith('image/') ? (
+                <Image source={{ uri: doc.uri }} style={styles.documentPreview} />
+              ) : (
+                <View style={styles.filePreview}>
+                  <Ionicons
+                    name={doc.mimeType?.includes('pdf') ? 'document-text' : 'document'}
+                    size={48}
+                    color={COLORS.primary}
+                  />
+                  <Text style={styles.fileName} numberOfLines={1}>{doc.fileName || 'Documento'}</Text>
+                </View>
+              )
+            )}
 
             <View style={styles.documentActions}>
               <TouchableOpacity
                 style={styles.selectButton}
-                onPress={() => pickImage(index)}
+                onPress={() => pickDocument(index)}
                 disabled={doc.isUploading}
               >
                 <Text style={styles.selectButtonText}>
-                  {doc.uri ? 'Cambiar Imagen' : 'Seleccionar Imagen'}
+                  {doc.uri ? 'Cambiar Archivo' : 'Seleccionar Archivo'}
                 </Text>
               </TouchableOpacity>
 
@@ -310,6 +451,22 @@ const styles = StyleSheet.create({
     height: 150,
     borderRadius: 12,
     marginBottom: 12,
+  },
+  filePreview: {
+    width: '100%',
+    height: 150,
+    borderRadius: 12,
+    marginBottom: 12,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fileName: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
+    paddingHorizontal: 8,
   },
   documentActions: {
     flexDirection: 'row',

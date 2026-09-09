@@ -3,9 +3,19 @@ import api from './client';
 export const authAPI = {
   login: (email: string, password: string) => api.post('/api/auth/login', { email, password }),
 
+  /**
+   * @deprecated Registration uses multipart/form-data for file uploads.
+   * Use authStore.register() which builds its own FormData with fetch().
+   * This function sends JSON and cannot handle file attachments.
+   */
   registerPassenger: (data: { email: string; password: string; name: string; phone: string }) =>
     api.post('/api/auth/register/passenger', data),
 
+  /**
+   * @deprecated Registration uses multipart/form-data for file uploads.
+   * Use authStore.register() which builds its own FormData with fetch().
+   * This function sends JSON and cannot handle file attachments.
+   */
   registerDriver: (data: {
     email: string;
     password: string;

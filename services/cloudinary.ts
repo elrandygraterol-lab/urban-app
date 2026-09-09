@@ -37,8 +37,12 @@ export const uploadDocumentToCloudinary = async (
     const response = await fetch(uri);
     const blob = await response.blob();
 
+    // Determine file extension from URI or default to jpg
+    const uriParts = uri.split('.');
+    const ext = uriParts.length > 1 ? uriParts[uriParts.length - 1].split('?')[0] : 'jpg';
+
     // Append file to form data
-    formData.append('file', blob, `${documentType}_${Date.now()}.jpg`);
+    formData.append('file', blob, `${documentType}_${Date.now()}.${ext}`);
     formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
     formData.append('folder', `urbantaxi/drivers/${driverId}`);
     formData.append('public_id', `${documentType}_${Date.now()}`);
@@ -46,14 +50,14 @@ export const uploadDocumentToCloudinary = async (
     formData.append('quality', 'auto');
     formData.append('fetch_format', 'auto');
 
-    // Upload to Cloudinary
+    // Upload to Cloudinary using 'auto' resource type (works for images, PDFs, Word docs)
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     let uploadResponse: Response;
     try {
       uploadResponse = await fetch(
-        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`,
         {
           method: 'POST',
           body: formData,
