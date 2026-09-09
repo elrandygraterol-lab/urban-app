@@ -40,8 +40,6 @@ import CenterLocationButton from '@/components/CenterLocationButton';
 // const WalkthroughCenterLocationButton = walkthroughable(CenterLocationButton);
 
 export default function DriverHomeScreen() {
-  const MemoizedMarker = React.memo(Marker);
-
   const { user, token } = useAuthStore();
   const {
     isAvailable,
@@ -685,14 +683,14 @@ export default function DriverHomeScreen() {
         toolbarEnabled={false}
         moveOnMarkerPress={false}
       >
-        <MemoizedMarker
+        <Marker
           coordinate={driverMarkerCoord!}
           title="Mi ubicación"
           anchor={{ x: 0.5, y: 0.5 }}
           rotation={0}
         >
           <DriverTaxiIcon />
-        </MemoizedMarker>
+        </Marker>
       </MapView>
 
       {/* Center Location Button */}
@@ -747,7 +745,7 @@ export default function DriverHomeScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               {/* Balance Cards */}
               <View style={styles.balanceContainer}>
-                <View style={[styles.balanceCard, { backgroundColor: colors.primary }]}>
+                <View style={[styles.balanceCard, { backgroundColor: '#4CAF50' }]}>
                   <Text style={styles.balanceLabel}>Bolívares (VES)</Text>
                   <Text style={styles.balanceValueText}>Bs. {balanceVES.toFixed(2)}</Text>
                   <View style={styles.balanceIconBg}>

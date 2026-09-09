@@ -110,10 +110,12 @@ module.exports = ({ config }) => {
       [
         'expo-notifications',
         {
+          icon: './assets/images/notification-icon.png',
           color: '#ffffff',
           androidCollapsedTitle: appName,
         },
       ],
+      '@react-native-firebase/app',
       'expo-audio',
       './plugins/withRemoveRecordAudioPermission',
       './plugins/withEdgeToEdge',
