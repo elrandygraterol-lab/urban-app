@@ -395,7 +395,7 @@ export default function RegisterScreen() {
         }
       }
 
-      await register({
+      const registerResult = await register({
         email: email.trim(),
         phone: formattedPhone,
         password,
@@ -430,8 +430,21 @@ export default function RegisterScreen() {
           },
           10000
         );
+      } else if (registerResult?.pendingApprovalMessage) {
+        // Conductor pendiente de aprobación
+        showStatus(
+          'success',
+          registerResult.pendingApprovalMessage,
+          'Solicitud enviada',
+          undefined,
+          undefined,
+          5000
+        );
+        setTimeout(() => {
+          router.replace('/(auth)/login' as any);
+        }, 5000);
       } else {
-        // Para conductores, redirigir al login (el admin los verifica)
+        // Para conductores aprobados (no debería pasar, pero por si acaso)
         showStatus(
           'success',
           'Tu cuenta ha sido creada correctamente. Un administrador la revisará pronto.',

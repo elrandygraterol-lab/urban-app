@@ -173,9 +173,17 @@ function AppContent() {
         }
       } else if (isAuthenticated && user) {
         // Ensure user is in correct role group
-        if (user.role === 'driver' && !inDriverGroup) {
-          logInfo('Navigation', 'Redirecting driver to driver home');
-          router.replace('/(driver)' as any);
+        if (user.role === 'driver') {
+          // Block pending drivers from accessing driver screens
+          if (user.status === 'pending') {
+            logInfo('Navigation', 'Blocking pending driver, redirecting to login');
+            router.replace('/(auth)/login' as any);
+            return;
+          }
+          if (!inDriverGroup) {
+            logInfo('Navigation', 'Redirecting driver to driver home');
+            router.replace('/(driver)' as any);
+          }
         } else if (user.role === 'passenger' && !inPassengerGroup) {
           logInfo('Navigation', 'Redirecting passenger to passenger home');
           router.replace('/(passenger)' as any);
@@ -184,7 +192,7 @@ function AppContent() {
     } catch (error) {
       logError('Navigation', error, { segments, isAuthenticated, userRole: user?.role });
     }
-  }, [isAuthenticated, user?.id, user?.role, segments, isNavigationReady, router]);
+  }, [isAuthenticated, user?.id, user?.role, user?.status, segments, isNavigationReady, router]);
 
   // Pre-load heavy screens after navigation settles (post-auth)
   useEffect(() => {

@@ -16,6 +16,7 @@ export interface User {
   profilePhotoUrl?: string;
   rating?: number;
   driverId?: string;
+  status?: string;
 }
 
 interface AuthState {
@@ -28,7 +29,7 @@ interface AuthState {
   setUser: (user: User | null) => void;
   setToken: (token: string | null) => Promise<void>;
   login: (email: string, password: string, role?: 'passenger' | 'driver' | 'owner') => Promise<void>;
-  register: (data: RegisterData) => Promise<void>;
+  register: (data: RegisterData) => Promise<{ pendingApprovalMessage?: string }>;
   logout: () => Promise<void>;
   loadStoredAuth: () => Promise<void>;
   switchRole: (role: 'passenger' | 'driver' | 'owner') => void;
@@ -272,9 +273,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         // Check if email verification is required
         if (dataResponse.data?.requiresEmailVerification) {
           console.log('[REGISTER] Email verification required');
-          // Don't set as authenticated - user needs to verify email first
           set({ isLoading: false });
-          return;
+          return {};
+        }
+
+        // Check if driver approval is required (no tokens issued)
+        if (dataResponse.data?.requiresApproval) {
+          console.log('[REGISTER] Driver approval required:', dataResponse.data.approvalMessage);
+          set({ isLoading: false });
+          return { pendingApprovalMessage: dataResponse.data.approvalMessage || 'Tu solicitud ha sido enviada. Un administrador revisará tu cuenta.' };
         }
 
         // Extract tokens and user data
@@ -291,6 +298,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           set({ user, token: accessToken, isAuthenticated: true });
         }
 
+        return {};
       } else {
         // LOCAL MODE: Send files directly to backend (current behavior)
         const formData = new FormData();
@@ -379,7 +387,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (dataResponse.data?.requiresEmailVerification) {
           console.log('[REGISTER] Email verification required');
           set({ isLoading: false });
-          return;
+          return {};
+        }
+
+        // Check if driver approval is required (no tokens issued)
+        if (dataResponse.data?.requiresApproval) {
+          console.log('[REGISTER] Driver approval required:', dataResponse.data.approvalMessage);
+          set({ isLoading: false });
+          return { pendingApprovalMessage: dataResponse.data.approvalMessage || 'Tu solicitud ha sido enviada. Un administrador revisará tu cuenta.' };
         }
 
         // Extract tokens and user data
@@ -395,6 +410,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           await SecureStore.setItemAsync('user_data', JSON.stringify(user));
           set({ user, token: accessToken, isAuthenticated: true });
         }
+        return {};
       }
     } catch (error) {
       console.error('[REGISTER] Error:', error);
@@ -402,6 +418,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } finally {
       set({ isLoading: false });
     }
+    return {};
   },
 
   logout: async () => {

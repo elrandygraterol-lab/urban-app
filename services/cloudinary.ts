@@ -3,7 +3,7 @@
  * Handles document uploads to Cloudinary for driver verification
  */
 
-const CLOUDINARY_CLOUD_NAME = 'dchkq5aa9';
+const CLOUDINARY_CLOUD_NAME = 'z7ivfy64';
 const CLOUDINARY_UPLOAD_PRESET = 'urbantaxi_documents'; // You need to create this in Cloudinary dashboard
 
 interface CloudinaryUploadResponse {
@@ -31,18 +31,22 @@ export const uploadDocumentToCloudinary = async (
   driverId: string
 ): Promise<CloudinaryUploadResponse> => {
   try {
-    const formData = new FormData();
-
-    // Convert URI to blob
-    const response = await fetch(uri);
-    const blob = await response.blob();
-
     // Determine file extension from URI or default to jpg
     const uriParts = uri.split('.');
     const ext = uriParts.length > 1 ? uriParts[uriParts.length - 1].split('?')[0] : 'jpg';
 
-    // Append file to form data
-    formData.append('file', blob, `${documentType}_${Date.now()}.${ext}`);
+    // Determine MIME type
+    let mimeType = 'application/octet-stream';
+    if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+    else if (ext === 'png') mimeType = 'image/png';
+    else if (ext === 'pdf') mimeType = 'application/pdf';
+    else if (ext === 'doc') mimeType = 'application/msword';
+    else if (ext === 'docx') mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+    // Build FormData using React Native file object (more reliable than fetch+blob)
+    const fileName = `${documentType}_${Date.now()}.${ext}`;
+    const formData = new FormData();
+    formData.append('file', { uri, type: mimeType, name: fileName } as any);
     formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
     formData.append('folder', `urbantaxi/drivers/${driverId}`);
     formData.append('public_id', `${documentType}_${Date.now()}`);

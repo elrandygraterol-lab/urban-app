@@ -6,7 +6,7 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
 
-const CLOUDINARY_CLOUD_NAME = 'dchkq5aa9';
+const CLOUDINARY_CLOUD_NAME = 'z7ivfy64';
 const CLOUDINARY_UPLOAD_PRESET = 'urbantaxi_documents';
 
 export interface CloudinaryUploadResponse {
@@ -62,8 +62,8 @@ export async function uploadToCloudinary(
 ): Promise<CloudinaryUploadResponse> {
   // Get file info to determine type
   const fileInfo = await FileSystem.getInfoAsync(uri);
-  const mimeType = (fileInfo as any).mimeType;
-  const isImage = isImageFile(mimeType);
+  const fileMimeType = (fileInfo as any).mimeType;
+  const isImage = isImageFile(fileMimeType);
 
   // Compress images before upload
   let uploadUri = uri;
@@ -71,18 +71,15 @@ export async function uploadToCloudinary(
     uploadUri = await compressImage(uri);
   }
 
-  // Convert URI to blob
-  const response = await fetch(uploadUri);
-  const blob = await response.blob();
-
   // Determine file extension
   const uriParts = uri.split('.');
   const ext = uriParts.pop()?.toLowerCase() || 'jpg';
   const fileName = `${options?.publicId || `${folder.replace(/\//g, '_')}_${Date.now()}`}.${ext}`;
+  const mimeType = isImage ? 'image/jpeg' : 'application/octet-stream';
 
-  // Build FormData
+  // Build FormData using React Native file object (more reliable than fetch+blob)
   const formData = new FormData();
-  formData.append('file', blob, fileName);
+  formData.append('file', { uri: uploadUri, type: mimeType, name: fileName } as any);
   formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
   formData.append('folder', folder);
 
