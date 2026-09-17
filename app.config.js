@@ -131,6 +131,7 @@ module.exports = ({ config }) => {
       'expo-audio',
       './plugins/withRemoveRecordAudioPermission',
       './plugins/withEdgeToEdge',
+      './plugins/withReactNativeMapsFix',
     ],
     experiments: {
       typedRoutes: true,
