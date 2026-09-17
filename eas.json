@@ -13,7 +13,8 @@
       },
       "ios": {
         "simulator": false,
-        "buildConfiguration": "Debug"
+        "buildConfiguration": "Debug",
+        "credentialsSource": "local"
       },
       "env": {
         "NODE_ENV": "development",
@@ -33,7 +34,8 @@
         "credentialsSource": "remote"
       },
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "credentialsSource": "local"
       },
       "env": {
         "NODE_ENV": "staging",
@@ -47,13 +49,26 @@
         "credentialsSource": "remote"
       },
       "ios": {
-        "buildConfiguration": "Release"
+        "buildConfiguration": "Release",
+        "credentialsSource": "local"
       },
       "env": {
         "NODE_ENV": "production",
         "EXPO_PUBLIC_API_URL": "https://administracionurbantaxis.com",
         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyDu-vsndSIMluuvLfmGf_sAhQiNDliznrU",
         "EXPO_NO_DOTENV": "1"
+      }
+    },
+    "adhoc": {
+      "distribution": "internal",
+      "ios": {
+        "buildConfiguration": "Release",
+        "credentialsSource": "local"
+      },
+      "env": {
+        "NODE_ENV": "staging",
+        "EXPO_PUBLIC_API_URL": "https://administracionurbantaxis.com",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyDu-vsndSIMluuvLfmGf_sAhQiNDliznrU"
       }
     }
   },
@@ -62,6 +77,12 @@
       "android": {
         "serviceAccountKeyPath": "./play-store-key.json",
         "track": "production"
+      },
+      "ios": {
+        "appleId": "maria.vvm22@gmail.com",
+        "ascApiKeyPath": "./auth/AuthKey_QZUJCWMGM8.p8",
+        "ascApiKeyId": "QZUJCWMGM8",
+        "ascApiKeyIssuerId": "78050246-7c10-4035-8b71-0a6ae8efeeb7"
       }
     }
   }

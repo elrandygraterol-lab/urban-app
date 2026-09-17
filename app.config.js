@@ -5,7 +5,7 @@ module.exports = ({ config }) => {
     : 'UrbanTaxi D';
   const suffix = profile === 'production' ? ''
     : profile === 'preview' ? '.preview'
-    : '.dev';
+    : '';
   const packageName = `com.urbantaxi.app${suffix}`;
   const androidGoogleServices = profile === 'production' ? './google-services.json'
     : profile === 'preview' ? './google-services-preview.json'
@@ -27,11 +27,19 @@ module.exports = ({ config }) => {
       supportsTablet: true,
       bundleIdentifier: packageName,
       googleServicesFile: iosGoogleServices,
+      appleTeamId: process.env.APPLE_TEAM_ID || 'FG4FGTT4Z4',
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
           `${appName} necesita acceso a tu ubicación para mostrarte en el mapa, encontrar conductores cercanos, calcular tarifas y rutas.`,
         NSLocationAlwaysAndWhenInUseUsageDescription:
-          `${appName} necesita acceso a tu ubicación incluso en segundo plano para compartir tu posición en tiempo real con el conductor durante el viaje y con el pasajero cuando conducas, garantizando un servicio seguro y preciso.`,
+          `${appName} necesita acceso a tu ubicación incluso en segundo plano para compartir tu posición en tiempo real con el conductor durante el viaje y con el pasajero cuando conduces, garantizando un servicio seguro y preciso.`,
+        NSPhotoLibraryUsageDescription:
+          `${appName} necesita acceso a tu galería para seleccionar tu foto de perfil.`,
+        NSCameraUsageDescription:
+          `${appName} necesita acceso a la cámara para tomar fotos de perfil.`,
+        NSMicrophoneUsageDescription:
+          `${appName} necesita acceso al micrófono para mensajes de audio.`,
+        ITSAppUsesNonExemptEncryption: false,
         UIBackgroundModes: ['location', 'fetch', 'remote-notification'],
       },
       config: {
@@ -79,6 +87,10 @@ module.exports = ({ config }) => {
             minSdkVersion: 24,
             usesCleartextTraffic: process.env.NODE_ENV !== 'production',
           },
+          ios: {
+            deploymentTarget: '15.1',
+            useFrameworks: 'static',
+          },
         },
       ],
       './plugins/withGoogleMapsApiKey',
@@ -101,7 +113,7 @@ module.exports = ({ config }) => {
         'expo-location',
         {
           locationAlwaysAndWhenInUsePermission:
-            `${appName} necesita acceso a tu ubicación incluso en segundo plano para compartir tu posición en tiempo real con el conductor durante el viaje y con el pasajero cuando conducas, garantizando un servicio seguro y preciso.`,
+            `${appName} necesita acceso a tu ubicación incluso en segundo plano para compartir tu posición en tiempo real con el conductor durante el viaje y con el pasajero cuando conduces, garantizando un servicio seguro y preciso.`,
           locationWhenInUsePermission:
             `${appName} necesita acceso a tu ubicación para mostrarte en el mapa, encontrar conductores cercanos, calcular tarifas y rutas.`,
           isAndroidBackgroundLocationEnabled: true,
@@ -136,7 +148,7 @@ module.exports = ({ config }) => {
     extra: {
       router: {},
       eas: {
-        "projectId": "358c0fe7-fd50-41a0-befd-86213bed1fbf"
+        "projectId": "2f0a1436-e1de-4a63-bf42-78a033c62cb9"
       },
       // Store Management System Configuration
       storeImageMaxSizeMB: 5,
