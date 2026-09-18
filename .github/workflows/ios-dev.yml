@@ -42,6 +42,16 @@ jobs:
       - name: Install Expo CLI
         run: npm install -g expo-cli eas-cli
 
+      - name: Decode GoogleService-Info.plist (production)
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}" | base64 --decode > GoogleService-Info.plist
+          ls -la GoogleService-Info.plist
+
+      - name: Decode GoogleService-Info-preview.plist (preview)
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICE_INFO_PREVIEW_PLIST_BASE64 }}" | base64 --decode > GoogleService-Info-preview.plist
+          ls -la GoogleService-Info-preview.plist
+
       - name: Prebuild iOS project
         run: |
           npx expo prebuild --clean --platform ios
