@@ -44,12 +44,12 @@ jobs:
 
       - name: Decode GoogleService-Info.plist (production)
         run: |
-          echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}" | base64 --decode > GoogleService-Info.plist
+          printf "%s" "${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}" | base64 --decode > GoogleService-Info.plist
           ls -la GoogleService-Info.plist
 
       - name: Decode GoogleService-Info-preview.plist (preview)
         run: |
-          echo "${{ secrets.GOOGLE_SERVICE_INFO_PREVIEW_PLIST_BASE64 }}" | base64 --decode > GoogleService-Info-preview.plist
+          printf "%s" "${{ secrets.GOOGLE_SERVICE_INFO_PREVIEW_PLIST_BASE64 }}" | base64 --decode > GoogleService-Info-preview.plist
           ls -la GoogleService-Info-preview.plist
 
       - name: Prebuild iOS project
@@ -63,12 +63,12 @@ jobs:
 
       - name: Decode and install P12 certificate
         run: |
-          echo "${{ secrets.DEV_P12_BASE64 }}" | base64 --decode > ${{ env.IOS_PROJECT_PATH }}/certs/development.p12
+          printf "%s" "${{ secrets.DEV_P12_BASE64 }}" | base64 --decode > ${{ env.IOS_PROJECT_PATH }}/certs/development.p12
           ls -la ${{ env.IOS_PROJECT_PATH }}/certs/
 
       - name: Decode and install Provisioning Profile
         run: |
-          echo "${{ secrets.DEV_PROFILE_BASE64 }}" | base64 --decode > ${{ env.IOS_PROJECT_PATH }}/certs/profile-development.mobileprovision
+          printf "%s" "${{ secrets.DEV_PROFILE_BASE64 }}" | base64 --decode > ${{ env.IOS_PROJECT_PATH }}/certs/profile-development.mobileprovision
           ls -la ${{ env.IOS_PROJECT_PATH }}/certs/
 
       - name: Create temporary keychain
