@@ -42,6 +42,11 @@ jobs:
       - name: Install Expo CLI
         run: npm install -g expo-cli eas-cli
 
+      - name: Create certs directory
+        run: |
+          mkdir -p ${{ env.IOS_PROJECT_PATH }}/certs
+          ls -la ${{ env.IOS_PROJECT_PATH }}/certs/
+
       - name: Decode and install P12 certificate
         run: |
           echo "${{ secrets.DEV_P12_BASE64 }}" | base64 --decode > ${{ env.IOS_PROJECT_PATH }}/certs/development.p12
