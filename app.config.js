@@ -135,6 +135,7 @@ module.exports = ({ config }) => {
       'expo-audio',
       './plugins/withRemoveRecordAudioPermission',
       './plugins/withEdgeToEdge',
+      './plugins/withPodfilePostInstallFix',
     ],
     experiments: {
       typedRoutes: true,
@@ -152,7 +153,7 @@ module.exports = ({ config }) => {
     extra: {
       router: {},
       eas: {
-        "projectId": "2f0a1436-e1de-4a63-bf42-78a033c62cb9"
+        "projectId": "f454393f-392d-435f-afd1-492ae42a4a20"
       },
       // Store Management System Configuration
       storeImageMaxSizeMB: 5,

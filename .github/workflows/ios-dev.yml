@@ -1,0 +1,122 @@
+name: iOS Development Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: false
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - adhoc
+
+jobs:
+  build:
+    name: Build iOS Development IPA
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    env:
+      NODE_VERSION: '20'
+      IOS_PROJECT_PATH: 'ios'
+      SCHEME: 'UrbanTaxiD'
+      BUNDLE_ID: 'com.urbantaxi.app'
+      TEAM_ID: 'FG4FGTT4Z4'
+      P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Expo CLI
+        run: npm install -g expo-cli eas-cli
+
+      - name: Decode and install P12 certificate
+        run: |
+          echo "${{ secrets.DEV_P12_BASE64 }}" | base64 --decode > ${{ env.IOS_PROJECT_PATH }}/certs/development.p12
+          ls -la ${{ env.IOS_PROJECT_PATH }}/certs/
+
+      - name: Decode and install Provisioning Profile
+        run: |
+          echo "${{ secrets.DEV_PROFILE_BASE64 }}" | base64 --decode > ${{ env.IOS_PROJECT_PATH }}/certs/profile-development.mobileprovision
+          ls -la ${{ env.IOS_PROJECT_PATH }}/certs/
+
+      - name: Create temporary keychain
+        run: |
+          security create-keychain -p "${{ secrets.P12_PASSWORD }}" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "${{ secrets.P12_PASSWORD }}" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+
+      - name: Import P12 certificate to keychain
+        run: |
+          security import ${{ env.IOS_PROJECT_PATH }}/certs/development.p12 \
+            -k build.keychain \
+            -P "${{ secrets.P12_PASSWORD }}" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+
+      - name: Install Provisioning Profile
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp ${{ env.IOS_PROJECT_PATH }}/certs/profile-development.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      - name: Set keychain as default for codesign
+        run: |
+          security set-key-partition-list -S apple-tool:,apple: -s -k "${{ secrets.P12_PASSWORD }}" build.keychain
+
+      - name: Prebuild iOS project
+        run: |
+          npx expo prebuild --clean --platform ios
+
+      - name: Archive iOS App
+        run: |
+          cd ${{ env.IOS_PROJECT_PATH }}
+          xcodebuild -workspace UrbanTaxiD.xcworkspace \
+            -scheme ${{ env.SCHEME }} \
+            -configuration Debug \
+            -archivePath build/UrbanTaxiD.xcarchive \
+            -allowProvisioningUpdates \
+            archive
+
+      - name: Export IPA
+        run: |
+          cd ${{ env.IOS_PROJECT_PATH }}
+          xcodebuild -exportArchive \
+            -archivePath build/UrbanTaxiD.xcarchive \
+            -exportPath build/ipa \
+            -exportOptionsPlist ../export-options.plist
+
+      - name: Upload IPA as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: UrbanTaxiD-${{ github.run_number }}.ipa
+          path: ${{ env.IOS_PROJECT_PATH }}/build/ipa/*.ipa
+          retention-days: 30
+
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          security delete-keychain build.keychain || true
+
+      - name: Summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Number**: ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Scheme**: ${{ env.SCHEME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Configuration**: Debug" >> $GITHUB_STEP_SUMMARY
+          echo "- **Bundle ID**: ${{ env.BUNDLE_ID }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Team ID**: ${{ env.TEAM_ID }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **IPA**: Available as artifact" >> $GITHUB_STEP_SUMMARY
+          echo "- **Install via**: Diawi, TestFlight, or direct install" >> $GITHUB_STEP_SUMMARY
