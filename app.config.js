@@ -90,6 +90,10 @@ module.exports = ({ config }) => {
           ios: {
             deploymentTarget: '15.1',
             useFrameworks: 'static',
+            buildSettings: {
+              CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULE: 'NO',
+              GCC_WARN_INHIBIT_ALL_WARNINGS: 'YES',
+            },
           },
         },
       ],
@@ -131,7 +135,6 @@ module.exports = ({ config }) => {
       'expo-audio',
       './plugins/withRemoveRecordAudioPermission',
       './plugins/withEdgeToEdge',
-      './plugins/withReactNativeMapsFix',
     ],
     experiments: {
       typedRoutes: true,
