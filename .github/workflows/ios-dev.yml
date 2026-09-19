@@ -25,6 +25,7 @@ jobs:
       BUNDLE_ID: 'com.urbantaxi.app'
       TEAM_ID: 'FG4FGTT4Z4'
       P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+      KEYCHAIN_PASSWORD: 'keychain-pass-urbantax-2024'
 
     steps:
       - name: Checkout repository
@@ -68,17 +69,45 @@ jobs:
       - name: Decode and install P12 certificate
         env:
           DEV_P12_BASE64: ${{ secrets.DEV_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
         run: |
-          echo "DEV_P12_BASE64 length: ${#DEV_P12_BASE64}"
-          echo "DEV_P12_BASE64 first 50: ${DEV_P12_BASE64:0:50}"
-          echo "DEV_P12_BASE64 last 50: ${DEV_P12_BASE64: -50}"
+          set -euo pipefail
+          echo "DEV_P12_BASE64 length (raw): ${#DEV_P12_BASE64}"
           node -e "
-            const b64 = process.env.DEV_P12_BASE64.trim();
-            const buf = Buffer.from(b64, 'base64');
-            require('fs').writeFileSync('${{ env.IOS_PROJECT_PATH }}/certs/development.p12', buf);
-            console.log('Decoded bytes:', buf.length);
-            if (buf.length !== 3224) console.error('⚠️ SIZE MISMATCH! Expected 3224');
+            const raw = process.env.DEV_P12_BASE64.replace(/\s+/g, '');
+            const buf = Buffer.from(raw, 'base64');
+            const fs = require('fs');
+            fs.writeFileSync('${{ env.IOS_PROJECT_PATH }}/certs/development.p12', buf);
+            console.log('DEV_P12_BASE64 length (sanitized):', raw.length, '(expected 4300)');
+            console.log('Decoded bytes:', buf.length, '(expected 3224)');
+            if (buf.length !== 3224) {
+              console.error('ERROR: P12 decodificado corrupto (longitud != 3224).');
+              console.error('  El secret DEV_P12_BASE64 esta incompleto o alterado.');
+              console.error('  Regenere con: base64 -i ios/certs/development.p12 | tr -d newline');
+              process.exit(1);
+            }
           "
+          echo "--- Validacion openssl del P12 decodificado ---"
+          if openssl pkcs12 -in ${{ env.IOS_PROJECT_PATH }}/certs/development.p12 -passin pass:"${P12_PASSWORD}" -nokeys -noout 2> /tmp/openssl_err.txt; then
+            echo "OK: P12 abierto con P12_PASSWORD (MAC valida)"
+          else
+            echo "FALLO: no se puede abrir el P12 con la P12_PASSWORD del secret."
+            cat /tmp/openssl_err.txt
+            echo "Causas probables:"
+            echo "  1) P12_PASSWORD no es exactamente UrbanTaxi2024 (14 chars, sin espacios ni saltos)"
+            echo "  2) DEV_P12_BASE64 corrupto"
+            exit 1
+          fi
+          echo "--- Normalizacion del P12 (re-export openssl) para garantizar MAC valida ---"
+          openssl pkcs12 -in ${{ env.IOS_PROJECT_PATH }}/certs/development.p12 \
+            -passin pass:"${P12_PASSWORD}" -nodes -out /tmp/dev_extracted.pem
+          openssl pkcs12 -export -in /tmp/dev_extracted.pem \
+            -passout pass:"${P12_PASSWORD}" \
+            -name "Apple Development: Maria velazquez motta (GNMJ4UW36K)" \
+            -out ${{ env.IOS_PROJECT_PATH }}/certs/development_normalized.p12
+          openssl pkcs12 -in ${{ env.IOS_PROJECT_PATH }}/certs/development_normalized.p12 \
+            -passin pass:"${P12_PASSWORD}" -nokeys -noout
+          echo "OK: P12 normalizado generado"
           ls -la ${{ env.IOS_PROJECT_PATH }}/certs/
 
       - name: Decode and install Provisioning Profile
@@ -87,32 +116,37 @@ jobs:
         run: |
           echo "DEV_PROFILE_BASE64 length: ${#DEV_PROFILE_BASE64}"
           node -e "
-            const b64 = process.env.DEV_PROFILE_BASE64.trim();
-            const buf = Buffer.from(b64, 'base64');
-            require('fs').writeFileSync('${{ env.IOS_PROJECT_PATH }}/certs/profile-development.mobileprovision', buf);
-            console.log('Decoded bytes:', buf.length);
+            const raw = process.env.DEV_PROFILE_BASE64.replace(/\s+/g, '');
+            const buf = Buffer.from(raw, 'base64');
+            const fs = require('fs');
+            fs.writeFileSync('${{ env.IOS_PROJECT_PATH }}/certs/profile-development.mobileprovision', buf);
+            console.log('DEV_PROFILE_BASE64 length (sanitized):', raw.length, '(expected 16896)');
+            console.log('Decoded bytes:', buf.length, '(expected 12671)');
+            if (buf.length !== 12671) {
+              console.error('ERROR: Provisioning profile decodificado corrupto (longitud != 12671).');
+              process.exit(1);
+            }
           "
+          file ${{ env.IOS_PROJECT_PATH }}/certs/profile-development.mobileprovision
           ls -la ${{ env.IOS_PROJECT_PATH }}/certs/
 
       - name: Create temporary keychain
         run: |
-          echo "P12_PASSWORD length: ${#P12_PASSWORD}"
-          echo "P12_PASSWORD: '${P12_PASSWORD}'"
-          security create-keychain -p "${P12_PASSWORD}" build.keychain
+          echo "P12_PASSWORD from secret, length: ${#P12_PASSWORD}"
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" build.keychain
           security default-keychain -s build.keychain
-          security unlock-keychain -p "${P12_PASSWORD}" build.keychain
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" build.keychain
           security set-keychain-settings -t 3600 -u build.keychain
 
       - name: Import P12 certificate to keychain
-        env:
-          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
         run: |
-          echo "Importing with password: '${P12_PASSWORD}'"
-          security import ${{ env.IOS_PROJECT_PATH }}/certs/development.p12 \
+          echo "Importing normalized P12..."
+          security import ${{ env.IOS_PROJECT_PATH }}/certs/development_normalized.p12 \
             -k build.keychain \
             -P "${P12_PASSWORD}" \
             -T /usr/bin/codesign \
             -T /usr/bin/security
+          security find-certificate -c "Apple Development" build.keychain
 
       - name: Install Provisioning Profile
         run: |
@@ -121,7 +155,7 @@ jobs:
 
       - name: Set keychain as default for codesign
         run: |
-          security set-key-partition-list -S apple-tool:,apple: -s -k "${{ secrets.P12_PASSWORD }}" build.keychain
+          security set-key-partition-list -S apple-tool:,apple: -s -k "${KEYCHAIN_PASSWORD}" build.keychain
 
       - name: Archive iOS App
         run: |
