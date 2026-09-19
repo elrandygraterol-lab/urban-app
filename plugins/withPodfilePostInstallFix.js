@@ -16,12 +16,24 @@ const withPodfilePostInstallFix = (config) => {
         // 'react-native-maps' (dash), not 'react_native_maps' (underscore), so a
         // name-scoped check never matches and leaves -Werror=non-modular... on.
         const postInstallFix = `
-    # Fix for react-native-maps non-modular header issue with Xcode 16 / iOS 18 SDK
+    # Fix for react-native-maps / react-native-google-maps non-modular header
+    # issue with Xcode 16 / iOS 18 SDK and new architecture (modules).
+    # 1) Disable non-modular-include escalation and other warnings for every pod.
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
         config.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULE'] = 'NO'
         config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
         config.build_settings['GCC_WARN_INHIBIT_ALL_WARNINGS'] = 'YES'
+      end
+    end
+    # 2) The Google provider target includes AirMaps headers through the
+    #    react_native_maps module; ordering the superclass import fails with
+    #    "declaration of 'RCTViewManager' must be imported from module". Turn
+    #    clang modules OFF for the maps targets so headers are textual includes.
+    installer.pods_project.targets.each do |target|
+      next unless target.name.include?('react-native-maps') || target.name.include?('react-native-google-maps')
+      target.build_configurations.each do |config|
+        config.build_settings['CLANG_ENABLE_MODULES'] = 'NO'
       end
     end
 `;
