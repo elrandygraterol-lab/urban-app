@@ -197,7 +197,7 @@ jobs:
           cd ${{ env.IOS_PROJECT_PATH }}
           xcodebuild -workspace UrbanTaxiD.xcworkspace \
             -scheme ${{ env.SCHEME }} \
-            -configuration Debug \
+            -configuration Release \
             -archivePath build/UrbanTaxiD.xcarchive \
             archive
 
@@ -226,7 +226,7 @@ jobs:
           echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "- **Build Number**: ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Scheme**: ${{ env.SCHEME }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Configuration**: Debug" >> $GITHUB_STEP_SUMMARY
+          echo "- **Configuration**: Release" >> $GITHUB_STEP_SUMMARY
           echo "- **Bundle ID**: ${{ env.BUNDLE_ID }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Team ID**: ${{ env.TEAM_ID }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Signing**: iPhone Distribution (Ad Hoc)" >> $GITHUB_STEP_SUMMARY
