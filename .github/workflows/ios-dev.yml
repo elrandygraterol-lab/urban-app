@@ -98,16 +98,22 @@ jobs:
             echo "  2) DEV_P12_BASE64 corrupto"
             exit 1
           fi
-          echo "--- Normalizacion del P12 (re-export openssl) para garantizar MAC valida ---"
+          echo "--- Normalizacion del P12 con algoritmos compatibles macOS (SHA1/3DES) ---"
+          sw_vers 2>/dev/null || true
           openssl pkcs12 -in ${{ env.IOS_PROJECT_PATH }}/certs/development.p12 \
             -passin pass:"${P12_PASSWORD}" -nodes -out /tmp/dev_extracted.pem
           openssl pkcs12 -export -in /tmp/dev_extracted.pem \
             -passout pass:"${P12_PASSWORD}" \
             -name "Apple Development: Maria velazquez motta (GNMJ4UW36K)" \
+            -keypbe PBE-SHA1-3DES \
+            -certpbe PBE-SHA1-3DES \
+            -macalg sha1 \
             -out ${{ env.IOS_PROJECT_PATH }}/certs/development_normalized.p12
           openssl pkcs12 -in ${{ env.IOS_PROJECT_PATH }}/certs/development_normalized.p12 \
             -passin pass:"${P12_PASSWORD}" -nokeys -noout
-          echo "OK: P12 normalizado generado"
+          openssl pkcs12 -in ${{ env.IOS_PROJECT_PATH }}/certs/development_normalized.p12 \
+            -passin pass:"${P12_PASSWORD}" -info -noout 2>&1 | grep -E "MAC:|Encrypted data:|Shrouded Keybag:" || true
+          echo "OK: P12 normalizado generado (MAC SHA1 + 3DES)"
           ls -la ${{ env.IOS_PROJECT_PATH }}/certs/
 
       - name: Decode and install Provisioning Profile
