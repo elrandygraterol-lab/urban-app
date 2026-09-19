@@ -44,14 +44,12 @@ jobs:
 
       - name: Decode GoogleService-Info.plist (production)
         run: |
-          echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}" > /tmp/GoogleService-Info.plist.b64
-          base64 -d -i /tmp/GoogleService-Info.plist.b64 -o GoogleService-Info.plist
+          node -e "require('fs').writeFileSync('GoogleService-Info.plist', Buffer.from(process.env.GOOGLE_SERVICE_INFO_PLIST_BASE64, 'base64'))"
           ls -la GoogleService-Info.plist
 
       - name: Decode GoogleService-Info-preview.plist (preview)
         run: |
-          echo "${{ secrets.GOOGLE_SERVICE_INFO_PREVIEW_PLIST_BASE64 }}" > /tmp/GoogleService-Info-preview.plist.b64
-          base64 -d -i /tmp/GoogleService-Info-preview.plist.b64 -o GoogleService-Info-preview.plist
+          node -e "require('fs').writeFileSync('GoogleService-Info-preview.plist', Buffer.from(process.env.GOOGLE_SERVICE_INFO_PREVIEW_PLIST_BASE64, 'base64'))"
           ls -la GoogleService-Info-preview.plist
 
       - name: Prebuild iOS project
@@ -65,14 +63,12 @@ jobs:
 
       - name: Decode and install P12 certificate
         run: |
-          echo "${{ secrets.DEV_P12_BASE64 }}" > /tmp/development.p12.b64
-          base64 -d -i /tmp/development.p12.b64 -o ${{ env.IOS_PROJECT_PATH }}/certs/development.p12
+          node -e "require('fs').writeFileSync('${{ env.IOS_PROJECT_PATH }}/certs/development.p12', Buffer.from(process.env.DEV_P12_BASE64, 'base64'))"
           ls -la ${{ env.IOS_PROJECT_PATH }}/certs/
 
       - name: Decode and install Provisioning Profile
         run: |
-          echo "${{ secrets.DEV_PROFILE_BASE64 }}" > /tmp/profile-development.mobileprovision.b64
-          base64 -d -i /tmp/profile-development.mobileprovision.b64 -o ${{ env.IOS_PROJECT_PATH }}/certs/profile-development.mobileprovision
+          node -e "require('fs').writeFileSync('${{ env.IOS_PROJECT_PATH }}/certs/profile-development.mobileprovision', Buffer.from(process.env.DEV_PROFILE_BASE64, 'base64'))"
           ls -la ${{ env.IOS_PROJECT_PATH }}/certs/
 
       - name: Create temporary keychain
