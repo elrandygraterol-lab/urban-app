@@ -49,3 +49,6 @@ GoogleService-Info.plist
 GoogleService-Info-*.plist
 # Firebase service account used by backend FCM delivery (Firebase Admin SDK; should not be committed)
 backend-urban-taxis/config/firebase-service-account.json
+
+# GitHub Actions secrets backup (contains signing credentials - DO NOT COMMIT)
+claves_github_actions.txt
