@@ -61,6 +61,26 @@ jobs:
         run: |
           npx expo prebuild --clean --platform ios
 
+      - name: Patch '@import' in Google-Maps-iOS-Utils headers
+        run: |
+          set -euo pipefail
+          # CLANG_ENABLE_MODULES=NO (aplicado en el post_install del Podfile para los targets
+          # de maps) resuelve el error de clang modules "declaration of 'RCTViewManager' must
+          # be imported from module 'react_native_maps.AIRMapCalloutManager'". Pero los headers
+          # de Google-Maps-iOS-Utils 5.x usan '@import GoogleMaps;', que requiere modules ON.
+          # Se parchean esos @import a #import para que compilen con modules desactivados.
+          replaced=0
+          for f in $(grep -rIl "@import" ${{ env.IOS_PROJECT_PATH }}/Pods/Google-Maps-iOS-Utils/Sources 2>/dev/null || true); do
+            sed -i '' 's/@import \([A-Za-z0-9_]*\);/#import <\1\/\1.h>/' "$f"
+            replaced=$((replaced+1))
+          done
+          for f in $(grep -rIl "@import" ${{ env.IOS_PROJECT_PATH }}/Pods/GoogleMaps/Maps/Sources 2>/dev/null || true); do
+            sed -i '' 's/@import \([A-Za-z0-9_]*\);/#import <\1\/\1.h>/' "$f"
+            replaced=$((replaced+1))
+          done
+          echo "Patched $replaced files"
+          grep -rn "@import" ${{ env.IOS_PROJECT_PATH }}/Pods/Google-Maps-iOS-Utils/Sources 2>/dev/null || echo "No '@import' remaining in Google-Maps-iOS-Utils"
+
       - name: Configure manual code signing on app target
         run: |
           node -e "

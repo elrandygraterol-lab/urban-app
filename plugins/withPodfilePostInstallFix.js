@@ -29,9 +29,11 @@ const withPodfilePostInstallFix = (config) => {
     # 2) The Google provider target includes AirMaps headers through the
     #    react_native_maps module; ordering the superclass import fails with
     #    "declaration of 'RCTViewManager' must be imported from module". Turn
-    #    clang modules OFF for the maps targets so headers are textual includes.
+    #    clang modules OFF only for the google provider target so those headers
+    #    become textual includes. (react-native-maps keeps modules ON so the app
+    #    can still import it as a framework module.)
     installer.pods_project.targets.each do |target|
-      next unless target.name.include?('react-native-maps') || target.name.include?('react-native-google-maps')
+      next unless target.name.include?('react-native-google-maps')
       target.build_configurations.each do |config|
         config.build_settings['CLANG_ENABLE_MODULES'] = 'NO'
       end
