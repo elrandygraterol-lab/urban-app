@@ -12,14 +12,16 @@ const withPodfilePostInstallFix = (config) => {
         let podfile = fs.readFileSync(podfilePath, 'utf-8');
         
         // Fix for react-native-maps non-modular header issue with Xcode 16 / iOS 18 SDK
+        // Applied to all pod targets: the react-native-maps pod target is named
+        // 'react-native-maps' (dash), not 'react_native_maps' (underscore), so a
+        // name-scoped check never matches and leaves -Werror=non-modular... on.
         const postInstallFix = `
     # Fix for react-native-maps non-modular header issue with Xcode 16 / iOS 18 SDK
     installer.pods_project.targets.each do |target|
-      if target.name == 'react_native_maps' || target.name == 'React-Core'
-        target.build_configurations.each do |config|
-          config.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULE'] = 'NO'
-          config.build_settings['GCC_WARN_INHIBIT_ALL_WARNINGS'] = 'YES'
-        end
+      target.build_configurations.each do |config|
+        config.build_settings['CLANG_WARN_NON_MODULAR_INCLUDE_IN_FRAMEWORK_MODULE'] = 'NO'
+        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+        config.build_settings['GCC_WARN_INHIBIT_ALL_WARNINGS'] = 'YES'
       end
     end
 `;
