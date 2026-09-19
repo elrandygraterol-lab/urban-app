@@ -61,6 +61,28 @@ jobs:
         run: |
           npx expo prebuild --clean --platform ios
 
+      - name: Configure manual code signing on app target
+        run: |
+          node -e "
+            const fs = require('fs');
+            const p = '${{ env.IOS_PROJECT_PATH }}/UrbanTaxiD.xcodeproj/project.pbxproj';
+            let s = fs.readFileSync(p, 'utf8');
+            const anchor = '\t\t\t\tDEVELOPMENT_TEAM = ${{ env.TEAM_ID }};';
+            const inject = anchor + '\n' +
+              '\t\t\t\tCODE_SIGN_STYLE = Manual;\n' +
+              '\t\t\t\tCODE_SIGN_IDENTITY = \"Apple Development\";\n' +
+              '\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"UrbanTaxi SJ Development\";';
+            const count = (s.split(anchor).length - 1);
+            if (count < 2) {
+              console.error('ERROR: esperaba al menos 2 ocurrencias de DEVELOPMENT_TEAM en el app target, encontradas:', count);
+              process.exit(1);
+            }
+            s = s.split(anchor).join(inject);
+            fs.writeFileSync(p, s);
+            console.log('OK: firma manual inyectada en', count, 'build configs del app target (UrbanTaxiD)');
+          "
+          grep -n "CODE_SIGN_STYLE\|PROVISIONING_PROFILE_SPECIFIER\|CODE_SIGN_IDENTITY" ${{ env.IOS_PROJECT_PATH }}/UrbanTaxiD.xcodeproj/project.pbxproj
+
       - name: Create certs directory
         run: |
           mkdir -p ${{ env.IOS_PROJECT_PATH }}/certs
@@ -172,10 +194,6 @@ jobs:
             -scheme ${{ env.SCHEME }} \
             -configuration Debug \
             -archivePath build/UrbanTaxiD.xcarchive \
-            DEVELOPMENT_TEAM=${{ env.TEAM_ID }} \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Development" \
-            PROVISIONING_PROFILE_SPECIFIER="UrbanTaxi SJ Development" \
             archive
 
       - name: Export IPA
