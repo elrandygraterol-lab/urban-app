@@ -19,6 +19,8 @@ jobs:
       KEYCHAIN_PASSWORD: 'keychain-pass-urbantax-2024'
       CERT_IDENTITY: 'iPhone Distribution: Maria velazquez motta (FG4FGTT4Z4)'
       PROFILE_NAME: 'UrbanTaxi SJ Ad Hoc'
+      EXPO_PUBLIC_API_URL: 'https://administracionurbantaxis.com'
+      EXPO_NO_DOTENV: '1'
 
     steps:
       - name: Checkout repository
