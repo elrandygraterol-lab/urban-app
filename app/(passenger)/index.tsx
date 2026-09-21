@@ -1425,6 +1425,12 @@ export default function PassengerHomeScreen() {
         return;
       }
 
+      // Defensive payment gate: any path that surfaces "accepted" must route
+      // the passenger through the payment form unless the ride was already paid.
+      if (data.status === 'accepted') {
+        openPaymentModalIfDue(data, data.estimatedFare ?? data.finalFare ?? undefined);
+      }
+
       setActiveRide(prev => ({
         ...prev!,
         status: data.status,
@@ -4390,8 +4396,38 @@ export default function PassengerHomeScreen() {
               bounces={false}
               overScrollMode="never"
             >
+              {/* Payment gate — while a ride is accepted but unpaid, show ONLY the
+                  payment prompt, not the driver/trip details (pay before details) */}
+              {activeRide && activeRide.status === 'accepted' && !paymentCompleted && (
+                <View style={styles.ridePanel}>
+                  <View style={styles.paywallCard}>
+                    <View style={styles.paywallIconWrap}>
+                      <Ionicons name="lock-closed-outline" size={18} color="#2FB908" />
+                    </View>
+                    <Text style={styles.paywallTitle}>Confirmar Pago</Text>
+                    <Text style={styles.paywallDesc}>
+                      Tu conductor fue asignado. Completa el pago para ver los detalles del viaje.
+                    </Text>
+                    <View style={styles.paywallFareRow}>
+                      <Text style={styles.paywallFareLabel}>Tarifa</Text>
+                      <Text style={styles.paywallFareValue}>
+                        {formatCurrency(finalFare || estimatedFare || 0, fareCurrency)}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.paywallBtn}
+                      activeOpacity={0.8}
+                      onPress={() => setShowMobilePaymentModal(true)}
+                    >
+                      <Ionicons name="wallet-outline" size={16} color="#fff" />
+                      <Text style={styles.paywallBtnText}>Pagar ahora</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
               {/* Active Ride - Driver Info (or completed fallback) */}
-              {activeRide && (activeRide.driver || activeRide.status === 'completed') && (
+              {activeRide && (activeRide.driver || activeRide.status === 'completed') && (paymentCompleted || activeRide.status !== 'accepted') && (
                 <View style={styles.ridePanel}>
                   {/* Dynamic title based on status */}
                   <Text style={styles.rideTitle}>
@@ -6777,6 +6813,68 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#f0f0f0',
+  },
+  paywallCard: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  paywallIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f0fdf4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  paywallTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1f2937',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  paywallDesc: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 17,
+    marginBottom: 12,
+    paddingHorizontal: 8,
+  },
+  paywallFareRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  paywallFareLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  paywallFareValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#2FB908',
+  },
+  paywallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#2FB908',
+    borderRadius: 10,
+    height: 40,
+    paddingHorizontal: 24,
+  },
+  paywallBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#fff',
   },
   rideTitle: {
     fontSize: 15,
