@@ -16,7 +16,7 @@ export const paymentAPI = {
   processPayment: (rideId: string, paymentMethodId: string) =>
     api.post('/api/payments/process', { rideId, paymentMethodId }),
 
-  verifyP2CPayment: (rideId: string, paymentData: {
+  verifyP2CPayment: (rideId: string | null, paymentData: {
     referencia: string;
     fecha: string;
     banco: string;

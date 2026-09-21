@@ -7,30 +7,28 @@ import {
   TextInput,
   ActivityIndicator,
   Animated,
-  Modal,
-  FlatList,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline, Region } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Colors } from '@/constants/theme';
-import { BANCOS_VENEZUELA } from '@/constants/banks';
 import api from '@/services/api';
+import { paymentAPI } from '@/services/api/payment';
 import { getRoute } from '@/services/mapsService';
 import { DriverTaxiIcon, DropoffIcon, PickupIcon } from '@/src/components/map/markers';
 import { useDriverStore } from '@/store/driverStore';
 import { formatCurrency, Currency } from '@/utils/currency';
 import CenterLocationButton from '@/components/CenterLocationButton';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
+import MobilePaymentModal from '@/components/MobilePaymentModal';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 
 export default function ManageRideScreen() {
   const router = useRouter();
   const mapRef = useRef<MapView>(null);
-  const insets = useSafeAreaInsets();
   const { setIsAvailable } = useDriverStore();
   const { showToast } = useUnifiedNotifications();
   const panelAnim = useRef(new Animated.Value(0)).current;
@@ -64,16 +62,15 @@ export default function ManageRideScreen() {
 
   // Payment
   const [paymentMode, setPaymentMode] = useState<'cash' | 'pago_movil'>('cash');
-  const [pagoMovilRef, setPagoMovilRef] = useState('');
-  const [pagoMovilPhone, setPagoMovilPhone] = useState('');
-  const [pagoMovilBank, setPagoMovilBank] = useState('0102');
-  const [pagoMovilCedula, setPagoMovilCedula] = useState('');
   const [beneficiaryName, setBeneficiaryName] = useState('');
 
   // Submit
   const [submitting, setSubmitting] = useState(false);
   const [destSearchText, setDestSearchText] = useState('');
-  const [showBankPicker, setShowBankPicker] = useState(false);
+
+  // Pago Móvil: reutiliza el formulario de pago principal (verificación contra el banco)
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [platformMethod, setPlatformMethod] = useState<any>(null);
 
   // Animate panel
   useEffect(() => {
@@ -116,6 +113,14 @@ export default function ManageRideScreen() {
       } catch {
         console.error('[MANAGE_RIDE] Exchange rate fetch failed');
       }
+
+      try {
+        const res = await paymentAPI.getPlatformPaymentMethods();
+        const methods = res.data?.data || [];
+        if (methods?.length > 0) setPlatformMethod(methods[0]);
+      } catch {
+        console.error('[MANAGE_RIDE] Platform payment methods fetch failed');
+      }
     })();
   }, []);
 
@@ -128,12 +133,9 @@ export default function ManageRideScreen() {
       setRouteDuration(null);
       setEstimatedFare(null);
       setPaymentMode('cash');
-      setPagoMovilRef('');
-      setPagoMovilPhone('');
-      setPagoMovilCedula('');
       setBeneficiaryName('');
       setDestSearchText('');
-      setShowBankPicker(false);
+      setShowPaymentModal(false);
       setIsPanelExpanded(false);
       setLoadingRoute(false);
       setLoadingFare(false);
@@ -224,64 +226,17 @@ export default function ManageRideScreen() {
       });
   };
 
-  const handleSubmit = async () => {
+  const createManualRide = async (paymentData: {
+    method: 'mobile_payment' | 'cash';
+    referencia?: string;
+    banco?: string;
+    telefonoP?: string;
+    identificacion?: string;
+  }) => {
     if (!pickup || !destination) return;
     setSubmitting(true);
     try {
-      // For pago_movil, verify payment via P2C API first
-      if (paymentMode === 'pago_movil') {
-        if (!pagoMovilRef || pagoMovilRef.length < 6) {
-          showToast('Ingresa una referencia de pago válida (6 dígitos)', 'error');
-          setSubmitting(false);
-          return;
-        }
-        if (!pagoMovilPhone) {
-          showToast('Ingresa el teléfono del pagador', 'error');
-          setSubmitting(false);
-          return;
-        }
-        if (!pagoMovilCedula) {
-          showToast('Ingresa la cédula del pagador', 'error');
-          setSubmitting(false);
-          return;
-        }
-        if (!estimatedFare || estimatedFare <= 0) {
-          showToast('No se pudo calcular la tarifa. Verifica que el destino sea válido.', 'error');
-          setSubmitting(false);
-          return;
-        }
-
-        // Calculate VES amount for P2C verification
-        let vesAmount = estimatedFare || 0;
-        if (fareCurrency === 'USD' && exchangeRate > 0) {
-          vesAmount = estimatedFare! * exchangeRate;
-        }
-
-        const today = new Date();
-        const fecha = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
-
-        try {
-          await api.post('/api/payments/verify-p2c', {
-            rideId: null, // No ride yet — pre-verification
-            referencia: pagoMovilRef.slice(-6),
-            fecha,
-            banco: pagoMovilBank,
-            telefonoP: pagoMovilPhone,
-            monto: Math.round(vesAmount * 100) / 100,
-            identificacion: pagoMovilCedula,
-            processPayment: true,
-          });
-          showToast('Pago verificado exitosamente', 'success');
-        } catch (verifyErr: any) {
-          const errorMsg =
-            verifyErr?.response?.data?.error?.message || verifyErr?.message || 'Pago no encontrado';
-          showToast(errorMsg, 'error');
-          setSubmitting(false);
-          return;
-        }
-      }
-
-      // Si llegamos aquí, P2C fue exitoso o no aplica; validar tarifa antes del body
+      const isPagoMovil = paymentData.method === 'mobile_payment';
 
       const body: any = {
         vehicleType: 'taxi',
@@ -291,17 +246,17 @@ export default function ManageRideScreen() {
         destinationLatitude: destination.latitude,
         destinationLongitude: destination.longitude,
         destinationAddress: destination.address,
-        paymentMode,
+        paymentMode: isPagoMovil ? 'pago_movil' : 'cash',
       };
-      if (paymentMode === 'pago_movil') {
-        body.pagoMovilRef = pagoMovilRef;
-        body.pagoMovilPhone = pagoMovilPhone;
-        body.pagoMovilBank = pagoMovilBank;
-        body.pagoMovilCedula = pagoMovilCedula;
+      if (isPagoMovil) {
         let vesAmount = estimatedFare || 0;
         if (fareCurrency === 'USD' && exchangeRate > 0) {
           vesAmount = estimatedFare! * exchangeRate;
         }
+        body.pagoMovilRef = paymentData.referencia;
+        body.pagoMovilPhone = paymentData.telefonoP;
+        body.pagoMovilBank = paymentData.banco;
+        body.pagoMovilCedula = paymentData.identificacion;
         body.pagoMovilAmount = Math.round(vesAmount * 100) / 100;
       }
       if (beneficiaryName.trim()) {
@@ -312,14 +267,10 @@ export default function ManageRideScreen() {
       const rideData = res.data?.data;
       if (rideData?.rideId) {
         setIsAvailable(false);
-        // Clear form state before navigating
         setDestSearchText('');
         setDestination(null);
         setRouteCoordinates([]);
         setEstimatedFare(null);
-        setPagoMovilRef('');
-        setPagoMovilPhone('');
-        setPagoMovilCedula('');
         setBeneficiaryName('');
         setPaymentMode('cash');
         router.push(`/(driver)/active-ride?rideId=${rideData.rideId}&source=manual` as any);
@@ -331,6 +282,21 @@ export default function ManageRideScreen() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = async () => {
+    if (!pickup || !destination) return;
+
+    if (paymentMode === 'pago_movil') {
+      if (!estimatedFare || estimatedFare <= 0) {
+        showToast('No se pudo calcular la tarifa. Verifica que el destino sea válido.', 'error');
+        return;
+      }
+      setShowPaymentModal(true);
+      return;
+    }
+
+    await createManualRide({ method: 'cash' });
   };
 
   const canSubmit = !!pickup && !!destination && !submitting;
@@ -356,6 +322,13 @@ export default function ManageRideScreen() {
       : estimatedFare! / exchangeRate
     : null;
   const secondaryCurrency: Currency = fareCurrency === 'USD' ? 'VES' : 'USD';
+
+  const vesPaymentAmount =
+    estimatedFare != null
+      ? fareCurrency === 'USD' && exchangeRate > 0
+        ? Math.round(estimatedFare * exchangeRate * 100) / 100
+        : Number(estimatedFare)
+      : 0;
 
   const panelMaxHeight = panelAnim.interpolate({
     inputRange: [0, 1],
@@ -581,65 +554,14 @@ export default function ManageRideScreen() {
 
               {paymentMode === 'pago_movil' && (
                 <View style={styles.pagoMovilFields}>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Referencia (6 dígitos)</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="123456"
-                      placeholderTextColor="#9ca3af"
-                      value={pagoMovilRef}
-                      onChangeText={setPagoMovilRef}
-                      keyboardType="number-pad"
-                      maxLength={12}
-                    />
-                  </View>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Teléfono del pagador</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="0412xxxxxxx"
-                      placeholderTextColor="#9ca3af"
-                      value={pagoMovilPhone}
-                      onChangeText={setPagoMovilPhone}
-                      keyboardType="phone-pad"
-                    />
-                  </View>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Cédula del pagador</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="V12345678"
-                      placeholderTextColor="#9ca3af"
-                      value={pagoMovilCedula}
-                      onChangeText={setPagoMovilCedula}
-                      autoCapitalize="characters"
-                    />
-                  </View>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Banco</Text>
-                    <TouchableOpacity
-                      style={styles.bankSelector}
-                      onPress={() => setShowBankPicker(true)}
-                    >
-                      <Text style={styles.bankSelectorText}>
-                        {BANCOS_VENEZUELA.find(b => b.code === pagoMovilBank)?.name ||
-                          'Seleccionar banco'}
-                      </Text>
-                      <Text style={styles.bankSelectorCode}>{pagoMovilBank}</Text>
-                      <Ionicons name="chevron-down" size={16} color="#9ca3af" />
-                    </TouchableOpacity>
-                  </View>
                   {estimatedFare != null && (
                     <View style={styles.vesAmountInfo}>
-                      <Ionicons name="information-circle-outline" size={14} color="#6b7280" />
+                      <Ionicons name="card-outline" size={16} color="#92400e" />
                       <Text style={styles.vesAmountText}>
-                        Monto verificado:{' '}
-                        {fareCurrency === 'USD' && exchangeRate > 0
-                          ? formatCurrency(
-                              Math.round(estimatedFare * exchangeRate * 100) / 100,
-                              'VES'
-                            )
-                          : formatCurrency(estimatedFare, 'VES')}
+                        {`Monto a pagar: ${formatCurrency(
+                          vesPaymentAmount,
+                          'VES'
+                        )}. El pasajero paga a la cuenta de la plataforma y la operación se valida con el banco al confirmar.`}
                       </Text>
                     </View>
                   )}
@@ -674,75 +596,18 @@ export default function ManageRideScreen() {
         </Animated.View>
       </View>
 
-      {/* Bank Picker Modal */}
-      <Modal
-        visible={showBankPicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowBankPicker(false)}
-      >
-        <TouchableOpacity
-          style={{ flex: 1, justifyContent: 'flex-end' }}
-          activeOpacity={1}
-          onPress={() => setShowBankPicker(false)}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={[styles.bankModal, { paddingBottom: insets.bottom + 16 }]}
-          >
-            <View style={styles.bankModalHeader}>
-              <Text style={styles.bankModalTitle}>Seleccionar Banco</Text>
-              <TouchableOpacity onPress={() => setShowBankPicker(false)}>
-                <Ionicons name="close" size={24} color="#374151" />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={BANCOS_VENEZUELA}
-              keyExtractor={b => b.code}
-              style={{ maxHeight: 400 }}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.bankItem, pagoMovilBank === item.code && styles.bankItemActive]}
-                  onPress={() => {
-                    setPagoMovilBank(item.code);
-                    setShowBankPicker(false);
-                  }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={[
-                        styles.bankItemName,
-                        pagoMovilBank === item.code && { color: Colors.primary },
-                      ]}
-                    >
-                      {item.name}
-                    </Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.bankItemCode,
-                      pagoMovilBank === item.code && { color: Colors.primary, fontWeight: '700' },
-                    ]}
-                  >
-                    {item.code}
-                  </Text>
-                  {pagoMovilBank === item.code && (
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={20}
-                      color={Colors.primary}
-                      style={{ marginLeft: 8 }}
-                    />
-                  )}
-                </TouchableOpacity>
-              )}
-              ItemSeparatorComponent={() => (
-                <View style={{ height: 1, backgroundColor: '#f3f4f6' }} />
-              )}
-            />
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+      {/* Formulario de pago principal reutilizado en el viaje manual */}
+      <MobilePaymentModal
+        visible={showPaymentModal}
+        amount={vesPaymentAmount}
+        currency="VES"
+        platformMethod={platformMethod}
+        onPaymentComplete={paymentData => {
+          setShowPaymentModal(false);
+          createManualRide(paymentData);
+        }}
+        onCancel={() => setShowPaymentModal(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -949,8 +814,6 @@ const styles = StyleSheet.create({
   paymentOptionText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
   paymentOptionTextActive: { color: '#fff' },
   pagoMovilFields: { marginTop: 12, gap: 10 },
-  inputGroup: { gap: 4 },
-  inputLabel: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
   input: {
     height: 44,
     borderWidth: 1.5,
@@ -961,44 +824,6 @@ const styles = StyleSheet.create({
     color: '#111',
     backgroundColor: '#f9fafb',
   },
-  bankSelector: {
-    height: 44,
-    borderWidth: 1.5,
-    borderColor: '#e5e7eb',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f9fafb',
-    gap: 8,
-  },
-  bankSelectorText: { flex: 1, fontSize: 14, color: '#111' },
-  bankSelectorCode: { fontSize: 12, color: '#9ca3af', fontWeight: '600' },
-  bankModal: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 20,
-    maxHeight: '60%',
-  },
-  bankModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  bankModalTitle: { fontSize: 18, fontWeight: '700', color: '#111' },
-  bankItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
-  bankItemActive: { backgroundColor: '#f0fdf4' },
-  bankItemName: { fontSize: 15, color: '#111', fontWeight: '500' },
-  bankItemCode: { fontSize: 13, color: '#9ca3af', fontWeight: '500' },
   vesAmountInfo: {
     flexDirection: 'row',
     alignItems: 'center',

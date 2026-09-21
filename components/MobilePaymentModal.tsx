@@ -42,7 +42,7 @@ interface MobilePaymentModalProps {
   amount: number;
   currency?: Currency;
   exchangeRate?: number;
-  rideId: string;
+  rideId?: string;
   passengerName?: string;
   platformMethod?: PlatformPaymentMethod;
   onPaymentComplete: (paymentData: {
@@ -308,6 +308,8 @@ export default function MobilePaymentModal({
 }: MobilePaymentModalProps) {
   const insets = useSafeAreaInsets();
   const { showToast, showStatus, dismissStatus } = useUnifiedNotifications();
+  // Modo manual: verificación previa al viaje (sin rideId), el padre crea el ride después
+  const isManualMode = rideId == null;
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mobile');
   const [selectedBank, setSelectedBank] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -375,6 +377,11 @@ export default function MobilePaymentModal({
 
   const handleTimeoutCancel = useCallback(async () => {
     if (isPaymentCompletedRef.current) return;
+    if (isManualMode) {
+      resetForm();
+      onCancel();
+      return;
+    }
     setIsAutoCancelling(true);
     setCancelError(null);
     try {
@@ -386,7 +393,7 @@ export default function MobilePaymentModal({
     } finally {
       setIsAutoCancelling(false);
     }
-  }, [rideId, resetForm, onCancel]);
+  }, [rideId, isManualMode, resetForm, onCancel]);
 
   useEffect(() => {
     if (visible) {
@@ -526,7 +533,7 @@ export default function MobilePaymentModal({
     isPaymentCompletedRef.current = true;
     try {
       const selectedBankData = VENEZUELAN_BANKS.find((b) => b.id === selectedBank);
-      const response = await paymentAPI.verifyP2CPayment(rideId, {
+      const response = await paymentAPI.verifyP2CPayment(isManualMode ? null : rideId, {
         referencia,
         fecha: safeFecha,
         banco: selectedBankData?.code || selectedBank,
@@ -611,9 +618,14 @@ export default function MobilePaymentModal({
     setIsAutoCancelling(true);
     onBeforeCancel?.();
     try {
-      await rideAPI.cancelRide(rideId, {});
-      resetForm();
-      onCancel();
+      if (isManualMode) {
+        resetForm();
+        onCancel();
+      } else {
+        await rideAPI.cancelRide(rideId, {});
+        resetForm();
+        onCancel();
+      }
     } catch {
       setCancelError('No se pudo cancelar el viaje. Intenta nuevamente.');
     } finally {
