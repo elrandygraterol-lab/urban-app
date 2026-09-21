@@ -563,24 +563,25 @@ export default function MobilePaymentModal({
       let retry = true;
       if (error.response) {
         const { status, data } = error.response;
+        const serverMsg = data?.error?.message as string | undefined;
         switch (status) {
           case 422:
-            msg = data.message || 'Pago rechazado por el banco. Verifica los datos.';
+            msg = serverMsg || 'Pago rechazado por el banco. Verifica los datos.';
             retry = false;
             break;
           case 409:
-            msg = 'Este pago ya fue procesado.';
+            msg = serverMsg || 'Este pago ya fue procesado.';
             retry = false;
             break;
           case 404:
-            msg = 'Pago no encontrado en el banco. Verifica los datos.';
+            msg = serverMsg || 'Pago no encontrado en el banco. Verifica los datos.';
             retry = false;
             break;
           case 503:
-            msg = 'Servicio de pagos no disponible. Intenta más tarde.';
+            msg = serverMsg || 'Servicio de pagos no disponible. Intenta más tarde.';
             break;
           default:
-            msg = data.message || msg;
+            msg = serverMsg || msg;
         }
       }
       if (retry) {

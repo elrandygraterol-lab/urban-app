@@ -274,7 +274,7 @@ export default function ManageRideScreen() {
           showToast('Pago verificado exitosamente', 'success');
         } catch (verifyErr: any) {
           const errorMsg =
-            verifyErr?.response?.data?.message || verifyErr?.message || 'Pago no encontrado';
+            verifyErr?.response?.data?.error?.message || verifyErr?.message || 'Pago no encontrado';
           showToast(errorMsg, 'error');
           setSubmitting(false);
           return;
