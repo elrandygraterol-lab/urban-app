@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -148,6 +148,8 @@ export default function ActiveRideScreen() {
   const locationBufferRef = useRef<Array<{ latitude: number; longitude: number; heading: number | null }>>([]);
   const completionSoundPlayedRef = useRef(false);
   const driverInitiatedCancelRef = useRef(false);
+  const cancellationHandledRef = useRef(false);
+  const fetchRideRef = useRef<(() => Promise<void>) | null>(null);
 
   // Keep rideRef and locationRef in sync
   useEffect(() => {
@@ -195,6 +197,29 @@ export default function ActiveRideScreen() {
   const [navDestCoords, setNavDestCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   const [routeSteps, setRouteSteps] = useState<Step[]>([]);
+
+  // Single source of truth for cancelling the current ride UI. Used by the
+  // socket handler, the foreground recovery and the polling fallback so a
+  // cancellation is only ever processed once per ride (dedup via ref).
+  const resetRideAfterCancellation = useCallback(
+    (message: string) => {
+      if (cancellationHandledRef.current) {
+        console.log('[ACTIVE_RIDE] Cancellation already handled — skipping duplicate cleanup');
+        return;
+      }
+      cancellationHandledRef.current = true;
+
+      playNotificationSound();
+      setIsAvailable(true);
+      setRide(null);
+      rideRef.current = null;
+      setRouteCoordinates([]);
+      setRouteSteps([]);
+      showStatus('ride_cancelled', message, 'Viaje Cancelado');
+      setTimeout(() => router.replace('/(driver)'), 1500);
+    },
+    [playNotificationSound, setIsAvailable, setRide, setRouteCoordinates, setRouteSteps, showStatus, router]
+  );
   const [nearestStepIndex, setNearestStepIndex] = useState<number>(0);
   const [nearestRouteIndex, setNearestRouteIndex] = useState<number>(0);
   const announcedStepIndexRef = useRef<number>(-1);
@@ -237,6 +262,7 @@ export default function ActiveRideScreen() {
     setBackendEtaDistance(null);
     completionSoundPlayedRef.current = false;
     driverInitiatedCancelRef.current = false;
+    cancellationHandledRef.current = false;
 
     fetchRide();
     initializeLocation();
@@ -347,7 +373,7 @@ export default function ActiveRideScreen() {
       }
 
       // Re-fetch ride data to get latest status (might have changed while in background)
-      fetchRide().then(() => {
+      fetchRideRef.current?.().then(() => {
         // Check if GPS subscription is still alive
         if (locationSubscriptionRef.current) {
           // Subscription alive — get fresh position and redraw route
@@ -486,11 +512,9 @@ export default function ActiveRideScreen() {
       // Check if ride was cancelled while app was in background
       if (rideData?.status === 'cancelled') {
         console.log('[ACTIVE_RIDE] ⚠️ Ride was cancelled while app was in background');
-        setIsAvailable(true);
-        setRide(null);
-        rideRef.current = null;
-        showStatus('ride_cancelled', 'El viaje fue cancelado mientras estabas fuera de la app.', 'Viaje Cancelado');
-        setTimeout(() => router.replace('/(driver)'), 1500);
+        resetRideAfterCancellation(
+          'El viaje fue cancelado mientras estabas fuera de la app.'
+        );
         return;
       }
 
@@ -569,6 +593,10 @@ export default function ActiveRideScreen() {
       if (currentRideIdRef.current === rideId) {
         setLoading(false);
       }
+      // Keep the latest fetchRide available to the AppState foreground handler,
+      // which is mounted once with empty deps and would otherwise capture a
+      // stale closure when the tab screen is reused across rides.
+      fetchRideRef.current = fetchRide;
     }
   };
 
@@ -1004,9 +1032,6 @@ export default function ActiveRideScreen() {
         return;
       }
 
-      // Play notification sound
-      playNotificationSound();
-
       // Build cancellation message based on who cancelled and why
       let message: string;
       if (data.cancellationReason === 'payment_timeout' || data.cancellationReason?.includes('timeout') || data.cancelledBy === 'system') {
@@ -1034,16 +1059,9 @@ export default function ActiveRideScreen() {
         }
       }
 
-      // Restore driver availability
-      setIsAvailable(true);
-      setRide(null);
-      setRouteCoordinates([]);
-      setRouteSteps([]);
-
-      // Notification handled by useGlobalSocketListeners — avoid duplicate
-
-      // Auto-redirect to home after notification shows
-      setTimeout(() => router.replace('/(driver)'), 1500);
+      // Shared cleanup (dedup: only once per ride). Notification handled by
+      // useGlobalSocketListeners — avoid duplicate.
+      resetRideAfterCancellation(message);
     };
 
     // Listen for payment method change by passenger (Req. 3.4)
@@ -1216,6 +1234,15 @@ export default function ActiveRideScreen() {
         const currentStatus = rideRef.current?.status;
         if (!updated?.status || !currentStatus) return;
         if (updated.status === currentStatus) return;
+        // Server reports cancellation — recover the UI even if the socket event
+        // was missed (e.g. app was offline or in background while passenger cancelled).
+        if (updated.status === 'cancelled') {
+          console.log('[ACTIVE_RIDE] ⚡ Polling caught cancellation:', ride.id);
+          terminated = true;
+          clearInterval(interval);
+          resetRideAfterCancellation('El viaje fue cancelado mientras estabas fuera de la app.');
+          return;
+        }
         // Never revert completed or cancelled
         if (cs === 'completed' || cs === 'cancelled') return;
         // Only allow forward progression in the status flow
@@ -1258,7 +1285,7 @@ export default function ActiveRideScreen() {
       terminated = true;
       clearInterval(interval);
     };
-  }, [ride?.id]);
+  }, [ride?.id, resetRideAfterCancellation]);
 
   // Network recovery — when internet comes back, refresh ride state and reconnect
   useNetworkRecovery(() => {

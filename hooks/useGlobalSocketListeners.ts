@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useCallback, useRef } from 'react';
+import { AppState } from 'react-native';
 import { getSocket, connectSocket, addConnectionListener, removeConnectionListener } from '@/services/socket';
 import { rideAPI } from '@/services/api';
 import { useSound } from './useSound';
@@ -40,6 +41,8 @@ export const useGlobalSocketListeners = ({
   const processedRideRequestIdsRef = useRef<Set<string>>(new Set());
   const processedCancelledRideIdsRef = useRef<Set<string>>(new Set());
   const debugOnAnyRef = useRef<((...args: any[]) => void) | null>(null);
+  const activeRideRequestRef = useRef(activeRideRequest);
+  activeRideRequestRef.current = activeRideRequest;
 
   // Handler for ride:request_created event (GLOBAL - works on any screen)
   const handleRideRequest = useCallback(
@@ -108,6 +111,19 @@ export const useGlobalSocketListeners = ({
     (data: { rideId: string }) => {
       if (activeRideRequest?.id === data.rideId) {
         console.log('[GLOBAL_SOCKET] Ride request taken by another driver, dismissing:', data.rideId);
+        dismissRideRequest();
+      }
+    },
+    [activeRideRequest?.id, dismissRideRequest]
+  );
+
+  // Handler for ride:request_cancelled event — passenger cancelled a PENDING
+  // request before any driver accepted it. Dismiss the card if it matches.
+  const handleRideRequestCancelled = useCallback(
+    (data: { rideId: string; status?: string; cancelledAt?: string }) => {
+      console.log('[GLOBAL_SOCKET] Ride request cancelled event received:', data);
+      if (activeRideRequest?.id === data.rideId) {
+        console.log('[GLOBAL_SOCKET] Dismissing cancelled ride request card:', data.rideId);
         dismissRideRequest();
       }
     },
@@ -212,6 +228,12 @@ export const useGlobalSocketListeners = ({
         return;
       }
 
+      // If this cancellation corresponds to a still-visible request card, dismiss it
+      if (activeRideRequest?.id === data.rideId) {
+        console.log('[GLOBAL_SOCKET] Dismissing ride request card for cancelled ride:', data.rideId);
+        dismissRideRequest();
+      }
+
       // Determine message based on who cancelled and role
       let message = '';
       if (user?.role === 'driver' && data.cancelledBy === 'driver') {
@@ -267,7 +289,7 @@ export const useGlobalSocketListeners = ({
         }
       }
     },
-    [user?.id, user?.role, showStatus, playNotificationSound, convertToUsd, convertToBs]
+    [user?.id, user?.role, showStatus, playNotificationSound, convertToUsd, convertToBs, activeRideRequest?.id, dismissRideRequest]
   );
 
   // HANDLERS FOR PASSENGER
@@ -446,7 +468,7 @@ export const useGlobalSocketListeners = ({
 
   // DRIVER: Request pending rides on connect/reconnect
   const fetchPendingRidesForDriver = useCallback(async () => {
-    if (user?.role !== 'driver' || fetchingPendingRef.current) return;
+    if (user?.role !== 'driver' || fetchingPendingRef.current) return [];
     fetchingPendingRef.current = true;
     try {
       const res = await rideAPI.getPendingRides();
@@ -456,8 +478,10 @@ export const useGlobalSocketListeners = ({
           handleRideRequest(ride);
         }
       }
+      return Array.isArray(pending) ? pending : [];
     } catch {
       // Silently ignore - the socket emit is the primary mechanism
+      return [];
     } finally {
       fetchingPendingRef.current = false;
     }
@@ -520,6 +544,7 @@ export const useGlobalSocketListeners = ({
       socket.off('ride:cancelled', handleRideCancelled);
       socket.off('ride:request_created', handleRideRequest);
       socket.off('ride:request_accepted', handleRideRequestAccepted);
+      socket.off('ride:request_cancelled', handleRideRequestCancelled);
       socket.off('ride:accepted', handleRideAccepted);
       socket.off('ride:status_changed', handleRideStatusChanged);
       socket.off('ride:eta_update', handleEtaUpdate);
@@ -555,6 +580,9 @@ export const useGlobalSocketListeners = ({
 
         socket.on('ride:request_accepted', handleRideRequestAccepted);
         console.log('[GLOBAL_SOCKET]    ride:request_accepted registered (driver only)');
+
+        socket.on('ride:request_cancelled', handleRideRequestCancelled);
+        console.log('[GLOBAL_SOCKET]    ride:request_cancelled registered (driver only)');
       }
 
       // PASSENGER-ONLY - driver acceptance, status changes, ETA, driver arrived
@@ -814,6 +842,7 @@ export const useGlobalSocketListeners = ({
         currentSocket.off('ride:cancelled', handleRideCancelled);
         currentSocket.off('ride:request_created', handleRideRequest);
         currentSocket.off('ride:request_accepted', handleRideRequestAccepted);
+        currentSocket.off('ride:request_cancelled', handleRideRequestCancelled);
         currentSocket.off('ride:accepted', handleRideAccepted);
         currentSocket.off('ride:status_changed', handleRideStatusChanged);
         currentSocket.off('ride:eta_update', handleEtaUpdate);
@@ -847,7 +876,7 @@ export const useGlobalSocketListeners = ({
       console.log('[GLOBAL_SOCKET]    listenersRegisteredRef reset to FALSE');
       console.log('[GLOBAL_SOCKET] ========== CLEANUP COMPLETE ==========');
     }
-  }, [isAuthenticated, user?.id, user?.role, handlePaymentCompleted, handleRideCancelled, handleRideRequest, handleRideRequestAccepted, handleRideAccepted, handleRideStatusChanged, handleEtaUpdate, handleDriverArrived, handleRideCompleted, fetchPendingRidesForDriver]);
+  }, [isAuthenticated, user?.id, user?.role, handlePaymentCompleted, handleRideCancelled, handleRideRequest, handleRideRequestAccepted, handleRideRequestCancelled, handleRideAccepted, handleRideStatusChanged, handleEtaUpdate, handleDriverArrived, handleRideCompleted, fetchPendingRidesForDriver]);
 
   // Re-register listeners when socket is fully recreated (e.g., after reconnectSocket destroy+create)
   useEffect(() => {
@@ -870,6 +899,40 @@ export const useGlobalSocketListeners = ({
       removeConnectionListener(handleConnectionChange);
     };
   }, []);
+
+  // DRIVER: when the app returns to foreground, revalidate the visible ride
+  // request card. If its ride is no longer pending (accepted by another driver,
+  // cancelled or expired while the app was in background and the socket event
+  // was missed), dismiss it immediately instead of waiting for the countdown.
+  useEffect(() => {
+    if (user?.role !== 'driver') return;
+
+    const subscription = AppState.addEventListener('change', state => {
+      if (state !== 'active') return;
+
+      const activeId = activeRideRequestRef.current?.id;
+      if (!activeId) return;
+
+      console.log('[GLOBAL_SOCKET] App foregrounded — revalidating ride request card:', activeId);
+      (async () => {
+        try {
+          const res = await rideAPI.getPendingRides();
+          const pending = res.data?.data || res.data?.rides || [];
+          const pendingIds = Array.isArray(pending)
+            ? new Set(pending.map(r => r?.id))
+            : new Set<string>();
+          if (!pendingIds.has(activeId)) {
+            console.log('[GLOBAL_SOCKET] Request no longer pending, dismissing:', activeId);
+            dismissRideRequest();
+          }
+        } catch {
+          // Silent — card keeps its countdown fallback
+        }
+      })();
+    });
+
+    return () => subscription.remove();
+  }, [user?.role, dismissRideRequest]);
 
   // No return value needed - this hook only manages side effects
 };
