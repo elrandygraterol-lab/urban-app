@@ -539,6 +539,9 @@ export default function PassengerHomeScreen() {
                 setFareCurrency(ride.currency);
               }
               setIsSearchingDriver(ride.status === 'pending');
+              // A ride restored in "accepted" state with an unpaid payment must
+              // show the payment form before the trip continues.
+              openPaymentModalIfDue(ride, ride.estimatedFare ?? undefined);
             }
           }
         } else {
@@ -821,6 +824,36 @@ export default function PassengerHomeScreen() {
   }, [paymentMethod]);
   const [selectedPlatformMethod, setSelectedPlatformMethod] = useState<any>(null);
   const [platformPaymentMethods, setPlatformPaymentMethods] = useState<any[]>([]);
+
+  // Prevents the payment form from reopening once the current ride has been paid
+  const paymentCompletedRef = useRef(false);
+  useEffect(() => {
+    paymentCompletedRef.current = paymentCompleted;
+  }, [paymentCompleted]);
+
+  /**
+   * Payment gate for the passenger: every path that transitions the ride into
+   * "accepted" (socket event, 5s polling fallback, restore on foreground,
+   * network recovery) MUST route the trip through the payment form unless the
+   * ride has already been paid. Guarantees the passenger always confirms
+   * payment BEFORE the trip starts.
+   */
+  const openPaymentModalIfDue = (
+    ride: { status?: string; payment?: { status?: string } | null },
+    fare?: number | null
+  ) => {
+    if (ride.status !== 'accepted') return;
+    if (ride.payment?.status === 'completed') return;
+    if (paymentCompletedRef.current) return;
+    if (fare != null && !Number.isNaN(Number(fare))) {
+      setFinalFare(Number(fare));
+    }
+    const firstMethod = platformPaymentMethods.length > 0 ? platformPaymentMethods[0] : null;
+    if (firstMethod) {
+      setSelectedPlatformMethod(firstMethod);
+    }
+    setShowMobilePaymentModal(true);
+  };
 
   // Change payment method during active ride (Req. 3)
   const [showChangePaymentModal, setShowChangePaymentModal] = useState(false);
@@ -1370,13 +1403,9 @@ export default function PassengerHomeScreen() {
       // Store final fare
       setFinalFare(estimatedFareRef.current || 0);
 
-      // Show payment form for the user to choose their payment method
-      // Auto-select the first available platform method so MobilePaymentModal shows destination info
-      const firstMethod = platformPaymentMethods.length > 0 ? platformPaymentMethods[0] : null;
-      if (firstMethod) {
-        setSelectedPlatformMethod(firstMethod);
-      }
-      setShowMobilePaymentModal(true);
+      // Show the payment form (choose payment method) before the trip starts.
+      // Delegated to the shared payment gate so every entry path behaves the same.
+      openPaymentModalIfDue({ status: 'accepted', payment: null }, estimatedFareRef.current || 0);
     };
 
     // Listen for ride status changes
@@ -1940,6 +1969,10 @@ export default function PassengerHomeScreen() {
             ...(updated.completedAt ? { completedAt: updated.completedAt } : {}),
             ...(updated.cancelledAt ? { cancelledAt: updated.cancelledAt } : {}),
           } : updated);
+
+          // If the ride moved forward to "accepted", the passenger must confirm
+          // payment through the form unless the ride was already paid.
+          openPaymentModalIfDue(updated, updated.estimatedFare ?? updated.finalFare);
         }
       } catch {
         // Silently ignore polling errors
@@ -1969,6 +2002,8 @@ export default function PassengerHomeScreen() {
           if (ride.pickupAddress) setPickupAddress(ride.pickupAddress);
           if (ride.destinationAddress) setDestinationAddress(ride.destinationAddress);
           setIsSearchingDriver(ride.status === 'pending');
+          // Network-recovered rides in "accepted" state must also confirm payment first.
+          openPaymentModalIfDue(ride, ride.estimatedFare ?? undefined);
         }
       }
       // Force listener re-registration
