@@ -139,6 +139,8 @@ export const useGlobalSocketListeners = ({
       driverEarnings: number;
       platformCommission: number;
       currency?: string;
+      usdAmount?: number | string;
+      vesAmount?: number | string;
     }) => {
       console.log('[GLOBAL_SOCKET] Payment completed event received:', data);
       // No playNotificationSound here - active-ride.tsx already plays it
@@ -160,16 +162,39 @@ export const useGlobalSocketListeners = ({
           driverStore.addEarning(earnings, (data.currency || 'VES') === 'USD' ? 'USD' : 'VES', data.rideId);
         }
 
-        const dualMsg = data.currency === 'USD'
-          ? `${convertToBs(earnings) !== '—' ? ` (≈ Bs. ${convertToBs(earnings)})` : ''}`
-          : `${convertToUsd(earnings) !== '—' ? ` (≈ $ ${convertToUsd(earnings)})` : ''}`;
-        const currencySymbol = data.currency === 'USD' ? '$' : 'Bs.';
-        const amountMsg = amount && amount !== earnings
-          ? `Pasajero pagó ${currencySymbol} ${amount.toFixed(2)}. `
-          : '';
+        // Monto dual exacto: el backend envía usdAmount/vesAmount (Pago Móvil siempre en Bs.).
+        // Si no vienen (backend viejo), se calcula con la tasa local del cliente.
+        const toNum = (value?: number | string): number => {
+          if (value == null || (typeof value === 'string' && value.trim() === '')) return NaN;
+          const parsed = typeof value === 'string' ? Number(value) : Number(value);
+          return Number.isFinite(parsed) ? parsed : NaN;
+        };
+        const currency = data.currency === 'USD' ? 'USD' : 'VES';
+        let usd = toNum(data.usdAmount);
+        let ves = toNum(data.vesAmount);
+        if (Number.isNaN(usd) || Number.isNaN(ves)) {
+          const localUsd = convertToUsd(amount);
+          const localBs = convertToBs(amount);
+          if (currency === 'USD') {
+            usd = amount;
+            ves = localBs !== '—' ? Number(localBs) : NaN;
+          } else {
+            ves = amount;
+            usd = localUsd !== '—' ? Number(localUsd) : NaN;
+          }
+        }
+        const shownUsd = !Number.isNaN(usd) ? `$ ${usd.toFixed(2)}` : null;
+        const shownVes = !Number.isNaN(ves) ? `Bs. ${ves.toFixed(2)}` : null;
+        const primary = currency === 'USD' ? shownUsd ?? shownVes : shownVes ?? shownUsd;
+        const secondary =
+          shownUsd && shownVes
+            ? currency === 'USD'
+              ? ` (≈ ${shownVes})`
+              : ` (≈ ${shownUsd})`
+            : '';
         showStatus(
           'payment_completed',
-          `${amountMsg}Recibiste ${currencySymbol} ${earnings.toFixed(2)}${dualMsg} por el viaje`,
+          `Pago recibido: ${primary}${secondary} por el viaje`,
           '¡Pago Recibido!',
           { rideId: data.rideId, amount: data.amount, currency: data.currency }
         );

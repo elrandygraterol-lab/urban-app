@@ -533,12 +533,18 @@ export default function MobilePaymentModal({
     isPaymentCompletedRef.current = true;
     try {
       const selectedBankData = VENEZUELAN_BANKS.find((b) => b.id === selectedBank);
+      // La API del banco siempre recibe montos en Bolívares: si el viaje está en USD,
+      // se convierte la tarifa a Bs. usando la tasa BCV antes de verificarla.
+      const montoVES =
+        currency === 'USD' && exchangeRate && exchangeRate > 0
+          ? Number((Number(amount) * exchangeRate).toFixed(2))
+          : Number(amount);
       const response = await paymentAPI.verifyP2CPayment(isManualMode ? null : rideId, {
         referencia,
         fecha: safeFecha,
         banco: selectedBankData?.code || selectedBank,
         telefonoP,
-        monto: amount,
+        monto: montoVES,
         identificacion,
         pagador,
       });
