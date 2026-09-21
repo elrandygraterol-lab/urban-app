@@ -447,6 +447,9 @@ export default function PassengerHomeScreen() {
   const currentLocationRef = useRef<LocationCoords | null>(null);
   const calculateRouteRef = useRef<() => Promise<void>>(async () => {});
   const calculateFareWithZoneRef = useRef<() => Promise<void>>(async () => {});
+  // Early listener cleanups (registered before activeRide exists, persist across reconnects)
+  const earlyAcceptedListenerRef = useRef<(() => void) | null>(null);
+  const earlyStatusListenerRef = useRef<(() => void) | null>(null);
 
   // Keep refs in sync with state — avoids stale closures in socket handlers
   useEffect(() => {
@@ -842,6 +845,14 @@ export default function PassengerHomeScreen() {
     ride: { status?: string; payment?: { status?: string } | null },
     fare?: number | null
   ) => {
+    // Guardia: detectar si paymentCompleted ya está true ANTES de que el usuario pague
+    if (paymentCompletedRef.current) {
+      console.warn('[PASSENGER] openPaymentModalIfDue BLOCKED — paymentCompletedRef=true', {
+        rideStatus: ride.status,
+        ridePaymentStatus: ride.payment?.status,
+        activeRide: activeRideRef.current?.status,
+      });
+    }
     if (ride.status !== 'accepted') return;
     if (ride.payment?.status === 'completed') return;
     if (paymentCompletedRef.current) return;
@@ -852,6 +863,7 @@ export default function PassengerHomeScreen() {
     if (firstMethod) {
       setSelectedPlatformMethod(firstMethod);
     }
+    console.log('[PASSENGER] openPaymentModalIfDue → SHOWING payment modal');
     setShowMobilePaymentModal(true);
   };
 
@@ -1283,6 +1295,56 @@ export default function PassengerHomeScreen() {
     return () => subscription.remove();
   }, [user, currentLocation]);
 
+  // Early handlers for ride:accepted and ride:status_changed (registered before activeRide exists)
+  // These must be useCallbacks so they're available when socket connects, not waiting for activeRide
+  const handleRideAccepted = useCallback(
+    async (data: any) => {
+      // Guard: prevent double processing from ride room + emitToUser
+      if (acceptedRideIdRef.current === data.rideId) return;
+      acceptedRideIdRef.current = data.rideId;
+      driverArrivedNotifiedRef.current = false;
+
+      console.log('[PASSENGER] Ride accepted (early):', data);
+
+      setActiveRide(prev => ({
+        ...prev!,
+        status: 'accepted',
+        driver: data.driver,
+      }));
+
+      setIsSearchingDriver(false);
+
+      // Clear search timeout — ride was accepted so no need to auto-cancel
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+
+      // Update driver location on map
+      if (data.driver?.currentLocation) {
+        setDriverLocation(data.driver.currentLocation);
+      }
+
+      // Store final fare
+      setFinalFare(estimatedFareRef.current || 0);
+
+      // Show the payment form (choose payment method) before the trip starts.
+      // Delegated to the shared payment gate so every entry path behaves the same.
+      openPaymentModalIfDue({ status: 'accepted', payment: null }, estimatedFareRef.current || 0);
+    },
+    [openPaymentModalIfDue]
+  );
+
+  const handleRideStatusChangedEarly = useCallback(
+    (data: any) => {
+      console.log('[PASSENGER] Early ride:status_changed:', data);
+      if (data.status === 'accepted') {
+        openPaymentModalIfDue(data, data.estimatedFare ?? data.finalFare ?? undefined);
+      }
+    },
+    [openPaymentModalIfDue]
+  );
+
   // Setup WebSocket connection and listeners
   useEffect(() => {
     // Only connect socket if user is authenticated and token exists
@@ -1312,10 +1374,38 @@ export default function PassengerHomeScreen() {
 
     setupSocket();
 
+    // Register ride:accepted listener IMMEDIATELY after socket connects,
+    // BEFORE activeRide exists. This ensures the payment gate fires
+    // when driver accepts, creating the activeRide.
+    const setupRideAcceptedListener = async () => {
+      const socket = getSocket();
+      if (socket?.connected) {
+        console.log('[PASSENGER] Registering early ride:accepted listener');
+        earlyAcceptedListenerRef.current = onRideAccepted(handleRideAccepted);
+        earlyStatusListenerRef.current = onRideStatusChanged(handleRideStatusChangedEarly);
+      } else {
+        // Wait for connection then register
+        const waitForSocket = () => {
+          const s = getSocket();
+          if (s?.connected) {
+            console.log('[PASSENGER] Socket ready, registering early ride:accepted listener');
+            earlyAcceptedListenerRef.current = onRideAccepted(handleRideAccepted);
+            earlyStatusListenerRef.current = onRideStatusChanged(handleRideStatusChangedEarly);
+          } else {
+            setTimeout(waitForSocket, 500);
+          }
+        };
+        setTimeout(waitForSocket, 500);
+      }
+    };
+    setupRideAcceptedListener();
+
     // Cleanup on unmount
     return () => {
       mounted = false;
       removeRideListeners();
+      earlyAcceptedListenerRef.current?.();
+      earlyStatusListenerRef.current?.();
       // Don't disconnect socket here - keep it alive for the session
     };
   }, [user, token]); // Depend on both user AND token
@@ -1356,57 +1446,21 @@ export default function PassengerHomeScreen() {
         socket?.emit('join_ride', { rideId: activeRideRef.current.id });
       }
       // Clean up stale listeners from previous connection, then re-register fresh ones
+      // NOTE: rideAccepted and rideStatusChanged are registered early in the socket connection
+      // effect and persist across reconnects via their own cleanup refs (acceptedListenerCleanup, etc.)
       Object.values(rideCleanupRefs.current).forEach(fn => fn());
       rideCleanupRefs.current = {};
-      rideCleanupRefs.current.rideAccepted = onRideAccepted(handleRideAccepted);
-      rideCleanupRefs.current.rideStatusChanged = onRideStatusChanged(handleRideStatusChanged);
       rideCleanupRefs.current.driverLocationUpdate = onDriverLocationUpdate(handleDriverLocationUpdate);
       rideCleanupRefs.current.etaUpdate = onETAUpdate(handleETAUpdate);
       rideCleanupRefs.current.driverArrived = onDriverArrived(handleDriverArrived);
       rideCleanupRefs.current.rideCancelled = onRideCancelled(handleRideCancelled);
       rideCleanupRefs.current.rideCompleted = onRideCompleted(handleRideCompleted);
       rideCleanupRefs.current.routePointCompleted = onRoutePointCompleted(handleRoutePointCompleted);
-      console.log('[PASSENGER] ✅ Listeners re-registered after reconnect');
+      console.log('[PASSENGER] ✅ Listeners re-registered after reconnect (excluding early ones)');
       // Bump listenerVersion to trigger re-registration of shared ride invitation handlers
       setListenerVersion(v => v + 1);
     };
     socket?.on('connect', handleReconnect);
-
-    // Listen for ride accepted event
-    const handleRideAccepted = async (data: any) => {
-      // Guard: prevent double processing from ride room + emitToUser
-      if (acceptedRideIdRef.current === data.rideId) return;
-      acceptedRideIdRef.current = data.rideId;
-      driverArrivedNotifiedRef.current = false;
-
-      console.log('[PASSENGER] Ride accepted:', data);
-
-      setActiveRide(prev => ({
-        ...prev!,
-        status: 'accepted',
-        driver: data.driver,
-      }));
-
-      setIsSearchingDriver(false);
-
-      // Clear search timeout — ride was accepted so no need to auto-cancel
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-        searchTimeoutRef.current = null;
-      }
-
-      // Update driver location on map
-      if (data.driver?.currentLocation) {
-        setDriverLocation(data.driver.currentLocation);
-      }
-
-      // Store final fare
-      setFinalFare(estimatedFareRef.current || 0);
-
-      // Show the payment form (choose payment method) before the trip starts.
-      // Delegated to the shared payment gate so every entry path behaves the same.
-      openPaymentModalIfDue({ status: 'accepted', payment: null }, estimatedFareRef.current || 0);
-    };
 
     // Listen for ride status changes
     const handleRideStatusChanged = (data: any) => {
@@ -5798,7 +5852,12 @@ export default function PassengerHomeScreen() {
         </Modal>
 
         {/* Mobile Payment Modal */}
-        <Suspense fallback={null}>
+        <Suspense fallback={
+          <View style={styles.modalLoading}>
+            <ActivityIndicator size="large" color="#2FB908" />
+            <Text style={styles.modalLoadingText}>Cargando formulario de pago...</Text>
+          </View>
+        }>
           <MobilePaymentModal
             visible={showMobilePaymentModal}
             amount={finalFare || estimatedFare || 0}
@@ -5814,7 +5873,12 @@ export default function PassengerHomeScreen() {
         </Suspense>
 
         {/* Change Payment Method Modal — for switching from cash to pago_movil during ride (Req. 3.2) */}
-        <Suspense fallback={null}>
+        <Suspense fallback={
+          <View style={styles.modalLoading}>
+            <ActivityIndicator size="large" color="#2FB908" />
+            <Text style={styles.modalLoadingText}>Cargando formulario de pago...</Text>
+          </View>
+        }>
           <MobilePaymentModal
             visible={showChangePaymentModal}
             amount={estimatedFare || 0}
@@ -8246,5 +8310,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 2,
     elevation: 2,
+  },
+  modalLoading: {
+    flex: 1,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalLoadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
   },
 });
