@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { paymentAPI, rideAPI } from '@/services/api';
+import * as Clipboard from 'expo-clipboard';
 import { formatCurrency, Currency } from '@/utils/currency';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
 
@@ -289,6 +290,39 @@ function BankSelector({
         </Modal>
       )}
     </>
+  );
+}
+
+// ── Row de datos del destino con botón de copiar ──
+
+function DestCopyRow({
+  icon,
+  label,
+  value,
+  desc,
+  onCopy,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  value?: string;
+  desc?: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <View style={styles.destInfoRow}>
+      <Ionicons name={icon} size={13} color="#6b7280" style={styles.destInfoIcon} />
+      <Text style={styles.destInfoLabel}>{label}</Text>
+      <Text style={desc ? styles.destInfoValueDesc : styles.destInfoValue} numberOfLines={2}>
+        {value}
+      </Text>
+      <TouchableOpacity
+        style={styles.destRowCopy}
+        onPress={onCopy}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Ionicons name="copy-outline" size={14} color={Colors.primary} />
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -643,6 +677,34 @@ export default function MobilePaymentModal({
     setShowCancelConfirm(false);
   };
 
+  // Copiar datos de la cuenta destino al portapapeles para facilitar el pago
+  const handleCopy = useCallback(async (label: string, value: string) => {
+    if (!value) return;
+    await Clipboard.setStringAsync(value);
+    showToast(`${label} copiado`, 'success');
+  }, [showToast]);
+
+  const destinationText = useMemo(() => {
+    if (platformMethod?.type === 'pago_movil') {
+      return [
+        `Pago a: ${platformMethod.mobileBank}`,
+        `Teléfono: ${platformMethod.mobilePhone}`,
+        `Cédula: ${platformMethod.mobileCedula}`,
+        ...(platformMethod.description ? [`Ref: ${platformMethod.description}`] : []),
+      ].join('\n');
+    }
+    if (platformMethod?.type === 'bank_transfer') {
+      return [
+        `Transfiere a: ${platformMethod.transferBank}`,
+        `N° Cuenta: ${platformMethod.accountNumber}`,
+        `Tipo: ${platformMethod.accountType || 'Corriente'}`,
+        `RIF: ${platformMethod.transferCedula}`,
+        ...(platformMethod.description ? [`Ref: ${platformMethod.description}`] : []),
+      ].join('\n');
+    }
+    return '';
+  }, [platformMethod]);
+
   const timerColor = getTimerColor(timeRemaining);
 
   // ── Collapsible content max-height interpolation ──
@@ -834,27 +896,39 @@ export default function MobilePaymentModal({
                             <Ionicons name="phone-portrait" size={15} color={Colors.primary} />
                           </View>
                           <Text style={styles.destTitle}>Paga a:</Text>
+                          <TouchableOpacity
+                            style={styles.destAllCopy}
+                            onPress={() => handleCopy('Destino del pago', destinationText)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="copy-outline" size={13} color={Colors.primary} />
+                            <Text style={styles.destAllCopyText}>Copiar</Text>
+                          </TouchableOpacity>
                         </View>
                         <Text style={styles.destBank}>{platformMethod.mobileBank}</Text>
                         <View style={styles.destDivider} />
-                        <View style={styles.destInfoRow}>
-                          <Ionicons name="call-outline" size={13} color="#6b7280" style={styles.destInfoIcon} />
-                          <Text style={styles.destInfoLabel}>Teléfono</Text>
-                          <Text style={styles.destInfoValue}>{platformMethod.mobilePhone}</Text>
-                        </View>
-                        <View style={styles.destInfoRow}>
-                          <Ionicons name="person-outline" size={13} color="#6b7280" style={styles.destInfoIcon} />
-                          <Text style={styles.destInfoLabel}>Cédula</Text>
-                          <Text style={styles.destInfoValue}>{platformMethod.mobileCedula}</Text>
-                        </View>
+                        <DestCopyRow
+                          icon="call-outline"
+                          label="Teléfono"
+                          value={platformMethod.mobilePhone}
+                          onCopy={() => handleCopy('Teléfono', platformMethod.mobilePhone || '')}
+                        />
+                        <DestCopyRow
+                          icon="person-outline"
+                          label="Cédula"
+                          value={platformMethod.mobileCedula}
+                          onCopy={() => handleCopy('Cédula', platformMethod.mobileCedula || '')}
+                        />
                         {platformMethod.description && (
                           <>
                             <View style={styles.destDivider} />
-                            <View style={styles.destInfoRow}>
-                              <Ionicons name="information-circle-outline" size={13} color="#6b7280" style={styles.destInfoIcon} />
-                              <Text style={styles.destInfoLabel}>Ref.</Text>
-                              <Text style={styles.destInfoValueDesc}>{platformMethod.description}</Text>
-                            </View>
+                            <DestCopyRow
+                              icon="information-circle-outline"
+                              label="Ref."
+                              value={platformMethod.description}
+                              desc
+                              onCopy={() => handleCopy('Referencia', platformMethod.description || '')}
+                            />
                           </>
                         )}
                       </View>
@@ -869,32 +943,45 @@ export default function MobilePaymentModal({
                             <Ionicons name="business" size={15} color={Colors.primary} />
                           </View>
                           <Text style={styles.destTitle}>Transfiere a:</Text>
+                          <TouchableOpacity
+                            style={styles.destAllCopy}
+                            onPress={() => handleCopy('Destino del pago', destinationText)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="copy-outline" size={13} color={Colors.primary} />
+                            <Text style={styles.destAllCopyText}>Copiar</Text>
+                          </TouchableOpacity>
                         </View>
                         <Text style={styles.destBank}>{platformMethod.transferBank}</Text>
                         <View style={styles.destDivider} />
-                        <View style={styles.destInfoRow}>
-                          <Ionicons name="card-outline" size={13} color="#6b7280" style={styles.destInfoIcon} />
-                          <Text style={styles.destInfoLabel}>N° Cuenta</Text>
-                          <Text style={styles.destInfoValue}>{platformMethod.accountNumber}</Text>
-                        </View>
-                        <View style={styles.destInfoRow}>
-                          <Ionicons name="receipt-outline" size={13} color="#6b7280" style={styles.destInfoIcon} />
-                          <Text style={styles.destInfoLabel}>Tipo</Text>
-                          <Text style={styles.destInfoValue}>{platformMethod.accountType || 'Corriente'}</Text>
-                        </View>
-                        <View style={styles.destInfoRow}>
-                          <Ionicons name="document-text-outline" size={13} color="#6b7280" style={styles.destInfoIcon} />
-                          <Text style={styles.destInfoLabel}>RIF</Text>
-                          <Text style={styles.destInfoValue}>{platformMethod.transferCedula}</Text>
-                        </View>
+                        <DestCopyRow
+                          icon="card-outline"
+                          label="N° Cuenta"
+                          value={platformMethod.accountNumber}
+                          onCopy={() => handleCopy('N° Cuenta', platformMethod.accountNumber || '')}
+                        />
+                        <DestCopyRow
+                          icon="receipt-outline"
+                          label="Tipo"
+                          value={platformMethod.accountType || 'Corriente'}
+                          onCopy={() => handleCopy('Tipo de cuenta', platformMethod.accountType || 'Corriente')}
+                        />
+                        <DestCopyRow
+                          icon="document-text-outline"
+                          label="RIF"
+                          value={platformMethod.transferCedula}
+                          onCopy={() => handleCopy('RIF', platformMethod.transferCedula || '')}
+                        />
                         {platformMethod.description && (
                           <>
                             <View style={styles.destDivider} />
-                            <View style={styles.destInfoRow}>
-                              <Ionicons name="information-circle-outline" size={13} color="#6b7280" style={styles.destInfoIcon} />
-                              <Text style={styles.destInfoLabel}>Ref.</Text>
-                              <Text style={styles.destInfoValueDesc}>{platformMethod.description}</Text>
-                            </View>
+                            <DestCopyRow
+                              icon="information-circle-outline"
+                              label="Ref."
+                              value={platformMethod.description}
+                              desc
+                              onCopy={() => handleCopy('Referencia', platformMethod.description || '')}
+                            />
                           </>
                         )}
                       </View>
@@ -1372,6 +1459,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: Colors.primary,
+  },
+  destAllCopy: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#dcfce7',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginLeft: 'auto',
+  },
+  destAllCopyText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  destRowCopy: {
+    padding: 2,
   },
   destBank: {
     fontSize: 16,

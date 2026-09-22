@@ -64,8 +64,7 @@ import type { SharedRideInvitation } from '@/components/SharedRideInvitationModa
 import { formatCurrency, Currency } from '@/utils/currency';
 import CenterLocationButton from '@/components/CenterLocationButton';
 import { resolveFileUrl } from '@/services/fileUrl';
-
-const MobilePaymentModal = React.lazy(() => import('@/components/MobilePaymentModal'));
+import MobilePaymentModal from '@/components/MobilePaymentModal';
 const AddressAutocomplete = React.lazy(() => import('@/components/AddressAutocomplete'));
 type Place = import('@/components/AddressAutocomplete').Place;
 const SharedRideInvitationModal = React.lazy(() => import('@/components/SharedRideInvitationModal'));
@@ -132,6 +131,9 @@ interface ActiveRide {
   id: string;
   status: 'pending' | 'accepted' | 'arrived' | 'in_progress' | 'completed' | 'cancelled';
   paymentMode?: 'cash' | 'pago_movil' | 'dual';
+  // Pago anidado que el backend entrega en GET /rides/active (Revisión 5).
+  // Permite que el gate conozca el estado real del pago en el auto-trigger.
+  payment?: { status?: string; amount?: number; paymentMode?: string } | null;
   isShared?: boolean;
   sharedPassengerId?: string;
   pickupAddress?: string;
@@ -531,8 +533,16 @@ export default function PassengerHomeScreen() {
                 });
               }
               // Restaurar estado de pago
+              // El backend marca payment.status='completed' SOLO en flujos de confirmación
+              // (verifier VOB para Pago Móvil, confirmación conductor/efectivo, admin).
+              // NOTA (Revisión 4): el backend NO tiene campo 'paidAt' (solo processedAt/status);
+              // usar status==='completed' es la señal real y evita reabrir el modal en viajes ya pagados.
               if (ride.payment?.status === 'completed') {
+                const paymentMode = ride.payment?.paymentMode;
+                console.log('[PASSENGER] Ride restored with completed payment:', { paymentMode, rideId: ride.id });
                 setPaymentCompleted(true);
+                paymentCompletedRef.current = true; // Ref síncrono: cierra la ventana de race (Rev. 5.1)
+                acceptedRideIdRef.current = null; // Reset idempotency ref for next ride
               }
               // Restaurar tarifa estimada
               if (ride.estimatedFare) {
@@ -544,7 +554,7 @@ export default function PassengerHomeScreen() {
               setIsSearchingDriver(ride.status === 'pending');
               // A ride restored in "accepted" state with an unpaid payment must
               // show the payment form before the trip continues.
-              openPaymentModalIfDue(ride, ride.estimatedFare ?? undefined);
+              openPaymentModalIfDue({ id: ride.id, status: ride.status, payment: ride.payment }, ride.estimatedFare ?? undefined);
             }
           }
         } else {
@@ -827,12 +837,36 @@ export default function PassengerHomeScreen() {
   }, [paymentMethod]);
   const [selectedPlatformMethod, setSelectedPlatformMethod] = useState<any>(null);
   const [platformPaymentMethods, setPlatformPaymentMethods] = useState<any[]>([]);
+  // Ref de métodos de pago: los listeners tempranos de socket capturan el closure
+  // del mount donde platformPaymentMethods aún estaba vacío (fetch aún no resuelto),
+  // por lo que el primer método NUNCA se seteaba en el modal (Revisión 5, BUG 1).
+  // Leer el valor actual desde este ref garantiza siempre la primera cuenta real.
+  const platformPaymentMethodsRef = useRef<any[]>([]);
+  useEffect(() => {
+    platformPaymentMethodsRef.current = platformPaymentMethods;
+  }, [platformPaymentMethods]);
 
   // Prevents the payment form from reopening once the current ride has been paid
   const paymentCompletedRef = useRef(false);
   useEffect(() => {
     paymentCompletedRef.current = paymentCompleted;
   }, [paymentCompleted]);
+
+  // Tracks whether the payment modal is currently open. Used by the idempotency
+  // guard (Opción C) so duplicate triggers are skipped while the modal is open,
+  // but legitimate reopens after closing it (button "Pagar Ahora") still work.
+  const showMobilePaymentModalRef = useRef(false);
+  useEffect(() => {
+    showMobilePaymentModalRef.current = showMobilePaymentModal;
+  }, [showMobilePaymentModal]);
+
+  // Limpia la idempotencia al iniciar un VIAJE NUEVO (cambia activeRide?.id).
+  // Reforzó el reset manual de los handlers de pago. Con Opción C, el guard 0 solo
+  // bloquea si el modal está abierto, así que limpiar aquí es siempre seguro
+  // (Revisión 5.1 — sugerencia del revisor).
+  useEffect(() => {
+    acceptedRideIdRef.current = null;
+  }, [activeRide?.id]);
 
   /**
    * Payment gate for the passenger: every path that transitions the ride into
@@ -841,31 +875,65 @@ export default function PassengerHomeScreen() {
    * ride has already been paid. Guarantees the passenger always confirms
    * payment BEFORE the trip starts.
    */
-  const openPaymentModalIfDue = (
-    ride: { status?: string; payment?: { status?: string } | null },
-    fare?: number | null
-  ) => {
-    // Guardia: detectar si paymentCompleted ya está true ANTES de que el usuario pague
-    if (paymentCompletedRef.current) {
-      console.warn('[PASSENGER] openPaymentModalIfDue BLOCKED — paymentCompletedRef=true', {
-        rideStatus: ride.status,
-        ridePaymentStatus: ride.payment?.status,
-        activeRide: activeRideRef.current?.status,
-      });
+  // useCallback con deps estables (solo refs + setters): el efecto auto-trigger solo
+  // se ejecuta cuando cambian status/id/paymentCompleted, NO en cada render
+  // (Revisión 5, BUG 2: en efectivo/transferencia con latencia de red, el auto-trigger
+  // se disparaba en cada render y reabría el modal durante el await del backend,
+  // dejándolo abierto sobre el éxito o tapando el error de pago).
+  const openPaymentModalIfDue = useCallback(
+    (
+      ride: { id?: string; status?: string; payment?: { status?: string } | null },
+      fare?: number | null
+    ) => {
+      // Idempotency guard (Opción C): solo bloquea duplicados MIENTRAS el modal
+      // está abierto para este ride. Si el usuario cerró el modal sin pagar
+      // (botón "Pagar Ahora" en panel o error de pago), esta condición es false
+      // → permite reabrir intencionalmente.
+      if (ride.id && acceptedRideIdRef.current === ride.id && showMobilePaymentModalRef.current) {
+        console.log('[PASSENGER] openPaymentModalIfDue SKIPPED — modal already open for rideId:', ride.id);
+        return;
+      }
+      // Guardia: detectar si paymentCompleted ya está true ANTES de que el usuario pague
+      if (paymentCompletedRef.current) {
+        console.warn('[PASSENGER] openPaymentModalIfDue BLOCKED — paymentCompletedRef=true', {
+          rideStatus: ride.status,
+          ridePaymentStatus: ride.payment?.status,
+          activeRide: activeRideRef.current?.status,
+        });
+        return;
+      }
+      if (ride.status !== 'accepted') return;
+      // Solo bloquear si pago COMPLETADO — señal real del backend (no existe 'paidAt').
+      // Revisión 4: el backend marca status='completed' solo en flujos de confirmación,
+      // por lo que usar status==='completed' es seguro y evita reabrir el modal en viajes pagados.
+      if (ride.payment?.status === 'completed') return;
+      if (fare != null && !Number.isNaN(Number(fare))) {
+        setFinalFare(Number(fare));
+      }
+      // Revisión 5: leer métodos desde el ref (el closure del listener early del mount
+      // veía platformPaymentMethods=[] y dejaba selectedPlatformMethod en null,
+      // sin la tarjeta de destino del Pago Móvil en el modal).
+      const methods = platformPaymentMethodsRef.current;
+      const firstMethod = methods.length > 0 ? methods[0] : null;
+      if (firstMethod) {
+        setSelectedPlatformMethod(firstMethod);
+      }
+      // Mark as processed for idempotency
+      if (ride.id) acceptedRideIdRef.current = ride.id;
+      console.log('[PASSENGER] openPaymentModalIfDue → SHOWING payment modal', { rideId: ride.id });
+      setShowMobilePaymentModal(true);
+    },
+    []
+  );
+
+  // Auto-trigger payment modal when ride becomes accepted and not paid
+  // This ensures modal opens even if socket event was missed or paywall rendered first
+  useEffect(() => {
+    if (activeRide?.status === 'accepted' && !paymentCompleted) {
+      console.log('[PASSENGER] Auto-trigger: ride accepted & not paid → opening payment modal');
+      openPaymentModalIfDue({ id: activeRide.id, status: 'accepted', payment: activeRide.payment ?? null }, estimatedFareRef.current || 0);
     }
-    if (ride.status !== 'accepted') return;
-    if (ride.payment?.status === 'completed') return;
-    if (paymentCompletedRef.current) return;
-    if (fare != null && !Number.isNaN(Number(fare))) {
-      setFinalFare(Number(fare));
-    }
-    const firstMethod = platformPaymentMethods.length > 0 ? platformPaymentMethods[0] : null;
-    if (firstMethod) {
-      setSelectedPlatformMethod(firstMethod);
-    }
-    console.log('[PASSENGER] openPaymentModalIfDue → SHOWING payment modal');
-    setShowMobilePaymentModal(true);
-  };
+  }, [activeRide?.status, activeRide?.id, paymentCompleted, openPaymentModalIfDue]);
 
   // Change payment method during active ride (Req. 3)
   const [showChangePaymentModal, setShowChangePaymentModal] = useState(false);
@@ -1301,7 +1369,7 @@ export default function PassengerHomeScreen() {
     async (data: any) => {
       // Guard: prevent double processing from ride room + emitToUser
       if (acceptedRideIdRef.current === data.rideId) return;
-      acceptedRideIdRef.current = data.rideId;
+      // Don't set acceptedRideIdRef here — openPaymentModalIfDue will set it after guards pass
       driverArrivedNotifiedRef.current = false;
 
       console.log('[PASSENGER] Ride accepted (early):', data);
@@ -1330,7 +1398,7 @@ export default function PassengerHomeScreen() {
 
       // Show the payment form (choose payment method) before the trip starts.
       // Delegated to the shared payment gate so every entry path behaves the same.
-      openPaymentModalIfDue({ status: 'accepted', payment: null }, estimatedFareRef.current || 0);
+      openPaymentModalIfDue({ id: data.rideId, status: 'accepted', payment: null }, estimatedFareRef.current || 0);
     },
     [openPaymentModalIfDue]
   );
@@ -1339,7 +1407,7 @@ export default function PassengerHomeScreen() {
     (data: any) => {
       console.log('[PASSENGER] Early ride:status_changed:', data);
       if (data.status === 'accepted') {
-        openPaymentModalIfDue(data, data.estimatedFare ?? data.finalFare ?? undefined);
+        openPaymentModalIfDue({ id: data.rideId, status: data.status, payment: data.payment }, data.estimatedFare ?? data.finalFare ?? undefined);
       }
     },
     [openPaymentModalIfDue]
@@ -1482,7 +1550,7 @@ export default function PassengerHomeScreen() {
       // Defensive payment gate: any path that surfaces "accepted" must route
       // the passenger through the payment form unless the ride was already paid.
       if (data.status === 'accepted') {
-        openPaymentModalIfDue(data, data.estimatedFare ?? data.finalFare ?? undefined);
+        openPaymentModalIfDue({ id: data.rideId, status: data.status, payment: data.payment }, data.estimatedFare ?? data.finalFare ?? undefined);
       }
 
       setActiveRide(prev => ({
@@ -2032,7 +2100,7 @@ export default function PassengerHomeScreen() {
 
           // If the ride moved forward to "accepted", the passenger must confirm
           // payment through the form unless the ride was already paid.
-          openPaymentModalIfDue(updated, updated.estimatedFare ?? updated.finalFare);
+          openPaymentModalIfDue({ id: updated.id, status: updated.status, payment: updated.payment }, updated.estimatedFare ?? updated.finalFare);
         }
       } catch {
         // Silently ignore polling errors
@@ -2063,7 +2131,7 @@ export default function PassengerHomeScreen() {
           if (ride.destinationAddress) setDestinationAddress(ride.destinationAddress);
           setIsSearchingDriver(ride.status === 'pending');
           // Network-recovered rides in "accepted" state must also confirm payment first.
-          openPaymentModalIfDue(ride, ride.estimatedFare ?? undefined);
+          openPaymentModalIfDue({ id: ride.id, status: ride.status, payment: ride.payment }, ride.estimatedFare ?? undefined);
         }
       }
       // Force listener re-registration
@@ -3863,6 +3931,9 @@ export default function PassengerHomeScreen() {
       showToast('No hay un viaje activo', 'error');
       return;
     }
+    // Revisión 5: guard defensivo — no re-procesar si el pago ya se completó
+    // (protege contra doble envío si el usuario reintenta tras un error).
+    if (paymentCompletedRef.current) return;
 
     try {
       // Cerrar modal y mostrar loading
@@ -3880,6 +3951,8 @@ export default function PassengerHomeScreen() {
 
         // Mark payment as completed so ride completion doesn't show payment modal again
         setPaymentCompleted(true);
+        paymentCompletedRef.current = true; // Ref síncrono: cierra la ventana de race con paymentCompletedRef (Rev. 5.1)
+        acceptedRideIdRef.current = null; // Reset idempotency ref for next ride
 
         // Confirmation shown by MobilePaymentModal — no duplicate toast here
       } else if (paymentData.method === 'cash') {
@@ -3896,6 +3969,8 @@ export default function PassengerHomeScreen() {
         setIsRequestingRide(false);
 
         setPaymentCompleted(true);
+        paymentCompletedRef.current = true; // Ref síncrono: cierra la ventana de race con paymentCompletedRef (Rev. 5.1)
+        acceptedRideIdRef.current = null; // Reset idempotency ref for next ride
       } else {
         await retryWithBackoff(async () => {
           const response = await paymentAPI.completePayment(activeRide.id, {
@@ -3914,6 +3989,8 @@ export default function PassengerHomeScreen() {
         setIsRequestingRide(false);
 
         setPaymentCompleted(true);
+        paymentCompletedRef.current = true; // Ref síncrono: cierra la ventana de race con paymentCompletedRef (Rev. 5.1)
+        acceptedRideIdRef.current = null; // Reset idempotency ref for next ride
 
         showToast(
           'Tu pago ha sido procesado exitosamente. El conductor ha sido notificado.',
@@ -4450,36 +4527,6 @@ export default function PassengerHomeScreen() {
               bounces={false}
               overScrollMode="never"
             >
-              {/* Payment gate — while a ride is accepted but unpaid, show ONLY the
-                  payment prompt, not the driver/trip details (pay before details) */}
-              {activeRide && activeRide.status === 'accepted' && !paymentCompleted && (
-                <View style={styles.ridePanel}>
-                  <View style={styles.paywallCard}>
-                    <View style={styles.paywallIconWrap}>
-                      <Ionicons name="lock-closed-outline" size={18} color="#2FB908" />
-                    </View>
-                    <Text style={styles.paywallTitle}>Confirmar Pago</Text>
-                    <Text style={styles.paywallDesc}>
-                      Tu conductor fue asignado. Completa el pago para ver los detalles del viaje.
-                    </Text>
-                    <View style={styles.paywallFareRow}>
-                      <Text style={styles.paywallFareLabel}>Tarifa</Text>
-                      <Text style={styles.paywallFareValue}>
-                        {formatCurrency(finalFare || estimatedFare || 0, fareCurrency)}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.paywallBtn}
-                      activeOpacity={0.8}
-                      onPress={() => setShowMobilePaymentModal(true)}
-                    >
-                      <Ionicons name="wallet-outline" size={16} color="#fff" />
-                      <Text style={styles.paywallBtnText}>Pagar ahora</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-
               {/* Active Ride - Driver Info (or completed fallback) */}
               {activeRide && (activeRide.driver || activeRide.status === 'completed') && (paymentCompleted || activeRide.status !== 'accepted') && (
                 <View style={styles.ridePanel}>
@@ -4499,6 +4546,21 @@ export default function PassengerHomeScreen() {
                       </Text>
                     </View>
                   </View>
+
+                  {/* Botón reapertura de pago — visible mientras viaje aceptado y no pagado */}
+                  {activeRide.status === 'accepted' && !paymentCompleted && (
+                    <TouchableOpacity
+                      style={styles.reopenPaymentBtn}
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        console.log('[PASSENGER] Panel "Pagar ahora" tapped → opening payment modal');
+                        openPaymentModalIfDue({ id: activeRide.id, status: 'accepted', payment: null }, estimatedFareRef.current || 0);
+                      }}
+                    >
+                      <Ionicons name="wallet-outline" size={18} color="#fff" />
+                      <Text style={styles.reopenPaymentBtnText}>Pagar Ahora</Text>
+                    </TouchableOpacity>
+                  )}
 
                   {/* Driver header row — only when driver info exists */}
                   {activeRide.driver && (
@@ -5852,25 +5914,18 @@ export default function PassengerHomeScreen() {
         </Modal>
 
         {/* Mobile Payment Modal */}
-        <Suspense fallback={
-          <View style={styles.modalLoading}>
-            <ActivityIndicator size="large" color="#2FB908" />
-            <Text style={styles.modalLoadingText}>Cargando formulario de pago...</Text>
-          </View>
-        }>
-          <MobilePaymentModal
-            visible={showMobilePaymentModal}
-            amount={finalFare || estimatedFare || 0}
-            currency={fareCurrency}
-            exchangeRate={fareBreakdown?.exchangeRate}
-            rideId={activeRide?.id || ''}
-            passengerName={user?.name || ""}
-            platformMethod={selectedPlatformMethod}
-            onPaymentComplete={handleMobilePaymentComplete}
-            onCancel={handleMobilePaymentCancel}
-            onBeforeCancel={handleBeforeMobilePaymentCancel}
-          />
-        </Suspense>
+        <MobilePaymentModal
+          visible={showMobilePaymentModal}
+          amount={finalFare || estimatedFare || 0}
+          currency={fareCurrency}
+          exchangeRate={fareBreakdown?.exchangeRate}
+          rideId={activeRide?.id || ''}
+          passengerName={user?.name || ""}
+          platformMethod={selectedPlatformMethod}
+          onPaymentComplete={handleMobilePaymentComplete}
+          onCancel={handleMobilePaymentCancel}
+          onBeforeCancel={handleBeforeMobilePaymentCancel}
+        />
 
         {/* Change Payment Method Modal — for switching from cash to pago_movil during ride (Req. 3.2) */}
         <Suspense fallback={
@@ -6936,6 +6991,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   paywallBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  reopenPaymentBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#2FB908',
+    borderRadius: 10,
+    height: 40,
+    paddingHorizontal: 24,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  reopenPaymentBtnText: {
     fontSize: 13,
     fontWeight: '700',
     color: '#fff',
