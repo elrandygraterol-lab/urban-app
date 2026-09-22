@@ -4514,7 +4514,7 @@ export default function PassengerHomeScreen() {
         )}
 
         {/* Search and Request Panel with native keyboard handling */}
-        <View style={[styles.panelContainer, isPanelCollapsed && styles.panelContainerCollapsed]}>
+        <View style={[styles.panelContainer, isPanelCollapsed && styles.panelContainerCollapsed, showMobilePaymentModal && styles.panelContainerHidden]}>
           {/* Collapsible Handle - Always visible */}
           <TouchableOpacity
             style={styles.panelHeaderCollapsible}
@@ -6144,6 +6144,9 @@ const styles = StyleSheet.create({
   },
   panelContainerCollapsed: {
     maxHeight: 50,
+  },
+  panelContainerHidden: {
+    display: 'none',
   },
   panelHeaderCollapsible: {
     alignItems: 'center',
