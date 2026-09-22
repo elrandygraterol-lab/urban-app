@@ -866,6 +866,34 @@ export default function PassengerHomeScreen() {
     showMobilePaymentModalRef.current = showMobilePaymentModal;
   }, [showMobilePaymentModal]);
 
+  // Evita disparar varios fetchs simultáneos de métodos de pago (mount + aperturas
+  // consecutivas del modal mientras la lista aún está vacía).
+  const platformMethodsFetchingRef = useRef(false);
+
+  // Carga los métodos de pago configurados por el admin (Pago Móvil / Transferencia).
+  // Se usa en el mount y, bajo demanda, dentro de openPaymentModalIfDue para que la
+  // tarjeta de destino SIEMPRE aparezca al abrir el formulario de pago, incluso si el
+  // fetch inicial fue lento o falló (Revisión 5, BUG 1 — visible en iPhone/iOS real).
+  // Al resolver, si el formulario ya está abierto y aún no hay método seleccionado,
+  // lo inyecta: el sync effect re-publica al store y la tarjeta aparece en vivo.
+  const loadPlatformPaymentMethods = useCallback(async () => {
+    try {
+      const res = await paymentAPI.getPlatformPaymentMethods();
+      const methods = res.data?.data || [];
+      setPlatformPaymentMethods(methods);
+      // Ref síncrono: disponible de inmediato para la próxima apertura del modal,
+      // sin esperar el efecto [platformPaymentMethods].
+      platformPaymentMethodsRef.current = methods;
+    } catch (err) {
+      console.log('[PASSENGER] Could not load platform payment methods:', err);
+    } finally {
+      const freshMethods = platformPaymentMethodsRef.current;
+      if (showMobilePaymentModalRef.current && freshMethods.length > 0) {
+        setSelectedPlatformMethod(freshMethods[0]);
+      }
+    }
+  }, []);
+
   // Limpia la idempotencia al iniciar un VIAJE NUEVO (cambia activeRide?.id).
   // Reforzó el reset manual de los handlers de pago. Con Opción C, el guard 0 solo
   // bloquea si el modal está abierto, así que limpiar aquí es siempre seguro
@@ -923,6 +951,16 @@ export default function PassengerHomeScreen() {
       const firstMethod = methods.length > 0 ? methods[0] : null;
       if (firstMethod) {
         setSelectedPlatformMethod(firstMethod);
+      }
+      // Bajo demanda: si el fetch del mount aún no resolvió o falló, abre el formulario
+      // igual y dispara una recarga asíncrona. Cuando lleguen los métodos, loadPlatformPaymentMethods
+      // aplica el primero (loader.finally) y el sync effect re-publica al store → la tarjeta
+      // de destino del Pago Móvil / Transferencia aparece en el modal ya abierto.
+      if (methods.length === 0 && !platformMethodsFetchingRef.current) {
+        platformMethodsFetchingRef.current = true;
+        loadPlatformPaymentMethods().finally(() => {
+          platformMethodsFetchingRef.current = false;
+        });
       }
       // Mark as processed for idempotency
       if (ride.id) acceptedRideIdRef.current = ride.id;
@@ -1511,16 +1549,12 @@ export default function PassengerHomeScreen() {
   // Fetch platform payment methods (admin-configured Pago Móvil options)
   useEffect(() => {
     if (!token) return;
-    (async () => {
-      try {
-        const res = await paymentAPI.getPlatformPaymentMethods();
-        const methods = res.data?.data || [];
-        setPlatformPaymentMethods(methods);
-      } catch (err) {
-        console.log('[PASSENGER] Could not load platform payment methods:', err);
-      }
-    })();
-  }, [token]);
+    if (platformMethodsFetchingRef.current) return;
+    platformMethodsFetchingRef.current = true;
+    loadPlatformPaymentMethods().finally(() => {
+      platformMethodsFetchingRef.current = false;
+    });
+  }, [token, loadPlatformPaymentMethods]);
 
   // Setup ride event listeners when active ride changes
   useEffect(() => {
