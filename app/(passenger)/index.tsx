@@ -4073,6 +4073,7 @@ export default function PassengerHomeScreen() {
   };
 
   const handleMobilePaymentCancel = () => {
+    console.log('[MOBILE_PAYMENT] cancel → reset pasajero', { rideId: activeRide?.id, status: activeRide?.status });
     setShowMobilePaymentModal(false);
     isProcessingPaymentRef.current = false;
     setIsProcessingPayment(false);
@@ -4134,6 +4135,7 @@ export default function PassengerHomeScreen() {
   };
 
   const handleBeforeMobilePaymentCancel = () => {
+    console.log('[MOBILE_PAYMENT] before-cancel (sheet close, sin cancel)');
     passengerInitiatedCancelRef.current = true;
   };
 
