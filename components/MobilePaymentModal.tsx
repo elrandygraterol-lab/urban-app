@@ -406,6 +406,7 @@ export default function MobilePaymentModal({
     setIdentificacion('');
     setPagador('');
     setIsCollapsed(false);
+    isPaymentCompletedRef.current = false; // Reset: re-habilita el auto-cancel por timeout (Fase A)
     if (timerRef.current) clearInterval(timerRef.current);
   }, []);
 
@@ -478,21 +479,22 @@ export default function MobilePaymentModal({
   useEffect(() => {
     if (isTimerActive && paymentMethod === 'mobile') {
       timerRef.current = setInterval(() => {
-        setTimeRemaining((prev) => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current!);
-            setIsTimerActive(false);
-            handleTimeoutCancel();
-            return 0;
-          }
-          return prev - 1;
-        });
+        setTimeRemaining((prev) => (prev <= 1 ? 0 : prev - 1));
       }, 1000);
       return () => {
         if (timerRef.current) clearInterval(timerRef.current);
       };
     }
-  }, [isTimerActive, paymentMethod, rideId, handleTimeoutCancel]);
+  }, [isTimerActive, paymentMethod]);
+
+  // Auto-cancel cuando el timer llega a 0 (fuera del updater de estado — Fase A)
+  useEffect(() => {
+    if (isTimerActive && paymentMethod === 'mobile' && timeRemaining === 0) {
+      setIsTimerActive(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+      handleTimeoutCancel();
+    }
+  }, [isTimerActive, paymentMethod, timeRemaining, handleTimeoutCancel]);
 
   const handleExtendTime = () => {
     if (extensionsUsed >= MAX_EXTENSIONS) return;
@@ -606,6 +608,8 @@ export default function MobilePaymentModal({
         });
       }, 500);
     } catch (error: any) {
+      // Re-habilita el auto-cancel por timeout tras un fallo de verificación (Fase A)
+      isPaymentCompletedRef.current = false;
       let msg = 'Error procesando el pago. Intenta nuevamente.';
       let retry = true;
       if (error.response) {

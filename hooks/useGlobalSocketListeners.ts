@@ -38,6 +38,7 @@ export const useGlobalSocketListeners = ({
   const fetchingPendingRef = useRef(false);
   const processedCompletedRidesRef = useRef<Set<string>>(new Set());
   const processedPaymentRidesRef = useRef<Set<string>>(new Set());
+  const processedAcceptedRideIdsRef = useRef<Set<string>>(new Set());
   const processedRideRequestIdsRef = useRef<Set<string>>(new Set());
   const processedCancelledRideIdsRef = useRef<Set<string>>(new Set());
   const debugOnAnyRef = useRef<((...args: any[]) => void) | null>(null);
@@ -331,7 +332,21 @@ export const useGlobalSocketListeners = ({
       try {
         console.log('[GLOBAL_SOCKET] Ride accepted event received (passenger):', JSON.stringify(data));
         if (user?.role !== 'passenger') return;
-        
+
+        // Dedup: skip if already notified for this ride (backend emits triple: room + user room + emitToUser)
+        if (processedAcceptedRideIdsRef.current.has(data.rideId)) {
+          console.log('[GLOBAL_SOCKET] Ride accepted already notified for', data.rideId, '— skipping duplicate');
+          return;
+        }
+        processedAcceptedRideIdsRef.current.add(data.rideId);
+        if (processedAcceptedRideIdsRef.current.size > 25) {
+          const entries = Array.from(processedAcceptedRideIdsRef.current);
+          processedAcceptedRideIdsRef.current = new Set(entries.slice(-20));
+        }
+        setTimeout(() => {
+          processedAcceptedRideIdsRef.current.delete(data.rideId);
+        }, 5000);
+
         // Safe extraction with defensive checks
         const driverName = data?.driver?.name || 'Un conductor';
         console.log('[GLOBAL_SOCKET] Driver name extracted:', driverName);

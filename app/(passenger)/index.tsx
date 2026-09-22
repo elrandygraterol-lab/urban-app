@@ -1367,6 +1367,11 @@ export default function PassengerHomeScreen() {
   // These must be useCallbacks so they're available when socket connects, not waiting for activeRide
   const handleRideAccepted = useCallback(
     async (data: any) => {
+      // Guard: prevent zombie rides — only process accepts for the current ride/search
+      if (!activeRideRef.current?.id || activeRideRef.current.id !== data.rideId) {
+        console.log('[PASSENGER] ride:accepted ignored — mismatched/unknown rideId', { currentId: activeRideRef.current?.id, eventRideId: data.rideId });
+        return;
+      }
       // Guard: prevent double processing from ride room + emitToUser
       if (acceptedRideIdRef.current === data.rideId) return;
       // Don't set acceptedRideIdRef here — openPaymentModalIfDue will set it after guards pass
@@ -1406,9 +1411,29 @@ export default function PassengerHomeScreen() {
   const handleRideStatusChangedEarly = useCallback(
     (data: any) => {
       console.log('[PASSENGER] Early ride:status_changed:', data);
+
+      // Guard: zombie preventer — only process events for the current active ride
+      if (!activeRideRef.current?.id || activeRideRef.current.id !== data.rideId) {
+        console.log('[PASSENGER] ride:status_changed ignored — mismatched/unknown rideId', { currentId: activeRideRef.current?.id, eventRideId: data.rideId });
+        return;
+      }
+
+      // Ignore arrived/completed — handled by dedicated listeners
+      if (data.status === 'arrived' || data.status === 'completed') {
+        console.log(`[PASSENGER] ride:status_changed ignored — ${data.status} handled by dedicated listener`);
+        return;
+      }
+
+      // Defensive payment gate: any path that surfaces "accepted" must route
+      // the passenger through the payment form unless the ride was already paid.
       if (data.status === 'accepted') {
         openPaymentModalIfDue({ id: data.rideId, status: data.status, payment: data.payment }, data.estimatedFare ?? data.finalFare ?? undefined);
       }
+
+      setActiveRide(prev => ({
+        ...prev!,
+        status: data.status,
+      }));
     },
     [openPaymentModalIfDue]
   );
@@ -1529,35 +1554,6 @@ export default function PassengerHomeScreen() {
       setListenerVersion(v => v + 1);
     };
     socket?.on('connect', handleReconnect);
-
-    // Listen for ride status changes
-    const handleRideStatusChanged = (data: any) => {
-      console.log('📍 Ride status changed:', data);
-
-      // Guard: if activeRide was already cleared (e.g., after rating),
-      // don't create a zombie object — just ignore the event
-      if (!activeRideRef.current?.id) {
-        console.log('[PASSENGER] ride:status_changed ignored — no active ride');
-        return;
-      }
-
-      // Ignore arrived/completed — handled by dedicated listeners
-      if (data.status === 'arrived' || data.status === 'completed') {
-        console.log(`[PASSENGER] ride:status_changed ignored — ${data.status} handled by dedicated listener`);
-        return;
-      }
-
-      // Defensive payment gate: any path that surfaces "accepted" must route
-      // the passenger through the payment form unless the ride was already paid.
-      if (data.status === 'accepted') {
-        openPaymentModalIfDue({ id: data.rideId, status: data.status, payment: data.payment }, data.estimatedFare ?? data.finalFare ?? undefined);
-      }
-
-      setActiveRide(prev => ({
-        ...prev!,
-        status: data.status,
-      }));
-    };
 
     // Listen for driver location updates — skip micro-movements <15m to prevent flicker
     const MIN_DRIVER_MOVE_METERS = 15;
@@ -2010,9 +2006,9 @@ export default function PassengerHomeScreen() {
     };
 
     // Register event listeners — store cleanup functions individually (no destructive socket.off)
+    // NOTE: ride:accepted y ride:status_changed se registran una sola vez (early listeners en el
+    // efecto de conexión del socket), se re-registran en cada connect y persisten en reconexiones.
     console.log('[PASSENGER] Registering socket event listeners...');
-    rideCleanupRefs.current.rideAccepted = onRideAccepted(handleRideAccepted);
-    rideCleanupRefs.current.rideStatusChanged = onRideStatusChanged(handleRideStatusChanged);
     rideCleanupRefs.current.driverLocationUpdate = onDriverLocationUpdate(handleDriverLocationUpdate);
     rideCleanupRefs.current.etaUpdate = onETAUpdate(handleETAUpdate);
     rideCleanupRefs.current.driverArrived = onDriverArrived(handleDriverArrived);
