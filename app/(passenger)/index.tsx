@@ -4281,27 +4281,11 @@ export default function PassengerHomeScreen() {
 
   const showDriverMarker = !!(activeRide?.driver && driverLocation && activeRide.status !== 'completed' && activeRide.status !== 'cancelled');
 
-  if (isLoadingLocation) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2FB908" />
-        <Text style={styles.loadingText}>Obteniendo ubicación...</Text>
-      </View>
-    );
-  }
-
-  if (!currentLocation) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>No se pudo obtener la ubicación</Text>
-        <Text style={styles.errorSubtext}>Por favor verifica los permisos de ubicación</Text>
-      </View>
-    );
-  }
-
   // Sincroniza el formulario de pago con el PaymentFormHost del layout (cubre la tab
   // bar y queda sobre los botones del mapa). Se publica en cada render para que el
   // host tenga siempre las props/métodos más frescos mientras el formulario está abierto.
+  // OJO: va ANTES de los early-returns (isLoadingLocation / !currentLocation) para no
+  // romper el orden de hooks entre renders.
   useEffect(() => {
     if (showMobilePaymentModal) {
       paymentForm.open({
@@ -4322,6 +4306,24 @@ export default function PassengerHomeScreen() {
 
   // Cierra el formulario si la pantalla se desmonta mientras estaba abierto
   useEffect(() => () => paymentForm.close(), []);
+
+  if (isLoadingLocation) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2FB908" />
+        <Text style={styles.loadingText}>Obteniendo ubicación...</Text>
+      </View>
+    );
+  }
+
+  if (!currentLocation) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>No se pudo obtener la ubicación</Text>
+        <Text style={styles.errorSubtext}>Por favor verifica los permisos de ubicación</Text>
+      </View>
+    );
+  }
 
   return (
     <ErrorBoundary>
