@@ -52,3 +52,6 @@ backend-urban-taxis/config/firebase-service-account.json
 
 # GitHub Actions secrets backup (contains signing credentials - DO NOT COMMIT)
 claves_github_actions.txt
+
+# Template de secretos iOS (llena los valores sin subirlo - DO NOT COMMIT with values)
+SECRETS_IOS_GITHUB_ACTIONS.md
