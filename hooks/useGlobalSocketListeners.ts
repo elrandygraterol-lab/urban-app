@@ -39,6 +39,7 @@ export const useGlobalSocketListeners = ({
   const processedCompletedRidesRef = useRef<Set<string>>(new Set());
   const processedPaymentRidesRef = useRef<Set<string>>(new Set());
   const processedAcceptedRideIdsRef = useRef<Set<string>>(new Set());
+  const processedInProgressRideIdsRef = useRef<Set<string>>(new Set());
   const processedRideRequestIdsRef = useRef<Set<string>>(new Set());
   const processedCancelledRideIdsRef = useRef<Set<string>>(new Set());
   const debugOnAnyRef = useRef<((...args: any[]) => void) | null>(null);
@@ -399,6 +400,20 @@ export const useGlobalSocketListeners = ({
         // 'arrived' handled by dedicated ride:driver_arrived handler (screen-level)
         if (data.status === 'arrived') return;
         if (data.status === 'in_progress') {
+          // Dedup: backend emits ride:status_changed to the ride room AND via emitToUser,
+          // so use a TTL set (same pattern as processedAcceptedRideIdsRef).
+          if (processedInProgressRideIdsRef.current.has(data.rideId)) {
+            console.log('[GLOBAL_SOCKET] Ride in_progress already notified for', data.rideId, '— skipping duplicate');
+            return;
+          }
+          processedInProgressRideIdsRef.current.add(data.rideId);
+          if (processedInProgressRideIdsRef.current.size > 25) {
+            const entries = Array.from(processedInProgressRideIdsRef.current);
+            processedInProgressRideIdsRef.current = new Set(entries.slice(-20));
+          }
+          setTimeout(() => {
+            processedInProgressRideIdsRef.current.delete(data.rideId);
+          }, 5000);
           playNotificationSound();
           showStatus(
             'info',

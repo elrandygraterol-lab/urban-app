@@ -610,6 +610,12 @@ export default function MobilePaymentModal({
     } catch (error: any) {
       // Re-habilita el auto-cancel por timeout tras un fallo de verificación (Fase A)
       isPaymentCompletedRef.current = false;
+      // Fase A.2: si el countdown llegó a 0 mientras el verify estaba en vuelo, el efecto
+      // de auto-cancel apagó el timer (timerRef null) — re-armamos el safety-net completo.
+      if (paymentMethod === 'mobile' && !timerRef.current) {
+        setIsTimerActive(true);
+        setTimeRemaining(INITIAL_TIME);
+      }
       let msg = 'Error procesando el pago. Intenta nuevamente.';
       let retry = true;
       if (error.response) {

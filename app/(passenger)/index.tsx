@@ -36,6 +36,8 @@ import { useAuthStore } from '@/store/authStore';
 import { rideAPI, paymentAPI, ratingAPI, passengerAPI } from '@/services/api';
 import { reverseGeocode, getRoute, geocodeAddress, getIpLocation, searchPlaces } from '@/services/mapsService';
 import {
+  addConnectionListener,
+  removeConnectionListener,
   connectSocket,
   getSocket,
   joinRide,
@@ -452,6 +454,9 @@ export default function PassengerHomeScreen() {
   // Early listener cleanups (registered before activeRide exists, persist across reconnects)
   const earlyAcceptedListenerRef = useRef<(() => void) | null>(null);
   const earlyStatusListenerRef = useRef<(() => void) | null>(null);
+  // Socket instance the early listeners are currently bound to — used to detect full
+  // socket recreation (connectSocket destroys all listeners on the old instance).
+  const earlyListenersSocketRef = useRef<any>(null);
 
   // Keep refs in sync with state — avoids stale closures in socket handlers
   useEffect(() => {
@@ -1467,38 +1472,37 @@ export default function PassengerHomeScreen() {
 
     setupSocket();
 
-    // Register ride:accepted listener IMMEDIATELY after socket connects,
-    // BEFORE activeRide exists. This ensures the payment gate fires
-    // when driver accepts, creating the activeRide.
-    const setupRideAcceptedListener = async () => {
-      const socket = getSocket();
-      if (socket?.connected) {
-        console.log('[PASSENGER] Registering early ride:accepted listener');
-        earlyAcceptedListenerRef.current = onRideAccepted(handleRideAccepted);
-        earlyStatusListenerRef.current = onRideStatusChanged(handleRideStatusChangedEarly);
-      } else {
-        // Wait for connection then register
-        const waitForSocket = () => {
-          const s = getSocket();
-          if (s?.connected) {
-            console.log('[PASSENGER] Socket ready, registering early ride:accepted listener');
-            earlyAcceptedListenerRef.current = onRideAccepted(handleRideAccepted);
-            earlyStatusListenerRef.current = onRideStatusChanged(handleRideStatusChangedEarly);
-          } else {
-            setTimeout(waitForSocket, 500);
-          }
-        };
-        setTimeout(waitForSocket, 500);
-      }
+    // Register ride:accepted / ride:status_changed ONCE PER SOCKET INSTANCE (before
+    // activeRide exists). addConnectionListener re-fires on every connect, including
+    // after a FULL socket recreation (connectSocket does removeAllListeners on the old
+    // instance). We only re-register when the socket OBJECT changed, so native
+    // reconnects (same instance, listeners preserved) never duplicate registrations.
+    const registerEarlyListeners = (connected: boolean) => {
+      if (!connected) return;
+      const s = getSocket();
+      if (!s) return;
+      if (earlyListenersSocketRef.current === s) return;
+      console.log('[PASSENGER] Registering early ride listeners for socket instance:', s.id);
+      // NOTE: intentionally NOT calling the previous cleanup here — after a recreation it
+      // would off() the NEW socket (module-level `socket`) and remove our fresh listeners.
+      earlyAcceptedListenerRef.current = onRideAccepted(handleRideAccepted);
+      earlyStatusListenerRef.current = onRideStatusChanged(handleRideStatusChangedEarly);
+      earlyListenersSocketRef.current = s;
+      // Force the ride-effect (deps: activeRide?.id, listenerVersion) to re-register its
+      // ride listeners (driverLocation, eta, driverArrived, cancelled, completed,
+      // routePointCompleted) and handleReconnect on the new socket instance.
+      setListenerVersion(v => v + 1);
     };
-    setupRideAcceptedListener();
+    addConnectionListener(registerEarlyListeners);
 
     // Cleanup on unmount
     return () => {
       mounted = false;
+      removeConnectionListener(registerEarlyListeners);
       removeRideListeners();
       earlyAcceptedListenerRef.current?.();
       earlyStatusListenerRef.current?.();
+      earlyListenersSocketRef.current = null;
       // Don't disconnect socket here - keep it alive for the session
     };
   }, [user, token]); // Depend on both user AND token
@@ -3475,6 +3479,10 @@ export default function PassengerHomeScreen() {
         status: 'pending',
       });
 
+      // Sync the ref synchronously (not only via effect) to close the theoretical window
+      // where a fast ride:accepted could arrive before the effect flushes the ref.
+      activeRideRef.current = { id: rideId, status: 'pending' };
+
       // Show searching driver state
       setIsRequestingRide(false);
       setIsSearchingDriver(true);
@@ -3585,6 +3593,10 @@ export default function PassengerHomeScreen() {
       // Reset states
       setActiveRide(null);
       setIsSearchingDriver(false);
+      // Close payment modals too — a late `ride:accepted` for this ride can arrive
+      // during the cancel API await above and leave the modal orphaned on screen.
+      setShowMobilePaymentModal(false);
+      setShowPaymentModal(false);
       setDriverLocation(null);
       setRouteCoordinates([]);
       setNearestRouteIndex(0);
