@@ -10,7 +10,7 @@ import {
   ScrollView,
   Animated,
   Platform,
-  AppState,
+  BackHandler,
   Dimensions,
   FlatList,
   Pressable,
@@ -369,46 +369,6 @@ export default function MobilePaymentModal({
 
   // Slide animation
   const slideAnim = useRef(new Animated.Value(0)).current;
-
-  // Android Modal resume-safe: RN Android <Modal> (Dialog nativo) puede DUPLICAR la
-  // ventana al volver del background. `shown` espeja `visible`; en Android, al pasar a
-  // background se cierra el Dialog y al volver se re-monta fresco si el padre aún lo
-  // quiere. En iOS el comportamiento queda idéntico (solo se usa en Android).
-  const [shown, setShown] = useState(visible);
-  const visibleRef = useRef(visible);
-  const resumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    visibleRef.current = visible;
-    setShown(visible);
-  }, [visible]);
-
-  useEffect(() => {
-    if (!visible) return;
-    const sub = AppState.addEventListener('change', (next) => {
-      const goingBackground = next !== 'active';
-      if (goingBackground) {
-        if (resumeTimerRef.current) {
-          clearTimeout(resumeTimerRef.current);
-          resumeTimerRef.current = null;
-        }
-        if (Platform.OS === 'android') {
-          setShown(false); // cierra el Dialog nativo mientras la app está en background
-        }
-      } else if (Platform.OS === 'android') {
-        resumeTimerRef.current = setTimeout(() => {
-          resumeTimerRef.current = null;
-          if (visibleRef.current) setShown(true); // re-monta fresco solo si el padre aún lo quiere
-        }, 250);
-      }
-    });
-    return () => {
-      sub.remove();
-      if (resumeTimerRef.current) {
-        clearTimeout(resumeTimerRef.current);
-        resumeTimerRef.current = null;
-      }
-    };
-  }, [visible]);
 
   // Reset processing states when modal opens
   useEffect(() => {
@@ -769,8 +729,20 @@ export default function MobilePaymentModal({
     outputRange: ['180deg', '0deg'],
   });
 
-  return (
-    <Modal visible={shown} animationType="slide" transparent onRequestClose={handleCancel}>
+  // Android: se renderiza como overlay dentro del árbol de la pantalla (sin <Modal>
+  // nativo), porque el <Modal transparent> de RN en Android puede DUPLICAR la ventana
+  // al volver del background. En iOS se mantiene el <Modal> nativo (no hay ese bug).
+  // Android: hardware back equivale al onRequestClose del Modal
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !visible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleCancel();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible, handleCancel]);
+
+  const sheet = (
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <View style={styles.overlay}>
         <Animated.View
@@ -1185,6 +1157,15 @@ export default function MobilePaymentModal({
         )}
       </View>
       </KeyboardAvoidingView>
+  );
+
+  if (Platform.OS === 'android') {
+    return visible ? <View style={styles.overlayRoot}>{sheet}</View> : null;
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleCancel}>
+      {sheet}
     </Modal>
   );
 }
@@ -1195,6 +1176,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
     paddingBottom: 12,
+  },
+  overlayRoot: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 50,
+    elevation: 50,
   },
   container: {
     backgroundColor: '#fff',
