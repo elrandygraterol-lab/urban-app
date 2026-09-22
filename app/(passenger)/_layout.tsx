@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { View } from 'react-native';
+import PaymentFormHost from '@/components/PaymentFormHost';
 
 export default function PassengerLayout() {
   return (
@@ -52,6 +53,8 @@ export default function PassengerLayout() {
           }}
         />
       </Tabs>
+      {/* Formulario de pago al nivel del layout: cubre la tab bar y ningún botón del mapa queda por encima del overlay */}
+      <PaymentFormHost />
     </View>
   );
 }

@@ -33,6 +33,7 @@ import {
 } from '@/src/components/map/markers';
 import { computeBearing, bearingAlongRoute, animateNavigationCamera, computeNearestRouteIndex } from '@/src/utils/mapNav';
 import { useAuthStore } from '@/store/authStore';
+import { paymentForm } from '@/store/paymentFormStore';
 import { rideAPI, paymentAPI, ratingAPI, passengerAPI } from '@/services/api';
 import { reverseGeocode, getRoute, geocodeAddress, getIpLocation, searchPlaces } from '@/services/mapsService';
 import {
@@ -4298,6 +4299,30 @@ export default function PassengerHomeScreen() {
     );
   }
 
+  // Sincroniza el formulario de pago con el PaymentFormHost del layout (cubre la tab
+  // bar y queda sobre los botones del mapa). Se publica en cada render para que el
+  // host tenga siempre las props/métodos más frescos mientras el formulario está abierto.
+  useEffect(() => {
+    if (showMobilePaymentModal) {
+      paymentForm.open({
+        amount: finalFare || estimatedFare || 0,
+        currency: fareCurrency,
+        exchangeRate: fareBreakdown?.exchangeRate,
+        rideId: activeRide?.id || '',
+        passengerName: user?.name || '',
+        platformMethod: selectedPlatformMethod,
+        onPaymentComplete: handleMobilePaymentComplete,
+        onCancel: handleMobilePaymentCancel,
+        onBeforeCancel: handleBeforeMobilePaymentCancel,
+      });
+    } else {
+      paymentForm.close();
+    }
+  });
+
+  // Cierra el formulario si la pantalla se desmonta mientras estaba abierto
+  useEffect(() => () => paymentForm.close(), []);
+
   return (
     <ErrorBoundary>
       <View style={styles.container}>
@@ -5920,20 +5945,6 @@ export default function PassengerHomeScreen() {
             </View>
           </View>
         </Modal>
-
-        {/* Mobile Payment Modal */}
-        <MobilePaymentModal
-          visible={showMobilePaymentModal}
-          amount={finalFare || estimatedFare || 0}
-          currency={fareCurrency}
-          exchangeRate={fareBreakdown?.exchangeRate}
-          rideId={activeRide?.id || ''}
-          passengerName={user?.name || ""}
-          platformMethod={selectedPlatformMethod}
-          onPaymentComplete={handleMobilePaymentComplete}
-          onCancel={handleMobilePaymentCancel}
-          onBeforeCancel={handleBeforeMobilePaymentCancel}
-        />
 
         {/* Change Payment Method Modal — for switching from cash to pago_movil during ride (Req. 3.2) */}
         <Suspense fallback={
