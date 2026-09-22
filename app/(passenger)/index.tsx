@@ -3976,7 +3976,17 @@ export default function PassengerHomeScreen() {
     }
     // Revisión 5: guard defensivo — no re-procesar si el pago ya se completó
     // (protege contra doble envío si el usuario reintenta tras un error).
-    if (paymentCompletedRef.current) return;
+    if (paymentCompletedRef.current) {
+      console.log('[MOBILE_PAYMENT] complete SKIPPED — paymentCompletedRef=true');
+      return;
+    }
+    console.log('[MOBILE_PAYMENT] complete →', {
+      method: paymentData.method,
+      rideId: activeRide.id,
+      state: activeRide.status,
+      hasRef: !!paymentData.referencia,
+      phone: !!paymentData.telefono,
+    });
 
     try {
       // Cerrar modal y mostrar loading

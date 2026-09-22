@@ -14,6 +14,7 @@ import {
   Dimensions,
   FlatList,
   Pressable,
+  Keyboard,
   KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -342,7 +343,7 @@ export default function MobilePaymentModal({
   onBeforeCancel,
 }: MobilePaymentModalProps) {
   const insets = useSafeAreaInsets();
-  const { showToast, showStatus, dismissStatus } = useUnifiedNotifications();
+  const { showToast } = useUnifiedNotifications();
   // Modo manual: verificación previa al viaje (sin rideId), el padre crea el ride después
   const isManualMode = rideId == null;
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mobile');
@@ -360,6 +361,11 @@ export default function MobilePaymentModal({
   const [isAutoCancelling, setIsAutoCancelling] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [formFeedback, setFormFeedback] = useState<{
+    type: 'error' | 'warning' | 'success' | 'info';
+    message: string;
+    retry?: boolean;
+  } | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isPaymentCompletedRef = useRef(false);
 
@@ -377,6 +383,7 @@ export default function MobilePaymentModal({
       setIsAutoCancelling(false);
       setShowCancelConfirm(false);
       setCancelError(null);
+      setFormFeedback(null);
     }
   }, [visible]);
 
@@ -407,6 +414,7 @@ export default function MobilePaymentModal({
     setIdentificacion('');
     setPagador('');
     setIsCollapsed(false);
+    setFormFeedback(null);
     isPaymentCompletedRef.current = false; // Reset: re-habilita el auto-cancel por timeout (Fase A)
     if (timerRef.current) clearInterval(timerRef.current);
   }, []);
@@ -504,6 +512,22 @@ export default function MobilePaymentModal({
   };
 
   const handleSubmitPayment = async () => {
+    // Descarta tope con el teclado: el toque siempre dispara el handler.
+    Keyboard.dismiss();
+    console.log('[MOBILE_PAYMENT] submit →', {
+      isManualMode,
+      rideId: rideId || null,
+      paymentMethod,
+      hasReferencia: !!referencia,
+      hasFecha: !!fecha,
+      hasBanco: !!selectedBank,
+      hasTelefonoP: !!telefonoP,
+      hasIdentificacion: !!identificacion,
+      hasPagador: !!pagador,
+      isProcessing,
+      isAutoCancelling,
+    });
+
     if (paymentMethod === 'cash') {
       const numAmount = Number(amount) || 0;
       let dualMessage: string;
@@ -514,14 +538,10 @@ export default function MobilePaymentModal({
         const usdEquivalent = exchangeRate && exchangeRate > 0 ? (numAmount / exchangeRate).toFixed(2) : null;
         dualMessage = `Bs. ${numAmount.toFixed(2)}${usdEquivalent ? `  →  $ ${usdEquivalent}` : ''}`;
       }
-      showStatus(
-        'info',
-        `Pagarás ${dualMessage} en efectivo al conductor.`,
-        'Pago en Efectivo',
-        undefined,
-        undefined,
-        4000
-      );
+      setFormFeedback({
+        type: 'info',
+        message: `Pagarás ${dualMessage} en efectivo al conductor.`,
+      });
       setTimeout(() => {
         resetForm();
         onPaymentComplete({ method: 'cash' });
@@ -530,33 +550,40 @@ export default function MobilePaymentModal({
     }
 
     if (!referencia || !fecha || !selectedBank || !telefonoP || !identificacion) {
-      showToast('Completa todos los campos del Pago Móvil.', 'warning');
+      console.log('[MOBILE_PAYMENT] fallo validación: campos incompletos');
+      setFormFeedback({ type: 'warning', message: 'Completa todos los campos del Pago Móvil.' });
       return;
     }
     if (referencia.length < 1 || referencia.length > 12 || !/^\d{1,12}$/.test(referencia)) {
-      showToast('La referencia debe tener entre 1 y 12 dígitos numéricos.', 'error');
+      console.log('[MOBILE_PAYMENT] fallo validación: referencia', { referencia });
+      setFormFeedback({ type: 'error', message: 'La referencia debe tener entre 1 y 12 dígitos numéricos.' });
       return;
     }
     if (!/^\d{2}\/\d{2}\/\d{4}$/.test(fecha)) {
-      showToast('Formato de fecha inválido. Usa DD/MM/YYYY.', 'error');
+      console.log('[MOBILE_PAYMENT] fallo validación: formato fecha', { fecha });
+      setFormFeedback({ type: 'error', message: 'Formato de fecha inválido. Usa DD/MM/YYYY.' });
       return;
     }
     const [d, m, y] = fecha.split('/').map(Number);
     const dateObj = new Date(y, m - 1, d);
     if (dateObj.getFullYear() !== y || dateObj.getMonth() !== m - 1 || dateObj.getDate() !== d) {
-      showToast('La fecha ingresada no es válida.', 'error');
+      console.log('[MOBILE_PAYMENT] fallo validación: fecha no válida', { fecha });
+      setFormFeedback({ type: 'error', message: 'La fecha ingresada no es válida.' });
       return;
     }
     if (telefonoP.length < 10) {
-      showToast('Número de teléfono muy corto.', 'error');
+      console.log('[MOBILE_PAYMENT] fallo validación: teléfono corto', { telefonoP });
+      setFormFeedback({ type: 'error', message: 'Número de teléfono muy corto.' });
       return;
     }
     if (identificacion.length < 6) {
-      showToast('Identificación demasiado corta.', 'error');
+      console.log('[MOBILE_PAYMENT] fallo validación: identificación corta', { identificacion });
+      setFormFeedback({ type: 'error', message: 'Identificación demasiado corta.' });
       return;
     }
     if (pagador.trim().length < 2) {
-      showToast('El nombre del pagador es muy corto.', 'error');
+      console.log('[MOBILE_PAYMENT] fallo validación: pagador corto', { pagador });
+      setFormFeedback({ type: 'error', message: 'El nombre del pagador es muy corto.' });
       return;
     }
     // Defensive reformat: garantiza DD/MM/YYYY antes del API call
@@ -576,6 +603,13 @@ export default function MobilePaymentModal({
         currency === 'USD' && exchangeRate && exchangeRate > 0
           ? Number((Number(amount) * exchangeRate).toFixed(2))
           : Number(amount);
+      console.log('[MOBILE_PAYMENT] verifyP2CPayment →', {
+        rideId: isManualMode ? null : rideId,
+        banco: selectedBankData?.code || selectedBank,
+        montoVES,
+        telefonoP,
+        identificacion,
+      });
       const response = await paymentAPI.verifyP2CPayment(isManualMode ? null : rideId, {
         referencia,
         fecha: safeFecha,
@@ -585,15 +619,12 @@ export default function MobilePaymentModal({
         identificacion,
         pagador,
       });
+      console.log('[MOBILE_PAYMENT] verifyP2CPayment OK', response?.data?.data);
 
-      showStatus(
-        'success',
-        `Pago Móvil de ${formatCurrency(amount, currency)} verificado`,
-        'Pago Verificado',
-        undefined,
-        undefined,
-        3000
-      );
+      setFormFeedback({
+        type: 'success',
+        message: `Pago Móvil de ${formatCurrency(amount, currency)} verificado`,
+      });
 
       // Cerrar modal y notificar al padre inmediatamente
       setTimeout(() => {
@@ -642,19 +673,15 @@ export default function MobilePaymentModal({
             msg = serverMsg || msg;
         }
       }
-      if (retry) {
-        showStatus(
-          'error',
-          msg,
-          'Error de Pago',
-          undefined,
-          { label: 'Reintentar', onPress: () => { handleSubmitPayment(); dismissStatus(); } },
-          12000
-        );
-      } else {
-        showStatus('error', msg, 'Error de Pago', undefined, undefined, 8000);
-      }
+      console.error('[MOBILE_PAYMENT] verifyP2CPayment ERROR', {
+        status: error?.response?.status,
+        msg,
+        msgDetail: error?.response?.data?.error?.message,
+        netError: error?.message,
+      });
+      setFormFeedback({ type: 'error', message: msg, retry });
     } finally {
+      console.log('[MOBILE_PAYMENT] submit finally');
       setIsProcessing(false);
     }
   };
@@ -1096,6 +1123,56 @@ export default function MobilePaymentModal({
             </Animated.View>
           </ScrollView>
 
+          {/* ── Feedback local del pago (siempre visible dentro del sheet, en iOS) ── */}
+          {formFeedback && (
+            <View
+              style={[
+                styles.feedbackBanner,
+                formFeedback.type === 'success'
+                  ? styles.feedbackBannerSuccess
+                  : formFeedback.type === 'warning'
+                  ? styles.feedbackBannerWarning
+                  : formFeedback.type === 'info'
+                  ? styles.feedbackBannerInfo
+                  : styles.feedbackBannerError,
+              ]}
+            >
+              <Ionicons
+                name={
+                  formFeedback.type === 'success'
+                    ? 'checkmark-circle'
+                    : formFeedback.type === 'warning'
+                    ? 'warning'
+                    : formFeedback.type === 'info'
+                    ? 'information-circle'
+                    : 'alert-circle'
+                }
+                size={14}
+                color={
+                  formFeedback.type === 'success'
+                    ? '#16a34a'
+                    : formFeedback.type === 'warning'
+                    ? '#d97706'
+                    : formFeedback.type === 'info'
+                    ? '#2563eb'
+                    : '#dc2626'
+                }
+              />
+              <Text style={styles.feedbackBannerText}>{formFeedback.message}</Text>
+              {formFeedback.retry && (
+                <TouchableOpacity
+                  style={styles.feedbackRetryBtn}
+                  onPress={() => {
+                    setFormFeedback(null);
+                    handleSubmitPayment();
+                  }}
+                >
+                  <Text style={styles.feedbackRetryText}>Reintentar</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
           {/* ── Actions ── */}
           {cancelError && (
             <View style={[styles.cancelErrorBanner, {}]}>
@@ -1113,7 +1190,14 @@ export default function MobilePaymentModal({
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.btnSubmit, (isProcessing || isAutoCancelling) && styles.btnSubmitDisabled]}
-              onPress={handleSubmitPayment}
+              onPress={() => {
+                console.log('[MOBILE_PAYMENT] botón Confirmar presionado', {
+                  isProcessing,
+                  isAutoCancelling,
+                  showCancelConfirm,
+                });
+                handleSubmitPayment();
+              }}
               disabled={isProcessing || isAutoCancelling}
             >
               {isProcessing ? (
@@ -1881,5 +1965,49 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#dc2626',
     fontWeight: '500',
+  },
+  feedbackBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginHorizontal: 20,
+    marginBottom: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  feedbackBannerError: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fecaca',
+  },
+  feedbackBannerWarning: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
+  },
+  feedbackBannerSuccess: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+  },
+  feedbackBannerInfo: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe',
+  },
+  feedbackBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#1f2937',
+    fontWeight: '500',
+  },
+  feedbackRetryBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#dc2626',
+  },
+  feedbackRetryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
   },
 });
