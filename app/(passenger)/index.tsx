@@ -900,6 +900,12 @@ export default function PassengerHomeScreen() {
   // (Revisión 5.1 — sugerencia del revisor).
   useEffect(() => {
     acceptedRideIdRef.current = null;
+    // CRITICAL: si el viaje anterior quedó 'paymentCompletedRef=true' (pago
+    // completado), un nuevo viaje NO debe heredarlo: openPaymentModalIfDue
+    // bloquea el modal cuando ese ref es true (guarda línea ~931), impidiendo
+    // que el formulario de pago aparezca al ser aceptado el nuevo viaje.
+    paymentCompletedRef.current = false;
+    setPaymentCompleted(false);
   }, [activeRide?.id]);
 
   /**
@@ -3517,6 +3523,12 @@ export default function PassengerHomeScreen() {
       // Sync the ref synchronously (not only via effect) to close the theoretical window
       // where a fast ride:accepted could arrive before the effect flushes the ref.
       activeRideRef.current = { id: rideId, status: 'pending' };
+
+      // Reset del estado de pago para el NUEVO viaje: si el viaje anterior quedó pago
+      // (paymentCompletedRef=true), heredarlo bloquearía openPaymentModalIfDue al ser
+      // aceptado este viaje y el formulario de pago nunca aparecería (bug reportado).
+      paymentCompletedRef.current = false;
+      setPaymentCompleted(false);
 
       // Show searching driver state
       setIsRequestingRide(false);
