@@ -3995,9 +3995,15 @@ export default function PassengerHomeScreen() {
       isProcessingPaymentRef.current = false;
       setIsProcessingPayment(false);
 
-      if (paymentData.method === 'mobile_payment' && paymentData.referencia) {
-        // P2C payment - already verified by the modal, just show success
-        console.log('✅ P2C Payment already verified:', paymentData);
+      if (paymentData.method === 'mobile_payment') {
+        if (paymentData.referencia) {
+          // P2C payment - already verified by the modal, just show success
+          console.log('✅ P2C Payment already verified:', paymentData);
+        } else {
+          // Defensivo: el verify-p2c ya corrió en el modal; sin referencia NO re-confirmamos
+          // (evita degradar a cash un pago que el backend ya pudo procesar).
+          console.warn('[MOBILE_PAYMENT] complete sin referencia — no se re-confirma, el pago ya fue enviado a verify-p2c');
+        }
 
         // Ocultar loading
         setIsRequestingRide(false);
