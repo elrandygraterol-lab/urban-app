@@ -4004,6 +4004,7 @@ export default function PassengerHomeScreen() {
 
         // Mark payment as completed so ride completion doesn't show payment modal again
         setPaymentCompleted(true);
+        setPaymentMethod('pago_movil'); // Coherencia local: si se reabre el panel, no re-confirmar en cash
         paymentCompletedRef.current = true; // Ref síncrono: cierra la ventana de race con paymentCompletedRef (Rev. 5.1)
         acceptedRideIdRef.current = null; // Reset idempotency ref for next ride
 
