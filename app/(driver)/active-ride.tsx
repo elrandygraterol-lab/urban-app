@@ -1232,8 +1232,30 @@ export default function ActiveRideScreen() {
         const res = await rideAPI.getRide(ride.id);
         const updated = res.data?.data || res.data;
         const currentStatus = rideRef.current?.status;
+        const currentPaymentStatus = rideRef.current?.payment?.status;
         if (!updated?.status || !currentStatus) return;
-        if (updated.status === currentStatus) return;
+        const paymentChanged =
+          currentPaymentStatus !== undefined &&
+          updated.payment?.status !== currentPaymentStatus;
+        // Even if the ride status hasn't changed, a payment-only update (e.g.
+        // one missed via socket race) must still be synced to unlock "Start Ride".
+        if (updated.status === currentStatus && !paymentChanged) return;
+        // Sync payment-only changes made while status stayed the same
+        if (paymentChanged) {
+          if (updated.payment?.status === 'completed') {
+            setIsPaymentConfirmed(true);
+          }
+          if (updated.payment?.paymentMode) {
+            setPassengerPaymentMode(updated.payment.paymentMode as 'cash' | 'pago_movil' | 'bank_transfer' | 'dual');
+          }
+          // Persist the payment update so later polls don't re-detect it
+          if (updated.status === currentStatus) {
+            setRide(prev => prev ? { ...prev, payment: updated.payment } : prev);
+            if (updated.payment?.status === 'completed') {
+              console.log('[ACTIVE_RIDE] 💳 Polling caught payment completed (status unchanged)', ride.id);
+            }
+          }
+        }
         // Server reports cancellation — recover the UI even if the socket event
         // was missed (e.g. app was offline or in background while passenger cancelled).
         if (updated.status === 'cancelled') {
