@@ -50,6 +50,7 @@ import {
   onDriverArrived,
   onRideCancelled,
   onRideCompleted,
+  onPaymentConfirmed,
   onSharedRideInvitationReceived,
   onSharedRideInvitationAccepted,
   onSharedRideInvitationRejected,
@@ -441,6 +442,14 @@ export default function PassengerHomeScreen() {
   const pickupLocationRef = useRef<LocationCoords | null>(null);
   const destinationLocationRef = useRef<LocationCoords | null>(null);
   const routeCoordinatesRef = useRef<RouteCoordinates[]>([]);
+  // Destino de la ruta representada actualmente en el mapa (pickup | destination).
+  // Evita re-trazar hacia el destino en cada location_update tras el in_progress,
+  // y fuerza el redibujo driver→destination aunque la ruta driver→pickup
+  // (prevista en 'accepted') siga en pantalla (G3).
+  const routeDrawnTargetRef = useRef<'pickup' | 'destination' | null>(null);
+  // Inicialización del viaje en curso (distancia inicial/landmarks/ruta): solo
+  // corre en la transición a in_progress, no en cada driverLocation (G3).
+  const rideStartedInitDoneRef = useRef(false);
   const driverArrivedNotifiedRef = useRef(false);
   const hasShownNearbyNotificationRef = useRef(false);
   const isDynamicRouteEnabledRef = useRef(true);
@@ -1616,6 +1625,7 @@ export default function PassengerHomeScreen() {
       rideCleanupRefs.current.rideCancelled = onRideCancelled(handleRideCancelled);
       rideCleanupRefs.current.rideCompleted = onRideCompleted(handleRideCompleted);
       rideCleanupRefs.current.routePointCompleted = onRoutePointCompleted(handleRoutePointCompleted);
+      rideCleanupRefs.current.paymentConfirmed = onPaymentConfirmed(handlePaymentConfirmed);
       console.log('[PASSENGER] ✅ Listeners re-registered after reconnect (excluding early ones)');
       // Bump listenerVersion to trigger re-registration of shared ride invitation handlers
       setListenerVersion(v => v + 1);
@@ -1763,6 +1773,25 @@ export default function PassengerHomeScreen() {
         undefined,
         5000
       );
+    };
+
+    // Listen for payment confirmation (G2): the backend can complete the payment
+    // asynchronously (VOB/mock verifier, cash confirmation, admin). Surface it in
+    // real time instead of waiting for the 5s polling, and dismiss the payment
+    // form that may still be open.
+    const handlePaymentConfirmed = (data: { rideId?: string }) => {
+      if (data?.rideId !== activeRideRef.current?.id) {
+        console.log('[PASSENGER] Payment completed for different ride, ignoring', data?.rideId, 'active:', activeRideRef.current?.id);
+        return;
+      }
+      console.log('[PASSENGER] Payment confirmed via socket for active ride', data?.rideId);
+      setPaymentCompleted(true);
+      paymentCompletedRef.current = true; // Ref síncrono (Rev. 5.1)
+      paidRideIdRef.current = activeRideRef.current.id; // Registrar a qué viaje pertenece el pago
+      acceptedRideIdRef.current = null; // Reset idempotency: next accepted ride must show form again
+      if (paymentTimeoutRef.current) clearTimeout(paymentTimeoutRef.current);
+      setShowMobilePaymentModal(false);
+      setShowPaymentModal(false);
     };
 
     // Listen for ride cancelled event
@@ -2006,6 +2035,7 @@ export default function PassengerHomeScreen() {
       // Clear route from map and driver location immediately
       setRouteCoordinates([]);
       setNearestRouteIndex(0);
+      routeDrawnTargetRef.current = null;
       setDriverLocation(null);
       setDisplayDistance(null);
       setDisplayDuration(null);
@@ -2082,6 +2112,7 @@ export default function PassengerHomeScreen() {
     rideCleanupRefs.current.rideCancelled = onRideCancelled(handleRideCancelled);
     rideCleanupRefs.current.rideCompleted = onRideCompleted(handleRideCompleted);
     rideCleanupRefs.current.routePointCompleted = onRoutePointCompleted(handleRoutePointCompleted);
+    rideCleanupRefs.current.paymentConfirmed = onPaymentConfirmed(handlePaymentConfirmed);
     console.log('[PASSENGER] ✅ All socket event listeners registered');
 
     // Cleanup listeners when ride ends or component unmounts
@@ -2210,18 +2241,26 @@ export default function PassengerHomeScreen() {
       setNearestRouteIndex(0);
       setDisplayDistance(null);
       setDisplayDuration(null);
+      routeDrawnTargetRef.current = null;
     }
   }, [activeRide?.status]);
   // Fetch route when status transitions to in_progress — driver→destination
   useEffect(() => {
     if (!activeRide || !driverLocation || !isDynamicRouteEnabled) return;
 
-    if (activeRide.status === 'accepted' && pickupLocation && routeCoordinates.length === 0) {
+    // Redibujar cuando el target cambia (accepted→pickup, in_progress→destination),
+    // NO solo cuando routeCoordinates está vacío: si quedó la ruta driver→pickup en
+    // pantalla al pasar a in_progress, se reemplaza por la ruta hacia el destino (G3).
+    if (activeRide.status === 'accepted' && pickupLocation && routeDrawnTargetRef.current !== 'pickup') {
+      routeDrawnTargetRef.current = 'pickup';
       updateDynamicRoute(driverLocation, pickupLocation);
-    } else if (activeRide.status === 'in_progress' && destinationLocation && routeCoordinates.length === 0) {
+    } else if (activeRide.status === 'in_progress' && destinationLocation && routeDrawnTargetRef.current !== 'destination') {
+      // Solo dibujar una vez por transición: el refresh continuo lo maneja el
+      // listener de location_update (con throttle), no duplicamos requests OSRM.
+      routeDrawnTargetRef.current = 'destination';
       updateDynamicRoute(driverLocation, destinationLocation);
     }
-  }, [activeRide?.status, listenerVersion, driverLocation]);
+  }, [activeRide?.status, listenerVersion, driverLocation, destinationLocation]);
 
   // Camera follows driver during the ride — same navigation experience as driver
   useEffect(() => {
@@ -2419,8 +2458,12 @@ export default function PassengerHomeScreen() {
       return;
     }
 
-    // Cuando el viaje cambia a in_progress, inicializar distancia y buscar landmarks
+    // Cuando el viaje cambia a in_progress, inicializar distancia y buscar landmarks.
+    // Gate por ref: solo en la transición (no en cada driverLocation) para no
+    // resetear el progreso a 0 ni duplicar requests OSRM en cada update (G3).
     if (activeRide.status === 'in_progress') {
+      if (rideStartedInitDoneRef.current) return;
+      rideStartedInitDoneRef.current = true;
       console.log('[RIDE_IMPROVEMENTS] Ride started, initializing improvements...');
 
       // Mejora 2: Calcular distancia inicial para el indicador de progreso
@@ -2456,6 +2499,7 @@ export default function PassengerHomeScreen() {
 
     // Resetear cuando el viaje termina
     if (activeRide.status === 'completed' || activeRide.status === 'cancelled') {
+      rideStartedInitDoneRef.current = false;
       setInitialDistanceToDestination(0);
       setRideProgress(0);
       setNearbyLandmarks([]);
