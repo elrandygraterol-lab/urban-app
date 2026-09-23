@@ -548,6 +548,7 @@ export default function PassengerHomeScreen() {
                 console.log('[PASSENGER] Ride restored with completed payment:', { paymentMode, rideId: ride.id });
                 setPaymentCompleted(true);
                 paymentCompletedRef.current = true; // Ref síncrono: cierra la ventana de race (Rev. 5.1)
+                paidRideIdRef.current = ride.id; // Registrar a qué viaje pertenece el pago
                 acceptedRideIdRef.current = null; // Reset idempotency ref for next ride
               }
               // Restaurar tarifa estimada
@@ -858,6 +859,11 @@ export default function PassengerHomeScreen() {
     paymentCompletedRef.current = paymentCompleted;
   }, [paymentCompleted]);
 
+  // Registra a QUÉ viaje pertenece el pago completado. Sirve para que un viaje
+  // NUEVO no herede el paymentCompletedRef del viaje anterior: si el pago se marcó
+  // para otro ride.id, openPaymentModalIfDue lo resetea en vez de bloquear el modal.
+  const paidRideIdRef = useRef<string | null>(null);
+
   // Tracks whether the payment modal is currently open. Used by the idempotency
   // guard (Opción C) so duplicate triggers are skipped while the modal is open,
   // but legitimate reopens after closing it (button "Pagar Ahora") still work.
@@ -902,10 +908,11 @@ export default function PassengerHomeScreen() {
     acceptedRideIdRef.current = null;
     // CRITICAL: si el viaje anterior quedó 'paymentCompletedRef=true' (pago
     // completado), un nuevo viaje NO debe heredarlo: openPaymentModalIfDue
-    // bloquea el modal cuando ese ref es true (guarda línea ~931), impidiendo
+    // bloquea el modal cuando ese ref es true (guarda línea ~945), impidiendo
     // que el formulario de pago aparezca al ser aceptado el nuevo viaje.
     paymentCompletedRef.current = false;
     setPaymentCompleted(false);
+    paidRideIdRef.current = null;
   }, [activeRide?.id]);
 
   /**
@@ -934,6 +941,21 @@ export default function PassengerHomeScreen() {
         return;
       }
       // Guardia: detectar si paymentCompleted ya está true ANTES de que el usuario pague
+      // Si el pago completado pertenece a OTRO viaje (ride.id distinto al que se marcó
+      // como pagado), es un viaje NUEVO: no heredar el bloqueo. Esto corrige el caso
+      // donde el conductor acepta mientras la app estuvo en background/offline y el
+      // restore/network-recovery llama aquí ANTES de que el effect [activeRide?.id]
+      // ejecute su reset síncrono (el formulario de pago no aparecía).
+      if (paymentCompletedRef.current && ride.id && paidRideIdRef.current !== ride.id) {
+        console.log('[PASSENGER] openPaymentModalIfDue — paymentCompleted pertenece a otro viaje, reseteando para este nuevo ride', {
+          paidRideId: paidRideIdRef.current,
+          newRideId: ride.id,
+        });
+        paymentCompletedRef.current = false;
+        setPaymentCompleted(false);
+        paidRideIdRef.current = null;
+        acceptedRideIdRef.current = null;
+      }
       if (paymentCompletedRef.current) {
         console.warn('[PASSENGER] openPaymentModalIfDue BLOCKED — paymentCompletedRef=true', {
           rideStatus: ride.status,
@@ -3529,6 +3551,7 @@ export default function PassengerHomeScreen() {
       // aceptado este viaje y el formulario de pago nunca aparecería (bug reportado).
       paymentCompletedRef.current = false;
       setPaymentCompleted(false);
+      paidRideIdRef.current = null;
 
       // Show searching driver state
       setIsRequestingRide(false);
@@ -3912,6 +3935,8 @@ export default function PassengerHomeScreen() {
         // Still show as completed locally — cash is paid physically at end of ride
       }
       setPaymentCompleted(true);
+      paymentCompletedRef.current = true; // Ref síncrono (Rev. 5.1)
+      paidRideIdRef.current = activeRide.id; // Registrar a qué viaje pertenece el pago
       setIsProcessingPayment(false);
       isProcessingPaymentRef.current = false;
       return;
@@ -3937,6 +3962,8 @@ export default function PassengerHomeScreen() {
 
       // Mark payment as completed
       setPaymentCompleted(true);
+      paymentCompletedRef.current = true; // Ref síncrono (Rev. 5.1)
+      paidRideIdRef.current = activeRide.id; // Registrar a qué viaje pertenece el pago
       setIsProcessingPayment(false);
     } catch (error: any) {
       console.error('Payment processing error:', error);
@@ -4024,6 +4051,7 @@ export default function PassengerHomeScreen() {
         setPaymentCompleted(true);
         setPaymentMethod('pago_movil'); // Coherencia local: si se reabre el panel, no re-confirmar en cash
         paymentCompletedRef.current = true; // Ref síncrono: cierra la ventana de race con paymentCompletedRef (Rev. 5.1)
+        paidRideIdRef.current = activeRide.id; // Registrar a qué viaje pertenece el pago
         acceptedRideIdRef.current = null; // Reset idempotency ref for next ride
 
         // Confirmation shown by MobilePaymentModal — no duplicate toast here
@@ -4042,6 +4070,7 @@ export default function PassengerHomeScreen() {
 
         setPaymentCompleted(true);
         paymentCompletedRef.current = true; // Ref síncrono: cierra la ventana de race con paymentCompletedRef (Rev. 5.1)
+        paidRideIdRef.current = activeRide.id; // Registrar a qué viaje pertenece el pago
         acceptedRideIdRef.current = null; // Reset idempotency ref for next ride
       } else {
         await retryWithBackoff(async () => {
@@ -4062,6 +4091,7 @@ export default function PassengerHomeScreen() {
 
         setPaymentCompleted(true);
         paymentCompletedRef.current = true; // Ref síncrono: cierra la ventana de race con paymentCompletedRef (Rev. 5.1)
+        paidRideIdRef.current = activeRide.id; // Registrar a qué viaje pertenece el pago
         acceptedRideIdRef.current = null; // Reset idempotency ref for next ride
 
         showToast(
