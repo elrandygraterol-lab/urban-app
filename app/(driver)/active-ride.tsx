@@ -39,6 +39,7 @@ import { useRideTracking } from '@/hooks/useRideTracking';
 import { useTTS } from '@/hooks/useTTS';
 import { useExchangeRate } from '@/hooks/useExchangeRate';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
+import DeferredModal from '@/components/DeferredModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Ride {
@@ -2932,7 +2933,7 @@ export default function ActiveRideScreen() {
       </Modal>
 
       {/* Rating Modal */}
-      <Modal
+      <DeferredModal
         visible={showRatingModal}
         transparent={true}
         animationType="fade"
@@ -3002,7 +3003,7 @@ export default function ActiveRideScreen() {
             </View>
           </View>
         </View>
-      </Modal>
+      </DeferredModal>
 
       {/* Call Options Modal */}
       <Modal

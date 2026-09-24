@@ -69,6 +69,7 @@ import { formatCurrency, Currency } from '@/utils/currency';
 import CenterLocationButton from '@/components/CenterLocationButton';
 import { resolveFileUrl } from '@/services/fileUrl';
 import MobilePaymentModal from '@/components/MobilePaymentModal';
+import DeferredModal from '@/components/DeferredModal';
 const AddressAutocomplete = React.lazy(() => import('@/components/AddressAutocomplete'));
 type Place = import('@/components/AddressAutocomplete').Place;
 const SharedRideInvitationModal = React.lazy(() => import('@/components/SharedRideInvitationModal'));
@@ -6039,7 +6040,7 @@ export default function PassengerHomeScreen() {
         </Modal>
 
         {/* Rating Modal */}
-        <Modal
+        <DeferredModal
           visible={showRatingModal}
           transparent={true}
           animationType="fade"
@@ -6099,7 +6100,7 @@ export default function PassengerHomeScreen() {
               </View>
             </View>
           </View>
-        </Modal>
+        </DeferredModal>
 
         {/* Change Payment Method Modal — for switching from cash to pago_movil during ride (Req. 3.2) */}
         <Suspense fallback={
