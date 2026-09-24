@@ -376,14 +376,25 @@ export default function MobilePaymentModal({
   // Slide animation
   const slideAnim = useRef(new Animated.Value(0)).current;
 
-  // Reset processing states when modal opens
+  // Reset processing states + form fields when modal opens. El componente vive
+  // SIEMPRE montado (PaymentFormHost ya no lo desmonta, ver 2026-09-24), así que
+  // aquí se limpian los campos del viaje anterior; el efecto de la fecha/pagador
+  // de abajo vuelve a autollenar la fecha y el pasajero.
   useEffect(() => {
     if (visible) {
+      setSelectedBank('');
+      setPaymentMethod('mobile');
+      setReferencia('');
+      setTelefonoP('');
+      setIdentificacion('');
+      setPagador('');
+      setIsCollapsed(false);
+      setFormFeedback(null);
       setIsProcessing(false);
       setIsAutoCancelling(false);
       setShowCancelConfirm(false);
       setCancelError(null);
-      setFormFeedback(null);
+      isPaymentCompletedRef.current = false;
     }
   }, [visible]);
 
