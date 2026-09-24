@@ -945,6 +945,20 @@ export default function PassengerHomeScreen() {
       // está abierto para este ride. Si el usuario cerró el modal sin pagar
       // (botón "Pagar Ahora" en panel o error de pago), esta condición es false
       // → permite reabrir intencionalmente.
+      // [DIAG ENTRY] Distinct "actually invoked live" marker — allows splitting "event never
+      // reaches here" vs "gate rejects". Shows every ref that drives the guards.
+      console.log('[PASSENGER][DIAG-GATE-ENTRY] openPaymentModalIfDue INVOCADO (live/realtime path)', JSON.stringify({
+        rideId: ride.id,
+        rideStatus: ride.status,
+        ridePaymentStatus: ride.payment?.status ?? null,
+        showPaymentCompleted: showMobilePaymentModalRef.current,
+        acceptedRideIdRef: acceptedRideIdRef.current,
+        paymentCompletedRef: paymentCompletedRef.current,
+        paidRideIdRef: paidRideIdRef.current,
+        activeRideId: activeRideRef.current?.id,
+        activeRideStatus: activeRideRef.current?.status,
+        fare,
+      }));
       if (ride.id && acceptedRideIdRef.current === ride.id && showMobilePaymentModalRef.current) {
         console.log('[PASSENGER] openPaymentModalIfDue SKIPPED — modal already open for rideId:', ride.id);
         return;
