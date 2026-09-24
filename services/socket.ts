@@ -6,6 +6,7 @@
 import { io, Socket } from 'socket.io-client';
 import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
+import { Platform } from 'react-native';
 
 const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'; // definido en eas.json por perfil
 
@@ -386,8 +387,12 @@ export const connectSocket = async (authToken?: string): Promise<Socket> => {
     lastError = null;
     shouldAutoReconnect = true;
 
-    // Start with polling (works reliably on RN/Expo Go), then upgrade to WebSocket
-    const socketTransports: Array<'websocket' | 'polling'> = ['polling', 'websocket'];
+    // Start with polling (works reliably on RN/Expo Go), then upgrade to WebSocket.
+    // iOS: force WebSocket-only. The polling→upgrade handshake can get stuck in iOS
+    // (sockets seem connected but never receive realtime events); Android handles the
+    // upgrade reliably, so it keeps the negotiated transports as-is.
+    const socketTransports: Array<'websocket' | 'polling'> =
+      Platform.OS === 'ios' ? ['websocket'] : ['polling', 'websocket'];
 
     console.log('[SOCKET]    Transports:', JSON.stringify(socketTransports));
 
