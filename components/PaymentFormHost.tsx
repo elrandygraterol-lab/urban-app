@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
 import MobilePaymentModal from '@/components/MobilePaymentModal';
 import { paymentForm, type PaymentFormState } from '@/store/paymentFormStore';
 
@@ -10,67 +9,34 @@ import { paymentForm, type PaymentFormState } from '@/store/paymentFormStore';
 //
 // 2026-09-24 (1.er fix): el <Modal> nativo se mantiene SIEMPRE montado y solo se
 // alterna `visible` (NO se desmonta con `return null`), replicando el patrón del
-// <Modal> del Historial (history.tsx:684-685) que en iOS SÍ presentaba. Antes este
-// host montaba el <MobilePaymentModal> desde cero ya con `visible=true`.
+// <Modal> del Historial (history.tsx:684-685) que en iOS SÍ presentaba.
 //
-// 2026-09-24 (2.º fix): en iOS se SERIALIZA la presentación del <Modal> del pago
-// detrás del <Modal> de notificación "ride_accepted" (UnifiedNotificationOverlay,
-// que también es un <Modal> nativo y se presenta en el MISMO tick del evento).
-// iOS descarta silenciosamente un segundo <Modal> nativo que intenta presentarse
-// concurrentemente desde el mismo view controller raíz ("view not in window
-// hierarchy"), por eso el formulario no aparecía en vivo pero sí al reabrir la app
-// (donde no hay notificación simultánea). Se difiere ~IOS_PRESENTATION_DELAY_MS
-// para que el <Modal> de la notificación se presente primero y el del pago se
-// apile POR ENCIMA (iOS sí permite apilar sobre un modal ya presentado). En
-// Android no aplica (el formulario es overlay <View>, no <Modal> nativo).
-const IOS_PRESENTATION_DELAY_MS = 300;
-
+// 2026-09-24 (2.º fix — REVERTIDO por el Fix 3): se serializaba con
+// IOS_PRESENTATION_DELAY_MS=300ms para diferir la presentación del pago detrás
+// del <Modal> de notificación "ride_accepted" (UnifiedNotificationOverlay, otro
+// <Modal> nativo), porque iOS descartaba el segundo <Modal> concurrente. El
+// usuario probó el build con ese delay y SIGUIÓ fallando → se descartó el timing
+// como causa raíz.
+//
+// 2026-09-24 (FIX 3, vigente): la causa raíz era la DOBLE presentación de
+// <Modal> nativo en el mismo tick. El UnifiedNotificationOverlay ya NO presenta
+// un <Modal> nativo para banners/status/toasts en iOS — los renderiza sobre
+// <FullWindowOverlay> (react-native-screens), a nivel de UIWindow. Así el
+// <Modal> del pago vuelve a ser el ÚNICO modal nativo → iOS lo presenta de
+// inmediato y siempre. Por eso aquí la presentación es DIRECTA en cuanto
+// `state.visible && state.props`; no queda ningún delay.
 export default function PaymentFormHost() {
   const [state, setState] = useState<PaymentFormState>(paymentForm.state);
-  const [presentNow, setPresentNow] = useState(false);
   const lastPropsRef = useRef<PaymentFormState['props'] | null>(null);
-  const deferTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => paymentForm.subscribe(setState), []);
-
-  useEffect(() => {
-    if (!state.visible) {
-      if (deferTimerRef.current != null) {
-        clearTimeout(deferTimerRef.current);
-        deferTimerRef.current = null;
-      }
-      setPresentNow(false);
-      return;
-    }
-
-    // Android: presentar de inmediato (overlay <View>, sin <Modal> nativo).
-    if (Platform.OS !== 'ios') {
-      setPresentNow(true);
-      return;
-    }
-
-    // iOS: diferir para no competir con el <Modal> de notificación.
-    if (presentNow) return;
-    if (deferTimerRef.current != null) return;
-    deferTimerRef.current = setTimeout(() => {
-      deferTimerRef.current = null;
-      setPresentNow(true);
-    }, IOS_PRESENTATION_DELAY_MS);
-
-    return () => {
-      if (deferTimerRef.current != null) {
-        clearTimeout(deferTimerRef.current);
-        deferTimerRef.current = null;
-      }
-    };
-  }, [state.visible, presentNow]);
 
   if (state.visible && state.props) {
     lastPropsRef.current = state.props;
   }
 
   const next = lastPropsRef.current;
-  const visible = !!presentNow && !!next;
+  const visible = !!state.visible && !!next;
 
   return (
     <MobilePaymentModal

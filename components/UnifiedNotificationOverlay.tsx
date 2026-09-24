@@ -18,12 +18,14 @@ import {
   Text,
   StyleSheet,
   Modal,
+  Platform,
   TouchableOpacity,
   Animated,
   ScrollView,
   Image,
   ActivityIndicator,
 } from 'react-native';
+import { FullWindowOverlay } from 'react-native-screens';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -716,6 +718,105 @@ export const UnifiedNotificationOverlay: React.FC = () => {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  // Ruta de render (2026-09-24, FIX 3): los banners/toasts ya NO presentan un
+  // segundo <Modal> nativo en iOS. iOS descarta silenciosamente un segundo
+  // <Modal> presentado mientras otro <Modal> (este overlay) ya está en pantalla
+  // desde el mismo root view controller — eso impedía que el <Modal> del
+  // formulario de pago se presentara en el MISMO tick de `ride:accepted` (la
+  // notificación "Viaje aceptado" ganaba y el pago se descartaba). Solución:
+  // los contenidos transitorios (banner de estado + toasts) se renderizan sobre
+  // <FullWindowOverlay> (react-native-screens), que añade su contenedor
+  // directamente a la UIWindow (RNSFullWindowOverlay.mm: show -> [window
+  // addSubview:_container]) por ENCIMA de cualquier <Modal> nativo y SIN hacer
+  // una segunda presentación modal → el <Modal> del pago queda como EL ÚNICO
+  // modal nativo y iOS lo presenta siempre. El <Modal> nativo se reserva para
+  // la ride-request-card del conductor y el action-sheet (capturas de pantalla
+  // completa). En Android no hay la limitación y se conserva el <Modal>
+  // original intacto.
+
+  const needsNativeModal = !!activeRideRequest || !!activeActionSheet;
+  const hasTransientContent = toastQueue.length > 0 || !!activeStatus;
+
+  const overlayContent = (dimmed: boolean) => (
+    <View
+      style={[styles.overlay, dimmed ? undefined : styles.overlayTransparent]}
+      pointerEvents="box-none"
+    >
+      {/* Backdrop tap-to-dismiss for action sheet */}
+      {activeActionSheet && (
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={dismissActionSheet}
+        />
+      )}
+
+      {/* Toast area — top of screen, stacked, below status bar */}
+      {toastQueue.length > 0 && (
+        <View style={[styles.toastArea, { paddingTop: insets.top }]} pointerEvents="box-none">
+          {toastQueue.map((toast, idx) => (
+            <ToastNotificationItem
+              key={toast.id}
+              toast={toast}
+              index={idx}
+              onDismiss={dismissToast}
+            />
+          ))}
+        </View>
+      )}
+
+      {/* Status banner — top-center, below status bar */}
+      {activeStatus && (
+        <View style={[styles.statusArea, { paddingTop: insets.top }]} pointerEvents="box-none">
+          <StatusBanner status={activeStatus} onDismiss={dismissStatus} />
+        </View>
+      )}
+
+      {/* Ride request card — centered */}
+      {activeRideRequest && (
+        <View style={styles.rideCardArea}>
+          <RideRequestCard
+            data={activeRideRequest}
+            onAccept={handleAcceptRide}
+            onReject={handleRejectRide}
+            onExpire={dismissRideRequest}
+          />
+        </View>
+      )}
+
+      {/* Action sheet — bottom sheet */}
+      {activeActionSheet && (
+        <ActionSheetComponent
+          title={activeActionSheet.title}
+          message={activeActionSheet.message}
+          options={activeActionSheet.options}
+          onDismiss={dismissActionSheet}
+          bottomInset={insets.bottom}
+        />
+      )}
+    </View>
+  );
+
+  if (needsNativeModal) {
+    return (
+      <Modal
+        visible={isVisible}
+        transparent={true}
+        animationType="none"
+        statusBarTranslucent={true}
+        presentationStyle="overFullScreen"
+      >
+        {overlayContent(true)}
+      </Modal>
+    );
+  }
+
+  if (Platform.OS === 'ios') {
+    if (!hasTransientContent) return null;
+    return <FullWindowOverlay>{overlayContent(false)}</FullWindowOverlay>;
+  }
+
+  if (!hasTransientContent) return null;
   return (
     <Modal
       visible={isVisible}
@@ -724,60 +825,7 @@ export const UnifiedNotificationOverlay: React.FC = () => {
       statusBarTranslucent={true}
       presentationStyle="overFullScreen"
     >
-      <View style={styles.overlay} pointerEvents="box-none">
-        {/* Backdrop tap-to-dismiss for action sheet */}
-        {activeActionSheet && (
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={dismissActionSheet}
-          />
-        )}
-
-        {/* Toast area — top of screen, stacked, below status bar */}
-        {toastQueue.length > 0 && (
-          <View style={[styles.toastArea, { paddingTop: insets.top }]} pointerEvents="box-none">
-            {toastQueue.map((toast, idx) => (
-              <ToastNotificationItem
-                key={toast.id}
-                toast={toast}
-                index={idx}
-                onDismiss={dismissToast}
-              />
-            ))}
-          </View>
-        )}
-
-        {/* Status banner — top-center, below status bar */}
-        {activeStatus && (
-          <View style={[styles.statusArea, { paddingTop: insets.top }]} pointerEvents="box-none">
-            <StatusBanner status={activeStatus} onDismiss={dismissStatus} />
-          </View>
-        )}
-
-        {/* Ride request card — centered */}
-        {activeRideRequest && (
-          <View style={styles.rideCardArea}>
-            <RideRequestCard
-              data={activeRideRequest}
-              onAccept={handleAcceptRide}
-              onReject={handleRejectRide}
-              onExpire={dismissRideRequest}
-            />
-          </View>
-        )}
-
-        {/* Action sheet — bottom sheet */}
-        {activeActionSheet && (
-          <ActionSheetComponent
-            title={activeActionSheet.title}
-            message={activeActionSheet.message}
-            options={activeActionSheet.options}
-            onDismiss={dismissActionSheet}
-            bottomInset={insets.bottom}
-          />
-        )}
-      </View>
+      {overlayContent(true)}
     </Modal>
   );
 };
@@ -790,6 +838,10 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.35)',
+  },
+
+  overlayTransparent: {
+    backgroundColor: 'transparent',
   },
 
   // ── Toast ─────────────────────────────────────────────────────────────────
