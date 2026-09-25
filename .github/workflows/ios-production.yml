@@ -190,7 +190,7 @@ jobs:
 
       - name: Set build number (CURRENT_PROJECT_VERSION)
         env:
-          BUILD_NUMBER: ${{ github.event.inputs.build_number || github.run_number }}
+          BUILD_NUMBER: ${{ github.event.inputs.build_number || (github.run_number + 1) }}
         run: |
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
           echo "Usando build number: $BUILD_NUMBER"
@@ -201,9 +201,28 @@ jobs:
             s = s.replace(/CURRENT_PROJECT_VERSION = [^;]*;/g, 'CURRENT_PROJECT_VERSION = ' + process.env.BUILD_NUMBER + ';');
             s = s.replace(/MARKETING_VERSION = [^;]*;/g, 'MARKETING_VERSION = ' + process.env.MARKETING_VERSION + ';');
             fs.writeFileSync(p, s);
-            console.log('OK: CURRENT_PROJECT_VERSION=' + process.env.BUILD_NUMBER + ' y MARKETING_VERSION=' + process.env.MARKETING_VERSION + ' aplicados');
+            console.log('OK: CURRENT_PROJECT_VERSION=' + process.env.BUILD_NUMBER + ' y MARKETING_VERSION=' + process.env.MARKETING_VERSION + ' aplicados a project.pbxproj');
           "
           grep -n "CURRENT_PROJECT_VERSION\|MARKETING_VERSION" ${{ env.IOS_PROJECT_PATH }}/${{ env.IOS_PROJECT_NAME }}.xcodeproj/project.pbxproj || true
+          node -e "
+            const fs = require('fs');
+            const dir = '${{ env.IOS_PROJECT_PATH }}';
+            const apps = fs.readdirSync(dir, { withFileTypes: true })
+              .filter(e => e.isDirectory() && e.name !== 'Pods' && e.name !== 'build')
+              .map(e => dir + '/' + e.name + '/Info.plist')
+              .filter(f => fs.existsSync(f));
+            if (apps.length === 0) {
+              console.error('ERROR: no se encontro ningún Info.plist de la app en ios/');
+              process.exit(1);
+            }
+            for (const f of apps) {
+              let t = fs.readFileSync(f, 'utf8');
+              t = t.replace(/(<key>CFBundleShortVersionString<\/key>\s*<string>)[^<]*(<\/string>)/, '\$1' + process.env.MARKETING_VERSION + '\$2');
+              t = t.replace(/(<key>CFBundleVersion<\/key>\s*<string>)[^<]*(<\/string>)/, '\$1' + process.env.BUILD_NUMBER + '\$2');
+              fs.writeFileSync(f, t);
+              console.log('OK: Info.plist parcheado (' + f + ') -> CFBundleShortVersionString=' + process.env.MARKETING_VERSION + ', CFBundleVersion=' + process.env.BUILD_NUMBER);
+            }
+          "
 
       - name: Create temporary keychain
         run: |
@@ -288,6 +307,35 @@ jobs:
           name: UrbanTaxiSJ-${{ env.BUILD_NUMBER }}.ipa
           path: ${{ env.IOS_PROJECT_PATH }}/build/ipa/*.ipa
           retention-days: 30
+
+      - name: Verify build & version in exported IPA
+        env:
+          BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
+          MARKETING_VERSION: ${{ env.MARKETING_VERSION }}
+        run: |
+          set -euo pipefail
+          IPA_PATH=$(ls ${{ env.IOS_PROJECT_PATH }}/build/ipa/*.ipa | head -1)
+          echo "Verificando $IPA_PATH ..."
+          python3 - "$IPA_PATH" <<'PY'
+            import os, plistlib, sys, zipfile
+            z = zipfile.ZipFile(sys.argv[1])
+            candidates = [n for n in z.namelist() if n.count('/') == 1 and n.endswith('.app/Info.plist')]
+            if not candidates:
+                print("::error::No se encontro Info.plist dentro del IPA")
+                sys.exit(1)
+            info = plistlib.loads(z.read(candidates[0]))
+            build = info.get("CFBundleVersion")
+            ver = info.get("CFBundleShortVersionString")
+            print("IPA CFBundleShortVersionString =", ver, "(esperado", os.environ["MARKETING_VERSION"], ")")
+            print("IPA CFBundleVersion =", build, "(esperado", os.environ["BUILD_NUMBER"], ")")
+            if str(build) != os.environ["BUILD_NUMBER"]:
+                print("::error::La build del IPA no coincide con BUILD_NUMBER. App Store Connect la rechazaria. No se sube.")
+                sys.exit(1)
+            if str(ver) != os.environ["MARKETING_VERSION"]:
+                print("::error::La version del IPA no coincide con MARKETING_VERSION.")
+                sys.exit(1)
+            print("OK: build y version del IPA coinciden con lo esperado")
+          PY
 
       - name: Decode App Store Connect API Key (P8)
         env:
