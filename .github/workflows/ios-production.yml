@@ -318,32 +318,31 @@ jobs:
 
       - name: Verify build & version in exported IPA
         env:
-          BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
-          MARKETING_VERSION: ${{ env.MARKETING_VERSION }}
+          EXPECTED_BUILD: ${{ env.BUILD_NUMBER }}
+          EXPECTED_VERSION: ${{ env.MARKETING_VERSION }}
         run: |
           set -euo pipefail
           IPA_PATH=$(ls ${{ env.IOS_PROJECT_PATH }}/build/ipa/*.ipa | head -1)
           echo "Verificando $IPA_PATH ..."
-          python3 - "$IPA_PATH" <<'PY'
-            import os, plistlib, sys, zipfile
-            z = zipfile.ZipFile(sys.argv[1])
-            candidates = [n for n in z.namelist() if n.count('/') == 1 and n.endswith('.app/Info.plist')]
-            if not candidates:
-                print("::error::No se encontro Info.plist dentro del IPA")
-                sys.exit(1)
-            info = plistlib.loads(z.read(candidates[0]))
-            build = info.get("CFBundleVersion")
-            ver = info.get("CFBundleShortVersionString")
-            print("IPA CFBundleShortVersionString =", ver, "(esperado", os.environ["MARKETING_VERSION"], ")")
-            print("IPA CFBundleVersion =", build, "(esperado", os.environ["BUILD_NUMBER"], ")")
-            if str(build) != os.environ["BUILD_NUMBER"]:
-                print("::error::La build del IPA no coincide con BUILD_NUMBER. App Store Connect la rechazaria. No se sube.")
-                sys.exit(1)
-            if str(ver) != os.environ["MARKETING_VERSION"]:
-                print("::error::La version del IPA no coincide con MARKETING_VERSION.")
-                sys.exit(1)
-            print("OK: build y version del IPA coinciden con lo esperado")
-          PY
+          INFO_PLIST="$(unzip -l "$IPA_PATH" | grep -oE 'Payload/[^ ]+\.app/Info\.plist' | head -1)"
+          if [ -z "$INFO_PLIST" ]; then
+            echo "::error::No se encontro Info.plist dentro del IPA"
+            exit 1
+          fi
+          unzip -p "$IPA_PATH" "$INFO_PLIST" > /tmp/ipa_info.plist
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' /tmp/ipa_info.plist)"
+          BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' /tmp/ipa_info.plist)"
+          echo "IPA CFBundleShortVersionString = $VERSION (esperado $EXPECTED_VERSION)"
+          echo "IPA CFBundleVersion = $BUILD (esperado $EXPECTED_BUILD)"
+          if [ "$BUILD" != "$EXPECTED_BUILD" ]; then
+            echo "::error::La build del IPA no coincide con BUILD_NUMBER. App Store Connect la rechazaria. No se sube."
+            exit 1
+          fi
+          if [ "$VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "::error::La version del IPA no coincide con MARKETING_VERSION."
+            exit 1
+          fi
+          echo "OK: build y version del IPA coinciden con lo esperado"
 
       - name: Decode App Store Connect API Key (P8)
         env:
