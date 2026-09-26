@@ -36,6 +36,7 @@ import {
 } from '@/src/utils/mapNav';
 import { formatAddressForCard } from '@/utils/addressFormatter';
 import { useRideTracking } from '@/hooks/useRideTracking';
+import { driverLocationService } from '@/services/driverLocationService';
 import { useTTS } from '@/hooks/useTTS';
 import { useExchangeRate } from '@/hooks/useExchangeRate';
 import { useUnifiedNotifications } from '@/context/UnifiedNotificationContext';
@@ -112,7 +113,7 @@ export default function ActiveRideScreen() {
   const { showToast, showStatus } = useUnifiedNotifications();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
-  const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
+  const locationUnsubRef = useRef<(() => void) | null>(null);
   const isFirstFetchRef = useRef(true);
   const currentRideIdRef = useRef('');
   const distanceScaleRef = useRef<number | null>(null);
@@ -272,9 +273,9 @@ export default function ActiveRideScreen() {
     // Cleanup on unmount or rideId change
     return () => {
       if (cleanup) cleanup();
-      if (locationSubscriptionRef.current) {
-        locationSubscriptionRef.current.remove();
-      }
+      locationUnsubRef.current?.();
+      locationUnsubRef.current = null;
+      driverLocationService.setRideStream(null);
       isFirstFetchRef.current = true;
       distanceScaleRef.current = null;
       durationScaleRef.current = null;
@@ -284,7 +285,7 @@ export default function ActiveRideScreen() {
 
   // Fetch and draw route ONLY when ride status or payment changes (NOT on every location update).
   // Location-based route updates are handled separately by the periodic update (every 30s)
-  // and deviation detection in the watchPositionAsync callback.
+  // and deviation detection in the location subscription callback.
   useEffect(() => {
     if (ride && location) {
       // Reset map interaction state only on status/payment change, not on location change
@@ -375,10 +376,11 @@ export default function ActiveRideScreen() {
 
       // Re-fetch ride data to get latest status (might have changed while in background)
       fetchRideRef.current?.().then(() => {
-        // Check if GPS subscription is still alive
-        if (locationSubscriptionRef.current) {
+        // Check if GPS subscription is still alive (single source service)
+        if (driverLocationService.isActive()) {
           // Subscription alive — get fresh position and redraw route
-          if (locationRef.current) {
+          const currentPos = driverLocationService.getLastPosition();
+          if (locationRef.current || currentPos) {
             fetchAndDrawRoute();
           } else {
             // Ref lost but subscription alive — request fresh position
@@ -399,7 +401,7 @@ export default function ActiveRideScreen() {
               const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
               setLocation(coords);
               locationRef.current = coords;
-              // Re-start the watchPositionAsync subscription
+              // Re-start the location subscription
               initializeLocation();
             })
             .catch(() => console.log('[ACTIVE_RIDE] Failed to get fresh location after foreground'));
@@ -604,10 +606,8 @@ export default function ActiveRideScreen() {
   const initializeLocation = async () => {
     try {
       // Clean up any existing subscription before creating a new one
-      if (locationSubscriptionRef.current) {
-        locationSubscriptionRef.current.remove();
-        locationSubscriptionRef.current = null;
-      }
+      locationUnsubRef.current?.();
+      locationUnsubRef.current = null;
 
       // Get initial location
       const currentLocation = await Location.getCurrentPositionAsync({
@@ -619,6 +619,7 @@ export default function ActiveRideScreen() {
       };
       setLocation(coords);
       locationRef.current = coords; // Update ref immediately for fetchAndDrawRoute
+      prevDriverPosRef.current = coords;
 
       // Set initial heading if available
       if (currentLocation.coords.heading !== null && currentLocation.coords.heading !== undefined) {
@@ -630,96 +631,47 @@ export default function ActiveRideScreen() {
         fetchAndDrawRoute();
       }
 
-      // Start watching location for real-time updates
-      const subscription = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.BestForNavigation,
-          timeInterval: 5000,
-          distanceInterval: 10,
-          pausesUpdatesAutomatically: false,
-          activityType: Location.ActivityType.AutomotiveNavigation,
-        } as any,
-        newLocation => {
-          const newCoords = {
-            latitude: newLocation.coords.latitude,
-            longitude: newLocation.coords.longitude,
-          };
+      // Single source of truth: the service owns the GPS watcher and emits
+      // location over socket (with rideId) during the ride. This screen only
+      // subscribes for UI updates (marker, heading, route, deviation).
+      locationUnsubRef.current = driverLocationService.subscribe(fix => {
+        const newCoords = {
+          latitude: fix.latitude,
+          longitude: fix.longitude,
+        };
 
-          console.log('[ACTIVE_RIDE] 📍 Location updated:', newCoords);
+        setLocation(newCoords);
+        locationRef.current = newCoords; // Update immediately, don't wait for React render
 
-          setLocation(newCoords);
-          locationRef.current = newCoords; // Update immediately, don't wait for React render
-
-          // Compute driver heading from actual movement (not device compass)
-          if (prevDriverPosRef.current) {
-            const prev = prevDriverPosRef.current;
-            if (prev.latitude !== newCoords.latitude || prev.longitude !== newCoords.longitude) {
-              const brng = computeBearing(prev, newCoords);
-              driverHeadingRef.current = brng;
-            }
+        // Compute driver heading from actual movement (not device compass)
+        if (prevDriverPosRef.current) {
+          const prev = prevDriverPosRef.current;
+          if (prev.latitude !== newCoords.latitude || prev.longitude !== newCoords.longitude) {
+            const brng = computeBearing(prev, newCoords);
+            driverHeadingRef.current = brng;
           }
-          prevDriverPosRef.current = newCoords;
-
-          // Update heading if available
-          if (newLocation.coords.heading !== null && newLocation.coords.heading !== undefined) {
-            setHeading(newLocation.coords.heading);
-          }
-
-          // Only send location updates if ride is still active (not completed)
-          // and the current rideRef matches the component's rideId (prevents stale emissions)
-          if (rideRef.current && rideRef.current.status !== 'completed' && rideRef.current.id === rideId) {
-            const s = getSocket();
-            if (s && s.connected) {
-              // Flush any buffered locations first
-              const buffered = locationBufferRef.current;
-              if (buffered.length > 0) {
-                buffered.forEach(loc => {
-                  s.emit('driver:location_update', {
-                    rideId: rideRef.current!.id,
-                    latitude: loc.latitude,
-                    longitude: loc.longitude,
-                    heading: loc.heading,
-                  });
-                });
-                locationBufferRef.current = [];
-              }
-              s.emit('driver:location_update', {
-                rideId: rideRef.current.id,
-                latitude: newCoords.latitude,
-                longitude: newCoords.longitude,
-                heading: newLocation.coords.heading,
-              });
-            } else if (s) {
-              // Socket exists but not connected — buffer location
-              locationBufferRef.current.push({
-                latitude: newCoords.latitude,
-                longitude: newCoords.longitude,
-                heading: newLocation.coords.heading || null,
-              });
-              // Keep only last 10 locations to avoid unbounded memory
-              if (locationBufferRef.current.length > 10) {
-                locationBufferRef.current.shift();
-              }
-            }
-          }
-
-          // Check if we should update the route (every 30 seconds)
-          const now = Date.now();
-          if (now - lastRouteUpdateRef.current > ROUTE_UPDATE_INTERVAL) {
-            console.log('[ACTIVE_RIDE] 🔄 Periodic route update');
-            lastRouteUpdateRef.current = now;
-            const currentRide = rideRef.current;
-            if (currentRide && currentRide.status !== 'completed' && currentRide.status !== 'arrived') {
-              fetchAndDrawRoute();
-            }
-          }
-
-          // Check for route deviation and trigger immediate reroute if needed
-          checkDeviationAndReroute(newCoords);
         }
-      );
+        prevDriverPosRef.current = newCoords;
 
-      locationSubscriptionRef.current = subscription;
+        // Update heading if available
+        if (fix.heading !== null && fix.heading !== undefined) {
+          setHeading(fix.heading);
+        }
+
+        // Check if we should update the route (every 30 seconds)
+        const now = Date.now();
+        if (now - lastRouteUpdateRef.current > ROUTE_UPDATE_INTERVAL) {
+          console.log('[ACTIVE_RIDE] 🔄 Periodic route update');
+          lastRouteUpdateRef.current = now;
+          const currentRide = rideRef.current;
+          if (currentRide && currentRide.status !== 'completed' && currentRide.status !== 'arrived') {
+            fetchAndDrawRoute();
+          }
+        }
+
+        // Check for route deviation and trigger immediate reroute if needed
+        checkDeviationAndReroute(newCoords);
+      });
     } catch (error) {
       console.error('Failed to get location:', error);
     }

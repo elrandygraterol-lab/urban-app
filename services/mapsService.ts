@@ -57,6 +57,9 @@ export async function getEstimate(
         farePerKm,
         baseFare,
       },
+      // El backend enruta contra OSRM self-hosted: amplio el timeout para no
+      // abortar antes de que el servidor termine (OSRM puede tardar bajo carga).
+      timeout: 30000,
     });
 
     return response.data.data;
@@ -256,7 +259,7 @@ export async function getRoute(pickupLocation: Location, dropoffLocation: Locati
     console.log('[MAPS SERVICE] getRoute - Full URL:', `${api.defaults.baseURL}${url}`);
     console.log('[MAPS SERVICE] getRoute - Params:', params);
 
-    const response = await api.get(url, { params });
+    const response = await api.get(url, { params, timeout: 30000 });
 
     console.log('[MAPS SERVICE] getRoute - Success:', response.data);
     return response.data.data;

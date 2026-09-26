@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import * as Location from 'expo-location';
-import { rideAPI } from '@/services/api';
+import { driverLocationService } from '@/services/driverLocationService';
 
 export function useRideTracking(rideId: string | null, rideStatus: string) {
-  const subscriptionRef = useRef<Location.LocationSubscription | null>(null);
   const [isTracking, setIsTracking] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [showBackgroundDisclosure, setShowBackgroundDisclosure] = useState(false);
@@ -15,8 +14,7 @@ export function useRideTracking(rideId: string | null, rideStatus: string) {
   // Cleanup on deactivation
   useEffect(() => {
     if (!rideId || !isActive) {
-      subscriptionRef.current?.remove();
-      subscriptionRef.current = null;
+      driverLocationService.setRideStream(null);
       setIsTracking(false);
       setShowBackgroundDisclosure(false);
       setPermissionDenied(false);
@@ -92,28 +90,9 @@ export function useRideTracking(rideId: string | null, rideStatus: string) {
     setPermissionDenied(false);
 
     try {
-      subscriptionRef.current = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.High,
-          timeInterval: 5000,
-          distanceInterval: 10,
-          foregroundService: {
-            notificationTitle: 'UrbanTaxi SJ',
-            notificationBody: 'Compartiendo tu ubicación con el pasajero',
-            notificationColor: '#2FB908',
-          },
-        } as any,
-        (location) => {
-          rideAPI
-            .updateLocation(
-              rideId,
-              location.coords.latitude,
-              location.coords.longitude,
-              location.coords.accuracy ?? undefined
-            )
-            .catch(() => {});
-        }
-      );
+      // Single source of truth: the service owns the watcher and handles
+      // socket + HTTP persistence during the ride.
+      driverLocationService.setRideStream(rideId);
 
       if (!cancelledRef.current) {
         setIsTracking(true);

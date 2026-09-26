@@ -3,8 +3,9 @@
  * Intercepts all console.log/warn/error calls globally and stores them
  * in a circular buffer for real-time display in the profile's Sistema section.
  *
- * Also sends logs to the backend in real-time so they appear in the admin
- * Sistema page log window. Uses Socket.IO when connected, falls back to HTTP POST.
+ * Remote delivery to the backend is DISABLED: app logs no longer travel to
+ * the server (avoids constant ingestion/load). Local buffer remains fully
+ * functional for the in-app Sistema log viewer.
  *
  * Initialize once at app startup: import '@/services/logCapture';
  */
@@ -162,7 +163,10 @@ console.error = function (...args: unknown[]) {
 };
 
 // --- Remote log delivery ---
+// DISABLED: app logs should not travel to the backend. Kept as a no-op so all
+// callers and exported API keep working without changes.
 
+const REMOTE_LOGGING_ENABLED = false;
 const REMOTE_FLUSH_INTERVAL = 10000; // flush every 10s (was 2s — reduced for battery)
 const BATCH_MAX_SIZE = 50;
 
@@ -176,11 +180,13 @@ export function setLogApiUrl(url: string): void {
 }
 
 function queueForRemote(entry: LogEntry): void {
-  remoteQueue.push(entry);
+  if (REMOTE_LOGGING_ENABLED) {
+    remoteQueue.push(entry);
+  }
 }
 
 async function flushRemoteBatch(): Promise<void> {
-  if (remoteQueue.length === 0) return;
+  if (!REMOTE_LOGGING_ENABLED || remoteQueue.length === 0) return;
 
   const batch = remoteQueue.splice(0, BATCH_MAX_SIZE);
 
@@ -294,12 +300,8 @@ export function getLogsAsText(filter?: { level?: LogLevel; source?: string }): s
     .join('\n');
 }
 
-// Auto-start remote logging — reads API URL from env
-const autoUrl = process.env.EXPO_PUBLIC_API_URL || '';
-if (autoUrl) {
-  setLogApiUrl(autoUrl);
-  startRemoteLogging();
-}
+// Remote log delivery is DISABLED — do not auto-start it.
+// Kept for API compatibility; calling startRemoteLogging() is a no-op.
 
 export type { LogEntry, LogLevel, LogCategory };
 export default { getAllLogs, subscribeToLogs, clearLogs, getLogCount, getLogsAsText };

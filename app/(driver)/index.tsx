@@ -12,6 +12,7 @@ import {
 import MapView, { Marker } from 'react-native-maps';
 import { getLocation } from '@/utils/lazyLocation';
 import type { LocationSubscription } from 'expo-location';
+import { driverLocationService } from '@/services/driverLocationService';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/authStore';
@@ -68,6 +69,7 @@ export default function DriverHomeScreen() {
   const disconnectLogHandlerRef = useRef<((reason: string) => void) | null>(null);
   const localListenersRegisteredRef = useRef(false);
   const locationSubscriptionRef = useRef<LocationSubscription | null>(null);
+  const locationUnsubRef = useRef<(() => void) | null>(null);
 
   useSocketReconnect();
 
@@ -171,35 +173,6 @@ export default function DriverHomeScreen() {
     }
   };
 
-  const startLocationUpdates = useCallback(async () => {
-    const Loc = await getLocation();
-    const subscription = await Loc.watchPositionAsync(
-      { accuracy: Loc.Accuracy.High, timeInterval: 10000, distanceInterval: 25 },
-      async newLocation => {
-        const newCoords = {
-          latitude: newLocation.coords.latitude,
-          longitude: newLocation.coords.longitude,
-        };
-        setLocation(newCoords);
-
-        const socket = getSocket();
-        if (socket) {
-          socket.emit('driver:location_update', {
-            driverId: user?.id,
-            latitude: newCoords.latitude,
-            longitude: newCoords.longitude,
-          });
-        }
-        // Update heading if available
-        if (newLocation.coords.heading !== null && newLocation.coords.heading !== undefined) {
-          setHeading(newLocation.coords.heading);
-        }
-      }
-    );
-
-    return subscription;
-  }, [user?.id, setHeading]);
-
   const initializeLocation = useCallback(async () => {
     try {
       const Loc = await getLocation();
@@ -230,20 +203,14 @@ export default function DriverHomeScreen() {
       }
       setLoading(false);
 
-      // Enviar ubicación inicial al servidor
-      const socket = getSocket();
-      if (socket && user?.id) {
-        socket.emit('driver:location_update', {
-          driverId: user.id,
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-        });
-        console.log('[DRIVER] Initial location sent:', coords);
-      }
-
-      // Iniciar actualizaciones de ubicación
-      const sub = await startLocationUpdates();
-      if (sub) locationSubscriptionRef.current = sub;
+      // Single source of truth: service owns the watcher and emits via socket in idle mode
+      driverLocationService.setIdleStream(true);
+      locationUnsubRef.current = driverLocationService.subscribe(fix => {
+        setLocation({ latitude: fix.latitude, longitude: fix.longitude });
+        if (fix.heading !== null && fix.heading !== undefined) {
+          setHeading(fix.heading);
+        }
+      });
     } catch (error: any) {
       console.warn('[DRIVER] Location error (handled with fallback):', error?.message || error);
 
@@ -266,17 +233,6 @@ export default function DriverHomeScreen() {
           'Los servicios de ubicación están deshabilitados. Se está usando una ubicación de prueba.\n\nPara usar tu ubicación real, habilita los servicios de ubicación y reinicia la aplicación.',
           'Ubicación No Disponible'
         );
-
-        // Send fallback location to server
-        const socket = getSocket();
-        if (socket && user?.id) {
-          socket.emit('driver:location_update', {
-            driverId: user.id,
-            latitude: fallbackCoords.latitude,
-            longitude: fallbackCoords.longitude,
-          });
-          console.log('[DRIVER] Fallback location sent:', fallbackCoords);
-        }
       } else if (errorMessage.includes('timeout')) {
         console.warn('[DRIVER] Location timeout, using fallback location');
         setLocation(fallbackCoords);
@@ -289,17 +245,6 @@ export default function DriverHomeScreen() {
           undefined,
           { label: 'Reintentar', onPress: () => { initializeLocation(); dismissStatus(); } }
         );
-
-        // Send fallback location to server
-        const socket = getSocket();
-        if (socket && user?.id) {
-          socket.emit('driver:location_update', {
-            driverId: user.id,
-            latitude: fallbackCoords.latitude,
-            longitude: fallbackCoords.longitude,
-          });
-          console.log('[DRIVER] Fallback location sent:', fallbackCoords);
-        }
       } else {
         console.warn('[DRIVER] Location error, using fallback location');
         setLocation(fallbackCoords);
@@ -312,17 +257,6 @@ export default function DriverHomeScreen() {
           undefined,
           { label: 'Reintentar', onPress: () => { initializeLocation(); dismissStatus(); } }
         );
-
-        // Send fallback location to server
-        const socket = getSocket();
-        if (socket && user?.id) {
-          socket.emit('driver:location_update', {
-            driverId: user.id,
-            latitude: fallbackCoords.latitude,
-            longitude: fallbackCoords.longitude,
-          });
-          console.log('[DRIVER] Fallback location sent:', fallbackCoords);
-        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -638,6 +572,11 @@ export default function DriverHomeScreen() {
         locationSubscriptionRef.current.remove();
         locationSubscriptionRef.current = null;
       }
+      if (locationUnsubRef.current) {
+        locationUnsubRef.current();
+        locationUnsubRef.current = null;
+      }
+      driverLocationService.setIdleStream(false);
     };
   }, [user?.id, user?.role, token]);
 
